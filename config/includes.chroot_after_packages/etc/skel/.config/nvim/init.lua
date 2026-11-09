@@ -32,12 +32,12 @@ o.fillchars = { eob = " ", vert = "│" }
 -- Colores
 --------------------------------------------------------------------------------
 local p = {
-    rosewater = "#f2f4fb", flamingo = "#ffb3cf", pink = "#ff6ea9", mauve = "#b59bff",
-    red = "#ff5c72", maroon = "#ff8a99", peach = "#ffab6e", yellow = "#ffe57a",
-    green = "#a6e87a", teal = "#6ee7f2", sky = "#6ee7f2", sapphire = "#7ab0ff",
-    blue = "#7ab0ff", lavender = "#b59bff", text = "#e0e4f2", subtext1 = "#b6bcd4",
+    rosewater = "#f2f4fb", flamingo = "#a6cbff", pink = "#7ab0ff", mauve = "#7ab0ff",
+    red = "#c96a78", maroon = "#d99aa3", peach = "#c9a26b", yellow = "#a6cbff",
+    green = "#a6cbff", teal = "#7ab0ff", sky = "#7ab0ff", sapphire = "#7ab0ff",
+    blue = "#7ab0ff", lavender = "#7ab0ff", text = "#e0e4f2", subtext1 = "#b6bcd4",
     subtext0 = "#9aa0bc", overlay2 = "#7a819e", overlay1 = "#565c78", overlay0 = "#454a64",
-    surface2 = "#343a52", surface1 = "#252939", surface0 = "#171a26", base = "#12141d",
+    surface2 = "#2f3b52", surface1 = "#252939", surface0 = "#171a26", base = "#12141d",
     mantle = "#0b0d14", crust = "#0b0d14",
 }
 
@@ -57,14 +57,14 @@ local grupos = {
     CursorLineNr = { fg = p.sky, bold = true },
     CursorLine = { bg = p.surface0, blend = 0 },
     ColorColumn = { bg = p.surface0 },
-    Visual = { bg = "#2e3350" },
+    Visual = { bg = "#2f3b52" },
     Search = { fg = p.base, bg = p.yellow },
     IncSearch = { fg = p.base, bg = p.peach },
     MatchParen = { fg = p.peach, bold = true },
     WinSeparator = { fg = p.surface2 },
     VertSplit = { fg = p.surface2 },
     Pmenu = { fg = p.text, bg = p.mantle },
-    PmenuSel = { fg = p.rosewater, bg = "#2e3350" },
+    PmenuSel = { fg = p.rosewater, bg = "#2f3b52" },
     NonText = { fg = p.surface2 },
     Whitespace = { fg = p.surface1 },
     Directory = { fg = p.sky },

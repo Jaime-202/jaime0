@@ -1,5 +1,5 @@
 desktop-color: "#12141d"
-title-color: "#6ee7f2"
+title-color: "#7ab0ff"
 title-font: "Unifont Regular 16"
 title-text: "Jaime0"
 message-font: "Unifont Regular 16"
@@ -12,7 +12,7 @@ terminal-font: "Unifont Regular 16"
         height = 40%
         item_color = "#e0e4f2"
         item_font = "Unifont Regular 16"
-        selected_item_color = "#6ee7f2"
+        selected_item_color = "#7ab0ff"
         selected_item_font = "Unifont Regular 16"
         item_height = 24
         item_padding = 4

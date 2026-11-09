@@ -1,7 +1,6 @@
 -- ~/.config/hypr/hyprland.lua
 -- Configuracion de Hyprland de Jaime0, sobre Debian Forky (sintaxis Lua de Hyprland 0.56 y 0.57).
--- Paleta jaime0: fondo #12141d, texto #e0e4f2 y acentos rosa #ff6ea9, malva #b59bff,
--- cian #6ee7f2, verde #a6e87a, amarillo #ffe57a y azul #7ab0ff.
+-- Paleta jaime0: fondo #12141d, azul #7ab0ff y pizarra #2f3b52; el resto son derivados.
 --
 -- Los atajos se declaran con atajo(): cada uno lleva su descripcion, que es lo que lista
 -- el comando "atajos". Los atajos propios del usuario van en atajos-usuario.lua, junto a
@@ -134,8 +133,8 @@ hl.config({
         gaps_out     = 8,
         border_size  = 2,
         col = {
-            active_border   = { colors = { "rgba(ff6ea9ff)", "rgba(b59bffff)", "rgba(6ee7f2ff)" }, angle = 45 },
-            inactive_border = "rgba(343a52cc)",
+            active_border   = { colors = { "rgba(7ab0ffff)", "rgba(a6cbffff)" }, angle = 45 },
+            inactive_border = "rgba(2f3b52cc)",
         },
         resize_on_border = false,
         allow_tearing    = false,

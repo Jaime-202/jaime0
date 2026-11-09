@@ -18,7 +18,7 @@
     progress_bar_height = 8
     progress_bar_frame_width = 0
     progress_bar_corner_radius = 0
-    highlight = "#b59bff"
+    highlight = "#7ab0ff"
 
     indicate_hidden = true
     separator_height = 2
@@ -67,20 +67,20 @@
 [urgency_low]
     background = "#12141de6"
     foreground = "#e0e4f2"
-    frame_color = "#6ee7f2"
-    highlight = "#6ee7f2"
+    frame_color = "#7ab0ff"
+    highlight = "#7ab0ff"
     timeout = 5
 
 [urgency_normal]
     background = "#12141de6"
     foreground = "#e0e4f2"
-    frame_color = "#b59bff"
-    highlight = "#ff6ea9"
+    frame_color = "#7ab0ff"
+    highlight = "#7ab0ff"
     timeout = 5
 
 [urgency_critical]
     background = "#12141de6"
     foreground = "#e0e4f2"
-    frame_color = "#ff5c72"
-    highlight = "#ff5c72"
+    frame_color = "#c96a78"
+    highlight = "#c96a78"
     timeout = 5

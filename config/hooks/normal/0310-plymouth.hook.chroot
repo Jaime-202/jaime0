@@ -20,7 +20,7 @@ sed -i \
     -e 's|^BackgroundStartColor=.*|BackgroundStartColor=0x12141d|' \
     -e 's|^BackgroundEndColor=.*|BackgroundEndColor=0x12141d|' \
     -e 's|^ProgressBarBackgroundColor=.*|ProgressBarBackgroundColor=0x252939|' \
-    -e 's|^ProgressBarForegroundColor=.*|ProgressBarForegroundColor=0xb59bff|' \
+    -e 's|^ProgressBarForegroundColor=.*|ProgressBarForegroundColor=0x7ab0ff|' \
     "${DESTINO}/${TEMA}.plymouth"
 
 plymouth-set-default-theme "${TEMA}"

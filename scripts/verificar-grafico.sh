@@ -46,7 +46,7 @@ SALIDA=$($H /tmp/vs3/roto.lua 2>&1); RC=$?
 if [ $RC -ne 0 ] && echo "$SALIDA" | grep -q "unknown config key"; then ok "control negativo: detecta una opcion invalida"; else fallo "control negativo no detecto el error"; fi
 
 echo "== Valores de la especificacion en hyprland.lua =="
-for E in 'layout *= "dwindle"' 'border_size *= 2' 'rgba[(]ff6ea9ff[)]' 'rgba[(]b59bffff[)]' 'rgba[(]6ee7f2ff[)]' 'rounding *= 10' 'gaps_in *= 4' 'gaps_out *= 8' 'active_opacity *= 1.0' 'fullscreen_opacity *= 1.0' 'size *= 5' 'passes *= 2' 'new_optimizations *= true' 'xray *= false' 'enabled *= not esVirtual' 'no_hardware_cursors *= esVirtual' 'popin 85%' 'style = "slide"' 'kb_layout *= tecladoSistema[(]"XKBLAYOUT", "es"[)]' '1.0 override 1.0 override' '0.94 override 0.90 override' 'fullscreen_state_internal = 2' 'content = "video"' 'namespace = "\^waybar\$"' 'namespace = "\^rofi\$"' 'Return' 'space' '"Print"' '" [+] F1"' 'atajos-usuario.lua' 'o.description = descripcion' 'mouse:272' 'mouse:273' 'mode = "fullscreen"' 'mode = "maximized"' 'window.swap' 'for i = 1, 9' 'pavucontrol' 'blueman-manager' '/usr/bin/lxpolkit' 'aurora.jpg' 'mpv' 'vlc'; do
+for E in 'layout *= "dwindle"' 'border_size *= 2' 'rgba[(]7ab0ffff[)]' 'rgba[(]7ab0ffff[)]' 'rgba[(]7ab0ffff[)]' 'rounding *= 10' 'gaps_in *= 4' 'gaps_out *= 8' 'active_opacity *= 1.0' 'fullscreen_opacity *= 1.0' 'size *= 5' 'passes *= 2' 'new_optimizations *= true' 'xray *= false' 'enabled *= not esVirtual' 'no_hardware_cursors *= esVirtual' 'popin 85%' 'style = "slide"' 'kb_layout *= tecladoSistema[(]"XKBLAYOUT", "es"[)]' '1.0 override 1.0 override' '0.94 override 0.90 override' 'fullscreen_state_internal = 2' 'content = "video"' 'namespace = "\^waybar\$"' 'namespace = "\^rofi\$"' 'Return' 'space' '"Print"' '" [+] F1"' 'atajos-usuario.lua' 'o.description = descripcion' 'mouse:272' 'mouse:273' 'mode = "fullscreen"' 'mode = "maximized"' 'window.swap' 'for i = 1, 9' 'pavucontrol' 'blueman-manager' '/usr/bin/lxpolkit' 'aurora.jpg' 'mpv' 'vlc'; do
     if grep -qE -- "$E" "chroot$LUA"; then ok "contiene: $E"; else fallo "falta: $E"; fi
 done
 if grep -q windowrulev2 "chroot$LUA"; then fallo "usa windowrulev2"; else ok "sin windowrulev2"; fi
@@ -84,8 +84,8 @@ INITRD=$(ls -t chroot/boot/initrd.img-* | head -n 1)
 if chroot chroot lsinitramfs "/boot/$(basename "$INITRD")" 2>/dev/null | grep -q 'plymouth/themes/jaime0/jaime0.plymouth'; then ok "tema dentro del initramfs"; else fallo "tema no esta en el initramfs"; fi
 chroot chroot lsinitramfs "/boot/$(basename "$INITRD")" 2>/dev/null | grep -q 'scripts/live' && ok "live-boot dentro del initramfs" || fallo "live-boot no esta en el initramfs"
 grep -q 'quiet splash' config/binary && ok "quiet splash en bootappend-live" || fallo "falta quiet splash en bootappend-live"
-grep -q 'vt.default_red=0x12,0xff' config/binary && ok "paleta de consola en bootappend-live" || fallo "falta la paleta de consola"
-grep -q 'vt.default_red=0x12,0xff' chroot/etc/default/grub.d/90-hypr.cfg && ok "paleta de consola en GRUB instalado" || fallo "falta la paleta de consola en GRUB"
+grep -q 'vt.default_red=0x12,0xc9,0x8f,0xc4,0x7a,0xa5,0x7f,0xe0,0x56,0xd9,0xa9,0xd9,0xa6,0xc2,0xa3,0xf2 vt.default_grn=0x14,0x6a,0xb3,0xad,0xb0,0x8a,0xb0,0xe4,0x5c,0x9a,0xc7,0xc7,0xcb,0xad,0xc8,0xf4 vt.default_blu=0x1d,0x78,0x9a,0x75,0xff,0xa8,0xbd,0xf2,0x78,0xa3,0xb3,0x96,0xff,0xc4,0xd2,0xfb' config/binary && ok "paleta de consola en bootappend-live" || fallo "falta la paleta de consola"
+grep -q 'vt.default_red=0x12,0xc9,0x8f,0xc4,0x7a,0xa5,0x7f,0xe0,0x56,0xd9,0xa9,0xd9,0xa6,0xc2,0xa3,0xf2 vt.default_grn=0x14,0x6a,0xb3,0xad,0xb0,0x8a,0xb0,0xe4,0x5c,0x9a,0xc7,0xc7,0xcb,0xad,0xc8,0xf4 vt.default_blu=0x1d,0x78,0x9a,0x75,0xff,0xa8,0xbd,0xf2,0x78,0xa3,0xb3,0x96,0xff,0xc4,0xd2,0xfb' chroot/etc/default/grub.d/90-hypr.cfg && ok "paleta de consola en GRUB instalado" || fallo "falta la paleta de consola en GRUB"
 
 echo "== Acceso con greetd y tuigreet =="
 for P in sddm weston xvfb; do

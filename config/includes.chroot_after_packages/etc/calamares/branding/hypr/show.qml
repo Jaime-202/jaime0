@@ -34,7 +34,7 @@ Presentation {
             model: 5
             Rectangle {
                 width: 7; height: 7; radius: 4
-                color: index === presentacion.currentSlide ? "#6ee7f2" : "#343a52"
+                color: index === presentacion.currentSlide ? "#7ab0ff" : "#2f3b52"
             }
         }
     }
@@ -56,7 +56,7 @@ Presentation {
         lineHeight: 1.25
     }
     component Etiqueta: Text {
-        color: "#6ee7f2"
+        color: "#7ab0ff"
         font.family: presentacion.fuente
         font.pixelSize: 13
         font.bold: true
@@ -74,7 +74,7 @@ Presentation {
         Layout.preferredWidth: rotulo.implicitWidth + 20
         radius: 3
         color: "#171a26"
-        border.color: "#343a52"
+        border.color: "#2f3b52"
         Text {
             id: rotulo
             anchors.centerIn: parent
@@ -90,7 +90,7 @@ Presentation {
         Layout.preferredHeight: 50
         radius: 3
         color: "#171a26"
-        border.color: "#343a52"
+        border.color: "#2f3b52"
         Text {
             id: linea
             anchors.verticalCenter: parent.verticalCenter
