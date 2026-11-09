@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+# atajos: lista, añade y quita atajos de teclado de Hyprland en Jaime0.
+# La lista sale de la configuracion cargada de verdad (hyprctl binds -j); los atajos propios
+# se guardan en ~/.config/hypr/atajos-usuario.lua, que hyprland.lua carga al final.
+import json, os, re, shutil, subprocess, sys, tempfile
+
+CARPETA = os.path.expanduser("~/.config/hypr")
+PROPIOS = os.path.join(CARPETA, "atajos-usuario.lua")
+CABECERA = (
+    "-- ~/.config/hypr/atajos-usuario.lua\n"
+    "-- Atajos propios. Los gestiona el comando \"atajos\" (atajos --help).\n"
+    "-- Formato: atajo(\"TECLAS\", \"orden\", \"descripción\")\n"
+)
+MARCA = "-- atajos:"
+MODS = [("SUPER", 64), ("SHIFT", 1), ("CTRL", 4), ("ALT", 8), ("MOD2", 16), ("MOD3", 32), ("MOD5", 128)]
+SINONIMOS = {"WIN": "SUPER", "META": "SUPER", "MOD4": "SUPER", "CONTROL": "CTRL", "MOD1": "ALT"}
+NOMBRES_TECLA = {
+    "RETURN": "Return", "ENTER": "Return", "INTRO": "Return", "SPACE": "space", "ESPACIO": "space",
+    "ESC": "Escape", "ESCAPE": "Escape", "TAB": "Tab", "PRINT": "Print", "IMPRPANT": "Print",
+    "LEFT": "left", "RIGHT": "right", "UP": "up", "DOWN": "down",
+    "IZQUIERDA": "left", "DERECHA": "right", "ARRIBA": "up", "ABAJO": "down",
+    "BACKSPACE": "BackSpace", "DELETE": "Delete", "SUPR": "Delete", "HOME": "Home", "END": "End",
+}
+
+TTY = sys.stdout.isatty()
+def c(codigo, texto):
+    return f"\033[{codigo}m{texto}\033[0m" if TTY else texto
+
+def error(texto, codigo=1):
+    print(c("1;31", "error: ") + texto, file=sys.stderr)
+    sys.exit(codigo)
+
+AYUDA = f"""{c('1;35', 'atajos')} — atajos de teclado de Hyprland
+
+Uso:
+  atajos                               Muestra todos los atajos activos con su descripción.
+  atajos añadir TECLAS ORDEN DESCRIPCIÓN
+                                       Añade un atajo propio (también: anadir, add).
+  atajos quitar TECLAS                 Quita un atajo propio (también: borrar, rm).
+  atajos editar                        Abre tus atajos en nvim y comprueba el resultado.
+  atajos --rofi                        Muestra la lista en Rofi (lo abre SUPER + F1).
+  atajos --help                        Esta ayuda.
+
+Ejemplos:
+  atajos añadir "SUPER+O" "kitty -e nvim" "Abrir Neovim"
+  atajos añadir "SUPER+SHIFT+Return" "kitty --class flotante" "Terminal flotante"
+  atajos quitar "SUPER+O"
+
+TECLAS son modificadores (SUPER, SHIFT, CTRL, ALT) y una tecla, unidos con +.
+Antes de aplicar, la configuración se comprueba con Hyprland --verify-config; si hay
+un error no se cambia nada. Los atajos propios están en {PROPIOS}.
+"""
+
+# ---------------------------------------------------------------------------
+def leer_binds():
+    try:
+        salida = subprocess.run(["hyprctl", "binds", "-j"], capture_output=True, text=True, timeout=10)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if salida.returncode != 0 or not salida.stdout.strip().startswith("["):
+        return None
+    try:
+        return json.loads(salida.stdout)
+    except json.JSONDecodeError:
+        return None
+
+def texto_mods(mascara):
+    return [nombre for nombre, bit in MODS if mascara & bit]
+
+def normalizar(teclas):
+    """'super+shift+b' -> ('SUPER + SHIFT + B', mascara, 'b')"""
+    partes = [p.strip() for p in re.split(r"\s*\+\s*", teclas.strip()) if p.strip()]
+    if not partes:
+        error("faltan las teclas, por ejemplo \"SUPER+O\".")
+    mods, tecla = [], None
+    for p in partes:
+        alto = SINONIMOS.get(p.upper(), p.upper())
+        if alto in dict(MODS):
+            if alto not in mods:
+                mods.append(alto)
+        elif tecla is None:
+            tecla = NOMBRES_TECLA.get(alto, p if len(p) > 1 else p.upper())
+        else:
+            error(f"«{teclas}» tiene más de una tecla normal ({tecla} y {p}).")
+    if tecla is None:
+        error(f"«{teclas}» no tiene ninguna tecla, solo modificadores.")
+    orden = [n for n, _ in MODS]
+    mods.sort(key=orden.index)
+    mascara = sum(dict(MODS)[m] for m in mods)
+    return " + ".join(mods + [tecla]), mascara, tecla.lower()
+
+# Nombres legibles solo para mostrar la lista (no cambian como se guardan los atajos).
+VISTA = {
+    "XF86AudioRaiseVolume": "Tecla Subir volumen", "XF86AudioLowerVolume": "Tecla Bajar volumen",
+    "XF86AudioMute": "Tecla Silencio", "XF86AudioMicMute": "Tecla Micrófono",
+    "XF86MonBrightnessUp": "Tecla Más brillo", "XF86MonBrightnessDown": "Tecla Menos brillo",
+    "XF86AudioPlay": "Tecla Reproducir", "XF86AudioPause": "Tecla Pausa",
+    "XF86AudioNext": "Tecla Siguiente", "XF86AudioPrev": "Tecla Anterior",
+    "mouse_down": "Rueda abajo", "mouse_up": "Rueda arriba",
+    "mouse:272": "Clic izquierdo", "mouse:273": "Clic derecho",
+    "Print": "ImprPant", "Return": "Enter", "space": "Espacio", "Escape": "Esc",
+    "BackSpace": "Retroceso", "left": "←", "right": "→", "up": "↑", "down": "↓",
+}
+
+def vista(combo):
+    partes = combo.split(" + ")
+    partes[-1] = VISTA.get(partes[-1], partes[-1])
+    return " + ".join(partes)
+
+def combinacion(b):
+    return " + ".join(texto_mods(b.get("modmask", 0)) + [b.get("key") or f"code:{b.get('keycode')}"])
+
+# ---------------------------------------------------------------------------
+def propios():
+    """Lineas de atajos propios: {combinacion: linea}"""
+    resultado = {}
+    if os.path.exists(PROPIOS):
+        with open(PROPIOS, encoding="utf-8") as f:
+            for linea in f:
+                if MARCA in linea:
+                    resultado[linea.split(MARCA, 1)[1].strip()] = linea
+    return resultado
+
+def lua(texto):
+    return '"' + texto.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ") + '"'
+
+def comprobar_y_aplicar(nuevo_contenido):
+    """Escribe atajos-usuario.lua en una copia, la verifica y, si es valida, la aplica."""
+    if not os.path.isfile(os.path.join(CARPETA, "hyprland.lua")):
+        error(f"no existe {CARPETA}/hyprland.lua: no hay configuración de Hyprland que comprobar.")
+    with tempfile.TemporaryDirectory(prefix="atajos-") as tmp:
+        # La copia lleva su propio HOME: asi hyprland.lua carga el atajos-usuario.lua nuevo
+        # de la copia y no el de la carpeta real.
+        prueba = os.path.join(tmp, ".config", "hypr")
+        shutil.copytree(CARPETA, prueba, symlinks=True)
+        with open(os.path.join(prueba, "atajos-usuario.lua"), "w", encoding="utf-8") as f:
+            f.write(nuevo_contenido)
+        principal = os.path.join(prueba, "hyprland.lua")
+        entorno = dict(os.environ, HOME=tmp)
+        r = subprocess.run(["Hyprland", "--verify-config", "--config", principal],
+                           capture_output=True, text=True, timeout=60, env=entorno)
+        texto = (r.stdout + r.stderr).strip()
+        if r.returncode != 0 or "config ok" not in texto.lower():
+            print(c("1;31", "La configuración no es válida; no se ha cambiado nada."), file=sys.stderr)
+            print(texto[-1500:], file=sys.stderr)
+            sys.exit(2)
+    os.makedirs(CARPETA, exist_ok=True)
+    temporal = PROPIOS + ".nuevo"
+    with open(temporal, "w", encoding="utf-8") as f:
+        f.write(nuevo_contenido)
+    os.replace(temporal, PROPIOS)
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        subprocess.run(["hyprctl", "reload"], capture_output=True, timeout=10)
+        return True
+    return False
+
+def contenido_actual():
+    if os.path.exists(PROPIOS):
+        with open(PROPIOS, encoding="utf-8") as f:
+            return f.read()
+    return CABECERA
+
+# ---------------------------------------------------------------------------
+def listar(rofi=False):
+    binds = leer_binds()
+    if binds is None:
+        error("no se pudo leer la configuración de Hyprland (¿hay una sesión de Hyprland abierta?).")
+    mios = propios()
+    filas = []
+    for b in binds:
+        combo = combinacion(b)
+        desc = (b.get("description") or "").strip()
+        if not desc:
+            desc = (b.get("dispatcher", "") + " " + str(b.get("arg", ""))).strip()
+        filas.append((vista(combo), desc, combo in mios))
+    filas.sort(key=lambda f: (f[0].count("+"), f[0]))
+    ancho = max([len(f[0]) for f in filas] + [10])
+    if rofi:
+        lineas = "\n".join(f"{f[0]:<{ancho}}   {f[1]}{'  ★' if f[2] else ''}" for f in filas)
+        subprocess.run(["rofi", "-dmenu", "-i", "-p", "\uf11c atajos", "-no-custom",
+                        "-mesg", "Añade los tuyos en una terminal: atajos añadir \"SUPER+O\" \"orden\" \"descripción\"",
+                        "-theme-str", "window { width: 860px; } listview { lines: 14; }"],
+                       input=lineas, text=True)
+        return
+    print(c("1;35", f"  {'ATAJO':<{ancho}}") + c("1;36", "  DESCRIPCIÓN"))
+    print(c("38;5;60", "  " + "─" * (ancho + 50)))
+    for combo, desc, mio in filas:
+        marca = c("1;33", " ★") if mio else ""
+        print("  " + c("1;35", f"{combo:<{ancho}}") + "  " + c("97", desc) + marca)
+    print()
+    print(c("38;5;245", f"  {len(filas)} atajos. ★ = propio. Añade más con: atajos añadir \"SUPER+O\" \"orden\" \"descripción\""))
+
+def anadir(args):
+    if len(args) < 2:
+        error("uso: atajos añadir TECLAS ORDEN [DESCRIPCIÓN]")
+    teclas, orden = args[0], args[1]
+    descripcion = args[2] if len(args) > 2 else orden
+    combo, mascara, tecla = normalizar(teclas)
+    binds = leer_binds() or []
+    for b in binds:
+        if b.get("modmask", 0) == mascara and (b.get("key") or "").lower() == tecla:
+            actual = (b.get("description") or b.get("dispatcher", "")).strip()
+            error(f"{combo} ya está en uso: {actual}. Elige otra combinación.", 3)
+    if combo in propios():
+        error(f"{combo} ya es uno de tus atajos. Quítalo antes con: atajos quitar \"{teclas}\"", 3)
+    linea = f"atajo({lua(combo)}, {lua(orden)}, {lua(descripcion)}) {MARCA} {combo}\n"
+    contenido = contenido_actual()
+    if not contenido.endswith("\n"):
+        contenido += "\n"
+    recargado = comprobar_y_aplicar(contenido + linea)
+    print(c("1;32", "✔ ") + f"Añadido {c('1;35', combo)} → {descripcion}")
+    if not recargado:
+        print("  Se aplicará al iniciar la próxima sesión de Hyprland.")
+
+def quitar(args):
+    if not args:
+        error("uso: atajos quitar TECLAS")
+    combo, _, _ = normalizar(args[0])
+    mios = propios()
+    if combo not in mios:
+        if any(combinacion(b) == combo for b in (leer_binds() or [])):
+            error(f"{combo} es un atajo del sistema, no uno propio. Para cambiarlo edita ~/.config/hypr/hyprland.lua.")
+        error(f"no hay ningún atajo propio con {combo}.")
+    contenido = "".join(l for l in contenido_actual().splitlines(True) if l != mios[combo])
+    comprobar_y_aplicar(contenido)
+    print(c("1;32", "✔ ") + f"Quitado {c('1;35', combo)}")
+
+def editar():
+    if not os.path.exists(PROPIOS):
+        os.makedirs(CARPETA, exist_ok=True)
+        with open(PROPIOS, "w", encoding="utf-8") as f:
+            f.write(CABECERA)
+    with open(PROPIOS, encoding="utf-8") as f:
+        antes = f.read()
+    subprocess.run([os.environ.get("EDITOR", "nvim"), PROPIOS])
+    with open(PROPIOS, encoding="utf-8") as f:
+        despues = f.read()
+    if despues == antes:
+        print("Sin cambios.")
+        return
+    with open(PROPIOS, "w", encoding="utf-8") as f:
+        f.write(antes)
+    comprobar_y_aplicar(despues)
+    print(c("1;32", "✔ ") + "Atajos guardados y aplicados.")
+
+# ---------------------------------------------------------------------------
+def main():
+    args = sys.argv[1:]
+    if not args:
+        return listar()
+    orden, resto = args[0], args[1:]
+    if orden in ("-h", "--help", "ayuda", "help"):
+        print(AYUDA)
+    elif orden in ("--rofi", "rofi"):
+        listar(rofi=True)
+    elif orden in ("añadir", "anadir", "add", "nuevo"):
+        anadir(resto)
+    elif orden in ("quitar", "borrar", "rm", "remove"):
+        quitar(resto)
+    elif orden in ("editar", "edit"):
+        editar()
+    elif orden in ("lista", "listar", "list"):
+        listar()
+    else:
+        error(f"orden desconocida «{orden}». Prueba: atajos --help")
+
+if __name__ == "__main__":
+    main()

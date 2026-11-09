@@ -1,0 +1,27 @@
+#!/bin/sh
+# Plymouth negro y sobrio (#12141d), basado en el tema spinner.
+set -e
+
+ORIGEN="/usr/share/plymouth/themes/spinner"
+TEMA="jaime0"
+DESTINO="/usr/share/plymouth/themes/${TEMA}"
+
+rm -rf "${DESTINO}"
+cp -a "${ORIGEN}" "${DESTINO}"
+mv "${DESTINO}/spinner.plymouth" "${DESTINO}/${TEMA}.plymouth"
+
+sed -i \
+    -e '/^Name\[/d' \
+    -e 's|^Name=.*|Name=Jaime0|' \
+    -e 's|^Description=.*|Description=Arranque negro.|' \
+    -e 's|^Font=.*|Font=Noto Sans 12|' \
+    -e 's|^TitleFont=.*|TitleFont=Noto Sans 30|' \
+    -e "s|^ImageDir=.*|ImageDir=${DESTINO}|" \
+    -e 's|^BackgroundStartColor=.*|BackgroundStartColor=0x12141d|' \
+    -e 's|^BackgroundEndColor=.*|BackgroundEndColor=0x12141d|' \
+    -e 's|^ProgressBarBackgroundColor=.*|ProgressBarBackgroundColor=0x252939|' \
+    -e 's|^ProgressBarForegroundColor=.*|ProgressBarForegroundColor=0xb59bff|' \
+    "${DESTINO}/${TEMA}.plymouth"
+
+plymouth-set-default-theme "${TEMA}"
+update-initramfs -u

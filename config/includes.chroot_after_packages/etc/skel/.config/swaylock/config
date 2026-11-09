@@ -1,0 +1,36 @@
+# ~/.config/swaylock/config: pantalla de bloqueo de Jaime0 (paleta jaime0).
+image=/usr/share/backgrounds/jaime0/aurora.jpg
+scaling=fill
+color=12141d
+font=JetBrainsMono Nerd Font
+font-size=18
+indicator-radius=90
+indicator-thickness=8
+show-failed-attempts
+indicator-idle-visible
+ignore-empty-password
+disable-caps-lock-text
+
+inside-color=12141dcc
+inside-clear-color=12141dcc
+inside-ver-color=12141dcc
+inside-wrong-color=12141dcc
+ring-color=b59bffff
+ring-clear-color=6ee7f2ff
+ring-ver-color=7ab0ffff
+ring-wrong-color=ff6ea9ff
+line-color=00000000
+line-clear-color=00000000
+line-ver-color=00000000
+line-wrong-color=00000000
+separator-color=00000000
+key-hl-color=ff6ea9ff
+bs-hl-color=ffe57aff
+text-color=e0e4f2ff
+text-clear-color=6ee7f2ff
+text-ver-color=7ab0ffff
+text-wrong-color=ff6ea9ff
+text-caps-lock-color=ffe57aff
+layout-bg-color=12141dcc
+layout-border-color=00000000
+layout-text-color=e0e4f2ff

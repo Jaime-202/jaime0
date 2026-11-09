@@ -1,0 +1,33 @@
+#!/bin/sh
+# Arranque al acceso de greetd (tuigreet en tty1) y una unica sesion: Hyprland.
+set -e
+
+systemctl enable greetd.service
+systemctl set-default graphical.target
+
+# greetd ocupa tty1: sin esto el getty de tty1 se pelearia con el.
+systemctl disable getty@tty1.service 2>/dev/null || true
+systemctl mask getty@tty1.service
+
+# Sin uwsm instalado, esta sesion quedaria rota.
+if ! command -v uwsm >/dev/null 2>&1; then
+    rm -f /usr/share/wayland-sessions/hyprland-uwsm.desktop
+fi
+
+# La sesion recibe el idioma del sistema: el PAM de greetd no carga /etc/default/locale
+# (sin esto la sesion queda en ingles y las carpetas de usuario se crean en ingles).
+if ! grep -q 'pam_env.so.*default/locale' /etc/pam.d/greetd; then
+    echo 'session    required   pam_env.so readenv=1 envfile=/etc/default/locale' >> /etc/pam.d/greetd
+fi
+
+# tuigreet guarda aqui el ultimo usuario (--remember).
+mkdir -p /var/cache/tuigreet
+chown _greetd:_greetd /var/cache/tuigreet 2>/dev/null || chown greeter:greeter /var/cache/tuigreet
+chmod 755 /var/cache/tuigreet
+
+# El usuario del acceso debe existir con el nombre de config.toml.
+USUARIO="$(sed -n 's/^user = "\(.*\)"/\1/p' /etc/greetd/config.toml | head -1)"
+getent passwd "${USUARIO}" >/dev/null
+
+chmod 755 /usr/local/bin/iniciar-sesion /usr/local/bin/captura-area /usr/local/bin/atajos /usr/local/bin/notificaciones-waybar
+chmod 644 /etc/systemd/system/greetd.service.d/10-idioma.conf

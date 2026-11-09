@@ -1,0 +1,3 @@
+#!/bin/sh
+# Compatibilidad: captura de un area (archivo y portapapeles).
+exec captura area

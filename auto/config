@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+lb config noauto \
+  --mode debian \
+  --distribution forky \
+  --architectures amd64 \
+  --archive-areas "main contrib non-free non-free-firmware" \
+  --mirror-bootstrap "https://deb.debian.org/debian/" \
+  --mirror-binary "https://deb.debian.org/debian/" \
+  --security false \
+  --updates false \
+  --apt-source-archives false \
+  --debootstrap-options "--variant=minbase" \
+  --apt-recommends false \
+  --firmware-chroot true \
+  --binary-images iso-hybrid \
+  --bootloaders "grub-pc,grub-efi" \
+  --chroot-squashfs-compression-type zstd \
+  --debian-installer none \
+  --memtest none \
+  --image-name "jaime0" \
+  --iso-volume "Jaime0" \
+  --iso-application "Jaime0" \
+  --iso-publisher "Jaime0" \
+  --bootappend-live "boot=live components hostname=jaime0 locales=es_ES.UTF-8 keyboard-layouts=es timezone=Europe/Madrid quiet splash loglevel=3 rd.udev.log_level=3 systemd.show_status=false vt.global_cursor_default=0 vt.default_red=0x12,0xff,0xa6,0xff,0x7a,0xff,0x6e,0xe0,0x56,0xff,0xc3,0xff,0xa6,0xb5,0xa2,0xf2 vt.default_grn=0x14,0x5c,0xe8,0xe5,0xb0,0x6e,0xe7,0xe4,0x5c,0x8a,0xf2,0xf0,0xcb,0x9b,0xf0,0xf4 vt.default_blu=0x1d,0x72,0x7a,0x7a,0xff,0xa9,0xf2,0xf2,0x78,0x99,0xa0,0xa8,0xff,0xff,0xf7,0xfb" \
+  --bootappend-live-failsafe "boot=live components hostname=jaime0 locales=es_ES.UTF-8 keyboard-layouts=es timezone=Europe/Madrid nomodeset" \n  "${@}"

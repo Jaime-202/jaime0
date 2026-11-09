@@ -1,0 +1,35 @@
+desktop-color: "#12141d"
+title-text: "Jaime0"
+title-color: "#6ee7f2"
+title-font: "Unifont Regular 16"
+message-font: "Unifont Regular 16"
+terminal-font: "Unifont Regular 16"
+
++ boot_menu {
+        left = 20%
+        width = 60%
+        top = 35%
+        height = 40%
+        item_color = "#e0e4f2"
+        item_font = "Unifont Regular 16"
+        selected_item_color = "#6ee7f2"
+        selected_item_font = "Unifont Regular 16"
+        item_height = 24
+        item_padding = 4
+        item_spacing = 6
+        icon_width = 0
+        icon_height = 0
+        item_icon_space = 0
+}
+
++ progress_bar {
+        id = "__timeout__"
+        left = 20%
+        top = 80%
+        height = 8
+        width = 60%
+        fg_color = "#7ab0ff"
+        bg_color = "#171a26"
+        border_color = "#252939"
+        show_text = false
+}

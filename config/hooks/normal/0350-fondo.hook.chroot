@@ -1,0 +1,47 @@
+#!/bin/sh
+# Fondo de Jaime0: "Aurora over the boreal forest", foto de Tim Rains para el National Park
+# Service (Denali, 2011). Obra del Gobierno de EE. UU.: dominio publico (PD-USGov-NPS).
+# https://commons.wikimedia.org/wiki/File:Aurora_over_the_boreal_forest_(57be20e1-a3cf-453e-9632-2d38df39b643).jpg
+# Se descarga fijada por SHA256, se recorta a 16:9 y se reduce a 2560x1440. Pillow se instala
+# solo para esto y se retira despues: no llega a la ISO.
+set -e
+
+URL="https://upload.wikimedia.org/wikipedia/commons/5/5b/Aurora_over_the_boreal_forest_%2857be20e1-a3cf-453e-9632-2d38df39b643%29.jpg"
+SUMA="3380b169c328dd23a9ed4e991581c02185e09783cb1fb28b447c4c891f4282a1"
+DESTINO=/usr/share/backgrounds/jaime0
+TMP=/tmp/fondo-original.jpg
+
+apt-get -y -qq --no-install-recommends install python3-pil
+curl -fsSL -A "Jaime0-build/1.0" -o "${TMP}" "${URL}"
+echo "${SUMA}  ${TMP}" | sha256sum -c -
+
+mkdir -p "${DESTINO}"
+python3 - "${TMP}" "${DESTINO}/aurora.jpg" <<'FIN'
+import sys
+from PIL import Image, ImageEnhance
+img = Image.open(sys.argv[1]).convert("RGB")
+w, h = img.size                       # 4288x2848
+alto = round(w * 9 / 16)              # 2412
+arriba = round((h - alto) * 0.55)     # algo mas de bosque que de cielo
+img = img.crop((0, arriba, w, arriba + alto)).resize((2560, 1440), Image.LANCZOS)
+# Un punto mas oscuro para que el texto de las terminales transparentes se lea bien
+img = ImageEnhance.Brightness(img).enhance(0.88)
+img.save(sys.argv[2], "JPEG", quality=90, optimize=True, progressive=True)
+FIN
+
+cat > "${DESTINO}/CREDITOS.txt" <<'FIN'
+aurora.jpg
+  "Aurora over the boreal forest", NPS Photo / Tim Rains, Denali National Park, 2011.
+  Dominio publico: obra del Gobierno de EE. UU. (National Park Service).
+  Origen: https://commons.wikimedia.org/wiki/File:Aurora_over_the_boreal_forest_(57be20e1-a3cf-453e-9632-2d38df39b643).jpg
+  Cambios: recortada a 16:9, reducida a 2560x1440 y oscurecida un 12 %.
+FIN
+
+rm -f "${TMP}"
+apt-get -y -qq purge python3-pil
+apt-get -y -qq autoremove --purge
+apt-get -qq clean
+
+chmod 644 "${DESTINO}/aurora.jpg" "${DESTINO}/CREDITOS.txt"
+test -s "${DESTINO}/aurora.jpg"
+rm -rf /usr/local/share/hypr

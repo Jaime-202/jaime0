@@ -1,0 +1,20 @@
+#!/bin/sh
+# En el sistema en vivo se entra directamente a Hyprland con el usuario de live-config.
+# El sistema instalado no lleva esto: la imagen que copia el instalador no tiene la seccion.
+. /usr/lib/live/config.sh
+
+USUARIO="$(getent passwd 1000 | cut -d: -f1)"
+ARCHIVO=/etc/greetd/config.toml
+if [ -n "${USUARIO}" ] && [ -f "${ARCHIVO}" ] && ! grep -q '^\[initial_session\]' "${ARCHIVO}"; then
+    cat >> "${ARCHIVO}" <<FIN
+
+[initial_session]
+command = "iniciar-sesion"
+user = "${USUARIO}"
+FIN
+fi
+
+# 0070-tzdata escribe /etc/timezone pero deja /etc/localtime en UTC.
+if [ -s /etc/timezone ] && [ -e "/usr/share/zoneinfo/$(cat /etc/timezone)" ]; then
+    ln -sf "/usr/share/zoneinfo/$(cat /etc/timezone)" /etc/localtime
+fi

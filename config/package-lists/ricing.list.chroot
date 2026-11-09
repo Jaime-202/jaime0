@@ -1,0 +1,16 @@
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+starship
+fastfetch
+kitty-terminfo
+nwg-look
+qt6ct
+gnome-themes-extra
+gnome-themes-extra-data
+adwaita-icon-theme
+dconf-gsettings-backend
+dconf-service
+gsettings-desktop-schemas
+libglib2.0-bin
+python3

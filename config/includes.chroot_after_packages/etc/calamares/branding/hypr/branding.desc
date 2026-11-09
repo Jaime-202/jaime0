@@ -1,0 +1,28 @@
+---
+componentName: hypr
+welcomeStyleCalamares: false
+welcomeExpandingLogo: false
+windowExpanding: normal
+windowSize: 1040px,680px
+windowPlacement: center
+sidebar: qml
+navigation: widget
+strings:
+    productName: "@PRODUCTO@"
+    shortProductName: "@PRODUCTO@"
+    version: ""
+    shortVersion: ""
+    versionedName: "@PRODUCTO@"
+    shortVersionedName: "@PRODUCTO@"
+    bootloaderEntryName: "@PRODUCTO@"
+images:
+    productLogo: "logo.svg"
+    productIcon: "logo.svg"
+    productWelcome: "logo.svg"
+slideshow: "show.qml"
+slideshowAPI: 2
+style:
+    SidebarBackground: "#0b0d14"
+    SidebarText: "#9aa0bc"
+    SidebarTextCurrent: "#f2f4fb"
+    SidebarBackgroundCurrent: "#171a26"

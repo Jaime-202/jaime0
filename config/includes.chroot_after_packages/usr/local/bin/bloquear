@@ -1,0 +1,5 @@
+#!/bin/sh
+# Bloquea la pantalla con swaylock (tema en ~/.config/swaylock/config).
+# -f: queda en segundo plano en cuanto la pantalla esta bloqueada.
+pgrep -x swaylock >/dev/null 2>&1 && exit 0
+exec swaylock -f

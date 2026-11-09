@@ -1,0 +1,19 @@
+#!/bin/sh
+# Zsh por defecto para usuarios nuevos y tema GTK como valor por defecto de GSettings.
+set -e
+
+grep -qx /bin/zsh /etc/shells || echo /bin/zsh >> /etc/shells
+
+if grep -qE '^#? *DSHELL=' /etc/adduser.conf; then
+    sed -i -E 's|^#? *DSHELL=.*|DSHELL=/bin/zsh|' /etc/adduser.conf
+else
+    echo 'DSHELL=/bin/zsh' >> /etc/adduser.conf
+fi
+
+if grep -qE '^#? *SHELL=' /etc/default/useradd; then
+    sed -i -E 's|^#? *SHELL=.*|SHELL=/bin/zsh|' /etc/default/useradd
+else
+    echo 'SHELL=/bin/zsh' >> /etc/default/useradd
+fi
+
+glib-compile-schemas /usr/share/glib-2.0/schemas

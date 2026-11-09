@@ -1,0 +1,194 @@
+// ~/.config/waybar/config.jsonc
+// Barra de pildoras compactas con iconos Nerd Font; cada modulo tiene su color (style.css).
+{
+    "layer": "top",
+    "position": "top",
+    "height": 30,
+    "margin-top": 6,
+    "margin-left": 8,
+    "margin-right": 8,
+    "margin-bottom": 0,
+    "spacing": 6,
+    "exclusive": true,
+    "fixed-center": true,
+
+    "modules-left": ["custom/logo", "hyprland/workspaces", "hyprland/window"],
+    "modules-center": ["mpris"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "clock", "custom/notificaciones", "group/bandeja", "custom/power"],
+
+    "custom/logo": {
+        "format": "",
+        "tooltip": true,
+        "tooltip-format": "Jaime0 · SUPER + F1: atajos",
+        "on-click": "rofi -show drun",
+        "on-click-right": "atajos --rofi"
+    },
+
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "format-icons": {
+            "active": "",
+            "empty": "",
+            "default": ""
+        },
+        "persistent-workspaces": {
+            "*": 5
+        },
+        "on-click": "activate",
+        "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'",
+        "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'",
+        "sort-by-number": true,
+        "show-special": false
+    },
+
+    "hyprland/window": {
+        "format": "{title}",
+        "rewrite": {
+            "(.+)": "  $1"
+        },
+        "max-length": 36,
+        "separate-outputs": true,
+        "icon": false
+    },
+
+    // Se oculta solo si no hay nada sonando.
+    "mpris": {
+        "format": "{player_icon}  {title} · {artist}",
+        "format-paused": "{status_icon}  {title} · {artist}",
+        "player-icons": {
+            "default": "",
+            "spotify": ""
+        },
+        "status-icons": {
+            "paused": ""
+        },
+        "title-len": 26,
+        "artist-len": 18,
+        "tooltip": false
+    },
+
+    "cpu": {
+        "interval": 5,
+        "format": " {usage}%",
+        "tooltip": false,
+        "on-click": "abrir-btop"
+    },
+
+    "memory": {
+        "interval": 10,
+        "format": " {percentage}%",
+        "tooltip-format": "RAM: {used:0.1f} / {total:0.1f} GB\nSwap: {swapUsed:0.1f} / {swapTotal:0.1f} GB",
+        "on-click": "abrir-btop"
+    },
+
+    "pulseaudio": {
+        "scroll-step": 5,
+        "format": "{icon} {volume}%",
+        "format-bluetooth": " {volume}%",
+        "format-muted": " mudo",
+        "format-icons": {
+            "default": ["", "", ""]
+        },
+        "tooltip-format": "{desc}",
+        "on-click": "pavucontrol",
+        "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
+    },
+
+    "network": {
+        "interval": 10,
+        "format-wifi": " {essid}",
+        "format-ethernet": " cable",
+        "format-linked": " sin IP",
+        "format-disconnected": " sin red",
+        "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",
+        "tooltip-format-ethernet": "{ifname}\n{ipaddr}/{cidr}",
+        "tooltip-format-disconnected": "Sin conexión",
+        "on-click": "kitty --class nmtui-flotante -e nmtui"
+    },
+
+    "bluetooth": {
+        "format": "",
+        "format-disabled": " off",
+        "format-off": " off",
+        "format-connected": " {num_connections}",
+        "format-no-controller": "",
+        "tooltip-format": "{controller_alias}: {status}",
+        "tooltip-format-connected": "{controller_alias}\n{device_enumerate}",
+        "tooltip-format-enumerate-connected": "{device_alias}",
+        "on-click": "blueman-manager"
+    },
+
+    "battery": {
+        "interval": 60,
+        "states": {
+            "aviso": 25,
+            "critico": 12
+        },
+        "format": "{icon} {capacity}%",
+        "format-charging": " {capacity}%",
+        "format-plugged": " {capacity}%",
+        "format-icons": ["", "", "", "", ""],
+        "tooltip-format": "{timeTo}"
+    },
+
+    "clock": {
+        "interval": 1,
+        "format": " {:%d/%m/%Y %H:%M:%S}",
+        "tooltip-format": "<tt>{calendar}</tt>",
+        "calendar": {
+            "mode": "month",
+            "weeks-pos": "",
+            "on-scroll": 1,
+            "format": {
+                "months": "<span color='#ff6ea9'><b>{}</b></span>",
+                "days": "<span color='#e0e4f2'>{}</span>",
+                "weekdays": "<span color='#6ee7f2'><b>{}</b></span>",
+                "today": "<span color='#12141d' background='#ffe57a'><b>{}</b></span>"
+            }
+        },
+        "actions": {
+            "on-scroll-up": "shift_up",
+            "on-scroll-down": "shift_down"
+        }
+    },
+
+    // Campana: clic para pausar o reanudar las notificaciones; clic derecho, la ultima otra vez.
+    "custom/notificaciones": {
+        "exec": "notificaciones-waybar",
+        "return-type": "json",
+        "interval": 5,
+        "on-click": "dunstctl set-paused toggle; pkill -RTMIN+8 waybar",
+        "on-click-right": "dunstctl history-pop",
+        "signal": 8
+    },
+
+    // La bandeja queda recogida: se despliega al pasar el raton por la flecha.
+    "group/bandeja": {
+        "orientation": "inherit",
+        "drawer": {
+            "transition-duration": 200,
+            "children-class": "bandeja-hija",
+            "transition-left-to-right": false
+        },
+        "modules": ["custom/bandeja", "tray"]
+    },
+
+    "custom/bandeja": {
+        "format": "",
+        "tooltip": true,
+        "tooltip-format": "Bandeja del sistema"
+    },
+
+    "tray": {
+        "icon-size": 15,
+        "spacing": 8,
+        "show-passive-items": true
+    },
+
+    "custom/power": {
+        "format": "",
+        "tooltip": true,
+        "tooltip-format": "Apagar, reiniciar, suspender o cerrar sesión",
+        "on-click": "menu-energia"
+    }
+}

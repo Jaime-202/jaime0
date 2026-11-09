@@ -1,0 +1,27 @@
+#!/bin/sh
+# Abre el instalador como root dentro de la sesion Wayland en vivo.
+if [ ! -d /run/live/medium ]; then
+    notify-send "Instalador" "Esto solo funciona desde el sistema en vivo."
+    exit 1
+fi
+
+sudo mv /etc/fstab /etc/fstab.orig.calamares 2>/dev/null
+sudo env \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    WAYLAND_DISPLAY="${WAYLAND_DISPLAY}" \
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR}" \
+    XDG_SESSION_TYPE=wayland \
+    XDG_CONFIG_HOME="${HOME}/.config" \
+    QT_QPA_PLATFORM=wayland \
+    QT_QPA_PLATFORMTHEME=qt6ct \
+    QT_WAYLAND_DISABLE_WINDOWDECORATION=1 \
+    LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE}" \
+    HOME=/root \
+    calamares
+ESTADO=$?
+sudo mv /etc/fstab.orig.calamares /etc/fstab 2>/dev/null
+
+# Deja el registro a mano por si hay que revisar un fallo.
+sudo cp /root/.cache/calamares/session.log "${HOME}/instalador.log" 2>/dev/null
+sudo chown "$(id -u):$(id -g)" "${HOME}/instalador.log" 2>/dev/null
+exit ${ESTADO}

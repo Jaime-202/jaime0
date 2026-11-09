@@ -1,0 +1,7 @@
+#!/bin/sh
+# Estado de Dunst para la campana de Waybar (JSON de una linea).
+if [ "$(dunstctl is-paused 2>/dev/null)" = true ]; then
+    printf '{"text":"\357\207\266","class":"pausadas","tooltip":"Notificaciones en pausa (clic para reanudar)"}\n'
+else
+    printf '{"text":"\357\203\263","class":"activas","tooltip":"Notificaciones activas (clic para pausar, clic derecho: la última)"}\n'
+fi

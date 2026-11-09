@@ -1,0 +1,28 @@
+#!/bin/sh
+# Permisos de /etc/skel: root es el dueno aqui; useradd y adduser los pasan al usuario nuevo.
+# La compilacion falla si queda algo ligado a la maquina de construccion.
+set -e
+
+chown -R root:root /etc/skel
+find /etc/skel -type d -exec chmod 755 {} +
+find /etc/skel -type f -exec chmod 644 {} +
+
+# Solo son ejecutables los archivos que son scripts de verdad.
+find /etc/skel -type f | while IFS= read -r ARCHIVO; do
+    if [ "$(head -c 2 "${ARCHIVO}")" = '#!' ]; then
+        chmod 755 "${ARCHIVO}"
+    fi
+done
+
+chown root:root /usr/local/bin/captura-area /usr/local/bin/menu-energia /usr/local/bin/tiempo-waybar
+chmod 755 /usr/local/bin/captura-area /usr/local/bin/menu-energia /usr/local/bin/tiempo-waybar
+
+if grep -rlE '/home/builder|builder@' /etc/skel; then
+    echo "ERROR: /etc/skel depende de la maquina de construccion" >&2
+    exit 1
+fi
+
+if grep -rl "$(printf '\r')" /etc/skel; then
+    echo "ERROR: /etc/skel contiene finales de linea CRLF" >&2
+    exit 1
+fi

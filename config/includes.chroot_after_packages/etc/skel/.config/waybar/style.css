@@ -1,0 +1,138 @@
+/* ~/.config/waybar/style.css
+   Pildoras oscuras y separadas, cada modulo con su color de la paleta jaime0.
+   El blur lo aplica Hyprland con layer_rule. */
+
+@define-color fondo     rgba(18, 20, 29, 0.82);
+@define-color borde     rgba(52, 58, 82, 0.90);
+@define-color texto     #e0e4f2;
+@define-color tenue     #7a819e;
+@define-color rosa      #ff6ea9;
+@define-color malva     #b59bff;
+@define-color cian      #6ee7f2;
+@define-color verde     #a6e87a;
+@define-color amarillo  #ffe57a;
+@define-color azul      #7ab0ff;
+@define-color rojo      #ff5c72;
+@define-color naranja   #ffab6e;
+
+* {
+    font-family: "JetBrainsMono Nerd Font", monospace;
+    font-size: 12px;
+    font-weight: 700;
+    min-height: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+window#waybar {
+    background: transparent;
+    color: @texto;
+}
+
+tooltip {
+    background: rgba(11, 13, 20, 0.97);
+    border: 1px solid @malva;
+    border-radius: 8px;
+}
+
+tooltip label {
+    color: @texto;
+    padding: 4px;
+}
+
+/* Todas las pildoras */
+#custom-logo,
+#workspaces,
+#window,
+#mpris,
+#cpu,
+#memory,
+#pulseaudio,
+#network,
+#bluetooth,
+#battery,
+#clock,
+#custom-notificaciones,
+#bandeja,
+#custom-power {
+    background: @fondo;
+    border: 1px solid @borde;
+    border-radius: 9px;
+    padding: 2px 10px;
+}
+
+#custom-logo        { color: @rosa;  font-size: 14px; padding: 2px 11px 2px 9px; }
+#window             { color: @texto; font-weight: 600; }
+#mpris              { color: @verde; }
+#mpris.paused       { color: @tenue; }
+#cpu                { color: @verde; }
+#memory             { color: @amarillo; }
+#pulseaudio         { color: @rosa; }
+#pulseaudio.muted   { color: @tenue; }
+#network            { color: @cian; }
+#network.disconnected { color: @rojo; }
+#bluetooth          { color: @azul; }
+#bluetooth.off,
+#bluetooth.disabled { color: @tenue; }
+#battery            { color: @verde; }
+#battery.aviso      { color: @naranja; }
+#battery.critico    { color: @rojo; }
+#clock              { color: @malva; }
+#custom-notificaciones          { color: @amarillo; }
+#custom-notificaciones.pausadas { color: @tenue; }
+#custom-bandeja     { color: @tenue; padding: 0 4px; }
+#tray               { padding: 0 2px; }
+#custom-power       { color: @rojo; padding: 2px 11px 2px 9px; }
+
+/* Sin ventana activa no se dibuja una pildora vacia */
+window#waybar.empty #window {
+    background: transparent;
+    border-color: transparent;
+    padding: 0;
+    margin: 0;
+}
+
+/* Escritorios como puntos: el activo relleno y en rosa */
+#workspaces {
+    padding: 2px 6px;
+}
+
+#workspaces button {
+    background: transparent;
+    color: @malva;
+    padding: 0 5px;
+    border-radius: 6px;
+}
+
+#workspaces button.empty {
+    color: #565c78;
+}
+
+#workspaces button.active {
+    color: @rosa;
+}
+
+#workspaces button.urgent {
+    color: @rojo;
+}
+
+#workspaces button:hover {
+    background: rgba(181, 155, 255, 0.18);
+}
+
+#custom-logo:hover,
+#cpu:hover,
+#memory:hover,
+#pulseaudio:hover,
+#network:hover,
+#bluetooth:hover,
+#clock:hover,
+#custom-notificaciones:hover,
+#custom-power:hover {
+    border-color: @malva;
+}
+
+#tray > .needs-attention {
+    background: @rojo;
+}

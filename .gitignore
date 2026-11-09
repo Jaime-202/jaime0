@@ -1,0 +1,19 @@
+# Resultado de compilar: la ISO se publica en Releases, no en el repositorio
+*.iso
+*.iso.sha256
+*.hybrid.iso
+*.deb
+*.log
+*.fin
+chroot/
+binary/
+cache/
+.build/
+config/binary
+config/bootstrap
+config/chroot
+config/common
+config/source
+config/packages.chroot/
+capturas-*/
+__pycache__/
