@@ -220,7 +220,7 @@ En Windows con la **Integridad de memoria** activada, VirtualBox funciona sobre 
 
 ## Paleta
 
-Tres colores base, y el resto son derivados: fondo oscuro `#12141d`, azul `#7ab0ff` y pizarra `#2f3b52`. Rojo y ámbar apagados (`#c96a78`, `#c9a26b`) solo avisan de errores. Los colores ANSI de la terminal están desaturados, para que `git` y `ls` sigan distinguiendo sus tipos.
+Tres colores base, y el resto son derivados: fondo oscuro `#12141d`, azul `#7ab0ff` y pizarra `#2f3b52`. Rojo y ámbar apagados (`#c96a78`, `#c9a26b`) solo avisan de errores. Los colores ANSI de la terminal están desaturados, para que `git` y `ls` sigan distinguiendo sus tipos. El fondo de pantalla es una foto de aurora recoloreada con esos mismos tonos.
 
 ## Qué lleva
 

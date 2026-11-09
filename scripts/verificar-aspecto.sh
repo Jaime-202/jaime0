@@ -99,6 +99,7 @@ else:
 PY
 grep -q 'Tim Rains' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && grep -qi 'dominio publico' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && ok "creditos del fondo" || fallo "faltan los creditos del fondo"
 grep -q '3380b169c328dd23a9ed4e991581c02185e09783cb1fb28b447c4c891f4282a1' config/hooks/normal/0350-fondo.hook.chroot && grep -q 'sha256sum -c' config/hooks/normal/0350-fondo.hook.chroot && ok "descarga del fondo fijada por SHA256" || fallo "descarga del fondo sin fijar"
+grep -q 'ImageOps.colorize(img.convert("L"), black="#0b0d14", mid="#2f3b52", white="#7ab0ff"' config/hooks/normal/0350-fondo.hook.chroot && grep -q 'recoloreada en azul' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && ok "fondo recoloreado con la paleta" || fallo "fondo sin recolorear"
 grep -q 'local fondo       = "/usr/share/backgrounds/jaime0/aurora.jpg"' "$SKEL/.config/hypr/hyprland.lua" && grep -q 'swaybg --image " .. fondo .. " --mode fill' "$SKEL/.config/hypr/hyprland.lua" && ok "swaybg usa el fondo en el autostart" || fallo "swaybg sin el fondo"
 C=chroot/usr/share/icons/Adwaita
 [ -f "$C/index.theme" ] && [ "$(ls "$C/cursors" | wc -l)" -gt 50 ] && ok "cursor Adwaita: $(ls "$C/cursors" | wc -l) entradas" || fallo "cursores Adwaita incompletos"
