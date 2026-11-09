@@ -59,9 +59,14 @@ echo "-- Fondo --"
 pgrep -a swaybg | grep -q jaime0/aurora.jpg && ok "swaybg corre con el fondo" || fallo "swaybg sin el fondo: $(pgrep -a swaybg)"
 capas | grep -qx wallpaper && ok "capa wallpaper presente" || fallo "falta la capa wallpaper"
 foto s5-escritorio
-A=$(muestra s5-escritorio 1100 150); B=$(muestra s5-escritorio 300 120)
-echo "Pixeles del fondo: $A y $B"
-[ -n "$A" ] && [ "$A" != "$B" ] && ok "el fondo no es un color solido" || fallo "el fondo parece un color solido"
+python3 -c "
+import sys
+from PIL import Image
+i = Image.open(sys.argv[1]).convert('RGB')
+p = [i.getpixel((x, y)) for x in range(100, 1000, 200) for y in range(100, 700, 150)]
+print('Tonos distintos del fondo:', len(set(p)))
+sys.exit(0 if len(set(p)) >= 8 and all(b > r for r, g, b in p) else 1)
+" "$X/s5-escritorio.png" && ok "el fondo tiene variedad de tonos azules" || fallo "el fondo parece un color solido o no es azul"
 
 echo "-- Kitty --"
 hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })' >/dev/null; sleep 1

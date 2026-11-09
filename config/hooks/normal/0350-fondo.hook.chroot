@@ -2,7 +2,7 @@
 # Fondo de Jaime0: "Aurora over the boreal forest", foto de Tim Rains para el National Park
 # Service (Denali, 2011). Obra del Gobierno de EE. UU.: dominio publico (PD-USGov-NPS).
 # https://commons.wikimedia.org/wiki/File:Aurora_over_the_boreal_forest_(57be20e1-a3cf-453e-9632-2d38df39b643).jpg
-# Se descarga fijada por SHA256, se recorta a 16:9 y se reduce a 2560x1440. Pillow se instala
+# Se descarga fijada por SHA256, se recorta a 16:9, se reduce a 2560x1440 y se recolorea en azul. Pillow se instala
 # solo para esto y se retira despues: no llega a la ISO.
 set -e
 
@@ -18,7 +18,7 @@ echo "${SUMA}  ${TMP}" | sha256sum -c -
 mkdir -p "${DESTINO}"
 python3 - "${TMP}" "${DESTINO}/aurora.jpg" <<'FIN'
 import sys
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageOps
 img = Image.open(sys.argv[1]).convert("RGB")
 w, h = img.size                       # 4288x2848
 alto = round(w * 9 / 16)              # 2412
@@ -26,6 +26,8 @@ arriba = round((h - alto) * 0.55)     # algo mas de bosque que de cielo
 img = img.crop((0, arriba, w, arriba + alto)).resize((2560, 1440), Image.LANCZOS)
 # Un punto mas oscuro para que el texto de las terminales transparentes se lea bien
 img = ImageEnhance.Brightness(img).enhance(0.88)
+# La aurora es verde: se reasigna la luminosidad a la paleta para dejarla en azul
+img = ImageOps.colorize(img.convert("L"), black="#0b0d14", mid="#2f3b52", white="#7ab0ff", blackpoint=0, midpoint=60, whitepoint=165)
 img.save(sys.argv[2], "JPEG", quality=90, optimize=True, progressive=True)
 FIN
 
@@ -34,7 +36,7 @@ aurora.jpg
   "Aurora over the boreal forest", NPS Photo / Tim Rains, Denali National Park, 2011.
   Dominio publico: obra del Gobierno de EE. UU. (National Park Service).
   Origen: https://commons.wikimedia.org/wiki/File:Aurora_over_the_boreal_forest_(57be20e1-a3cf-453e-9632-2d38df39b643).jpg
-  Cambios: recortada a 16:9, reducida a 2560x1440 y oscurecida un 12 %.
+  Cambios: recortada a 16:9, reducida a 2560x1440, oscurecida un 12 % y recoloreada en azul.
 FIN
 
 rm -f "${TMP}"
