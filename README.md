@@ -1,6 +1,6 @@
 # Jaime0
 
-Sistema operativo ligero, en vivo e instalable, basado en Debian Forky (testing), con Hyprland sobre Wayland. Trae terminales en mosaico con acentos pastel, un escritorio vacío al entrar y un instalador gráfico propio.
+Sistema operativo ligero, en vivo e instalable, basado en Debian Forky (testing), con Hyprland sobre Wayland. Trae terminales en mosaico en tonos de azul sobre fondo oscuro, un escritorio vacío al entrar y un instalador gráfico propio.
 
 Este repositorio contiene todo lo necesario para reconstruir la imagen: configuración de live-build, dotfiles de `/etc/skel`, hooks y scripts de verificación. La ISO lista para usar está en [Releases](https://github.com/Jaime-202/jaime0/releases).
 
@@ -217,6 +217,10 @@ Activa la aceleración 3D (`--accelerate-3d on --vram 128`) y usa ratón de tipo
 Dentro de una VM, Jaime0 se aligera solo: los programas dibujan por software, se apagan el blur y las animaciones, el cursor se dibuja por software y la escala queda fija en 1. En hardware real no se aplica nada de esto.
 
 En Windows con la **Integridad de memoria** activada, VirtualBox funciona sobre Hyper-V y va bastante más lento, incluido el ratón.
+
+## Paleta
+
+Tres colores base, y el resto son derivados: fondo oscuro `#12141d`, azul `#7ab0ff` y pizarra `#2f3b52`. Rojo y ámbar apagados (`#c96a78`, `#c9a26b`) solo avisan de errores. Los colores ANSI de la terminal están desaturados, para que `git` y `ls` sigan distinguiendo sus tipos.
 
 ## Qué lleva
 

@@ -30,7 +30,7 @@ for F in .zshrc .config/kitty/kitty.conf .config/starship.toml .config/fastfetch
 done
 
 echo "== Valores de la especificacion =="
-for PAR in ".config/kitty/kitty.conf|^font_family +JetBrainsMono Nerd Font$" ".config/kitty/kitty.conf|^font_size +11" ".config/kitty/kitty.conf|^hide_window_decorations +yes$" ".config/kitty/kitty.conf|^window_padding_width +8$" ".config/kitty/kitty.conf|^background_opacity +0.72$" ".config/kitty/kitty.conf|^background +#12141d$" ".config/kitty/kitty.conf|^foreground +#e0e4f2$" ".config/kitty/kitty.conf|^tab_bar_edge +bottom$" ".config/kitty/kitty.conf|^tab_bar_min_tabs +1$" ".config/kitty/kitty.conf|^color5 +#ff6ea9$" ".config/btop/btop.conf|^color_theme = \"jaime0\"$" ".config/btop/btop.conf|^rounded_corners = True$" ".config/btop/themes/jaime0.theme|^theme.cpu_box.=\"#a6e87a\"$" ".zshrc|_titulo_orden" ".zshrc|COLUMNS >= 86" ".config/fastfetch/logo.txt|^.1 .*.2" ".config/gtk-3.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/gtk-4.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/qt6ct/qt6ct.conf|^icon_theme=Papirus-Dark$"; do
+for PAR in ".config/kitty/kitty.conf|^font_family +JetBrainsMono Nerd Font$" ".config/kitty/kitty.conf|^font_size +11" ".config/kitty/kitty.conf|^hide_window_decorations +yes$" ".config/kitty/kitty.conf|^window_padding_width +8$" ".config/kitty/kitty.conf|^background_opacity +0.72$" ".config/kitty/kitty.conf|^background +#12141d$" ".config/kitty/kitty.conf|^foreground +#e0e4f2$" ".config/kitty/kitty.conf|^tab_bar_edge +bottom$" ".config/kitty/kitty.conf|^tab_bar_min_tabs +1$" ".config/kitty/kitty.conf|^color5 +#a58aa8$" ".config/btop/btop.conf|^color_theme = \"jaime0\"$" ".config/btop/btop.conf|^rounded_corners = True$" ".config/btop/themes/jaime0.theme|^theme.cpu_box.=\"#a6cbff\"$" ".zshrc|_titulo_orden" ".zshrc|COLUMNS >= 86" ".config/fastfetch/logo.txt|^.1 .*.2" ".config/gtk-3.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/gtk-4.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/qt6ct/qt6ct.conf|^icon_theme=Papirus-Dark$"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done
@@ -40,12 +40,12 @@ d = json.loads(re.sub(r'^\s*//.*$', '', open(sys.argv[1], encoding='utf-8').read
 claves = [m.get('key', '') for m in d['modules'] if isinstance(m, dict)]
 assert 'OS' in claves and 'WM' in claves and 'PC' in claves
 assert sum(1 for k in claves if k.startswith('│ ├')) >= 8 and sum(1 for k in claves if k.startswith('│ └')) == 3
-assert d['logo']['color'] == {'1': '35', '2': '36'}
+assert d['logo']['color'] == {'1': '94', '2': '34'}
 PY
 python3 - "$SKEL/.config/starship.toml" <<'PY' && ok "starship.toml valido" || fallo "starship.toml invalido"
 import sys, tomllib
 d = tomllib.load(open(sys.argv[1], 'rb'))
-assert d['palettes']['jaime0']['pink'] == '#ff6ea9'
+assert d['palettes']['jaime0']['pink'] == '#7ab0ff'
 assert d['add_newline'] is True and '$time' in d['right_format'] and '$status' in d['right_format'] and d['time']['disabled'] is False
 assert '❯' in d['character']['success_symbol'] and '$directory' in d['format']
 PY
@@ -53,7 +53,8 @@ PY
 echo "== Paleta: solo colores de la paleta jaime0 =="
 python3 - chroot <<'PY' | tee -a "$SALIDA"
 import pathlib, re, sys
-MARINO = set("12141d 0b0d14 171a26 252939 343a52 2e3350 b59bff 7ab0ff 6ee7f2 e0e4f2 f2f4fb b6bcd4 9aa0bc 7a819e 565c78 454a64 ff5c72 ff8a99 ffe57a ffab6e a6e87a ff6ea9 a6cbff a2f0f7 c3f2a0 fff0a8 ffb3cf".split())
+MARINO = set("12141d 0b0d14 171a26 252939 2f3b52 7ab0ff a6cbff c7dcff e0e4f2 f2f4fb b6bcd4 9aa0bc 7a819e 565c78 454a64 c96a78 d99aa3 c9a26b".split())
+ANSI_KITTY = set("8fb39a a9c7b3 c4ad75 d9c796 7fb0bd a3c8d2 a58aa8 c2adc4".split())
 raiz = pathlib.Path(sys.argv[1])
 rutas = []
 for base in ["etc/skel/.config", "usr/share/qt6ct/colors/jaime0.conf", "etc/greetd/config.toml", "etc/calamares/branding/hypr/stylesheet.qss", "etc/calamares/branding/hypr/branding.desc", "etc/calamares/branding/hypr/logo.svg", "usr/share/grub/themes/hypr/theme.txt"]:
@@ -70,7 +71,8 @@ for f in rutas:
         candidatos = {entero[:6], entero[2:8]} if len(entero) == 8 else {entero}
         if entero == "00000000":  # totalmente transparente: no aporta color
             continue
-        if not (candidatos & MARINO):
+        permitidos = MARINO | ANSI_KITTY if f.name == "kitty.conf" else MARINO
+        if not (candidatos & permitidos):
             print(f"[FALLO] color ajeno {m.group(0)} en {f.relative_to(raiz)}")
             ajenos += 1
 print(f"[OK]    {len(rutas)} archivos revisados" if not ajenos else f"[FALLO] {ajenos} colores ajenos")
@@ -122,7 +124,7 @@ echo "== Fondo y acceso =="
 [ -d chroot/usr/local/share/hypr ] && fallo "restos del generador antiguo del fondo" || ok "sin restos del generador antiguo"
 grep -q "^python3-pil" chroot.packages.live && fallo "Pillow en la ISO" || ok "Pillow retirado tras preparar el fondo"
 grep -q "^librsvg2-bin" chroot.packages.live && fallo "librsvg2-bin en la ISO" || ok "librsvg2-bin retirado tras generar la marca"
-grep -q "border=magenta" chroot/etc/greetd/config.toml && grep -q "container=black" chroot/etc/greetd/config.toml && ok "tuigreet con colores de la paleta" || fallo "tuigreet sin tema"
+grep -q "border=blue;title=lightblue" chroot/etc/greetd/config.toml && grep -q "container=black" chroot/etc/greetd/config.toml && ok "tuigreet con colores de la paleta" || fallo "tuigreet sin tema"
 grep -q -- "--greeting 'Jaime0'" chroot/etc/greetd/config.toml && ok "tuigreet saluda con Jaime0" || fallo "tuigreet sin saludo Jaime0"
 
 echo "== Zsh por defecto =="

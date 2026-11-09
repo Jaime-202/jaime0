@@ -1,15 +1,13 @@
 /* ~/.config/rofi/jaime0.rasi
-   Lanzador centrado: fondo oscuro translucido, borde malva, buscador en pildora y
-   seleccion en rosa. El blur lo aplica Hyprland. */
+   Lanzador centrado: fondo oscuro translucido, borde azul, buscador en pildora y
+   seleccion en azul. El blur lo aplica Hyprland. */
 
 * {
     fondo:        #12141de6;
     superficie:   #252939;
     texto:        #e0e4f2;
     tenue:        #7a819e;
-    rosa:         #ff6ea9;
-    malva:        #b59bff;
-    cian:         #6ee7f2;
+    azul:         #7ab0ff;
     oscuro:       #12141d;
     transparente: #00000000;
 
@@ -22,7 +20,7 @@ window {
     anchor:           center;
     width:            620px;
     border:           2px;
-    border-color:     @malva;
+    border-color:     @azul;
     border-radius:    12px;
     background-color: @fondo;
 }
@@ -42,7 +40,7 @@ inputbar {
 }
 
 prompt {
-    text-color: @rosa;
+    text-color: @azul;
 }
 
 entry {
@@ -90,16 +88,16 @@ element-text {
 element selected.normal,
 element selected.active,
 element selected.urgent {
-    background-color: @rosa;
+    background-color: @azul;
     text-color:       @oscuro;
 }
 
 element normal.active,
 element alternate.active {
-    text-color: @cian;
+    text-color: @azul;
 }
 
 element normal.urgent,
 element alternate.urgent {
-    text-color: #ff5c72;
+    text-color: #c96a78;
 }

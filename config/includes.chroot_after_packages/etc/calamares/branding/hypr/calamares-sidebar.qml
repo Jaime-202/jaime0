@@ -84,7 +84,7 @@ Rectangle {
                     radius: 4
                     color: paso.actual ? "#171a26" : "transparent"
                     border.width: paso.actual ? 1 : 0
-                    border.color: "#343a52"
+                    border.color: "#2f3b52"
                 }
 
                 // Linea que une cada paso con el siguiente
@@ -94,7 +94,7 @@ Rectangle {
                     y: parent.height / 2 + 11
                     width: 2
                     height: parent.height - 22
-                    color: paso.hecho ? "#b59bff" : "#252939"
+                    color: paso.hecho ? "#7ab0ff" : "#252939"
                 }
 
                 Rectangle {
@@ -104,9 +104,9 @@ Rectangle {
                     width: 22
                     height: 22
                     radius: 11
-                    color: paso.hecho ? "#b59bff" : (paso.actual ? "#252939" : "transparent")
+                    color: paso.hecho ? "#7ab0ff" : (paso.actual ? "#252939" : "transparent")
                     border.width: 2
-                    border.color: paso.hecho || paso.actual ? "#b59bff" : "#343a52"
+                    border.color: paso.hecho || paso.actual ? "#7ab0ff" : "#2f3b52"
 
                     Text {
                         anchors.centerIn: parent

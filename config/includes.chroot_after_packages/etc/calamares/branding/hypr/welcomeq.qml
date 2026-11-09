@@ -93,7 +93,7 @@ Rectangle {
                     width: listado.width
                     height: 38
 
-                    readonly property color tono: satisfied ? "#a6e87a" : (mandatory ? "#ff5c72" : "#ffe57a")
+                    readonly property color tono: satisfied ? "#a6cbff" : (mandatory ? "#c96a78" : "#a6cbff")
 
                     Rectangle {
                         id: indicador
@@ -135,7 +135,7 @@ Rectangle {
             text: config.requirementsModel.satisfiedMandatory
                 ? "Puedes continuar: lo marcado con ! es solo una recomendación."
                 : "Este equipo no cumple lo mínimo para instalar " + bienvenida.producto + ". Corrige lo marcado con ✕ para poder continuar."
-            color: config.requirementsModel.satisfiedMandatory ? "#ffe57a" : "#ff8a99"
+            color: config.requirementsModel.satisfiedMandatory ? "#a6cbff" : "#d99aa3"
             font.family: bienvenida.fuente
             font.pixelSize: 13
             wrapMode: Text.WordWrap
@@ -168,7 +168,7 @@ Rectangle {
             background: Rectangle {
                 radius: 4
                 color: "#0b0d14"
-                border.color: idiomas.hovered ? "#b59bff" : "#343a52"
+                border.color: idiomas.hovered ? "#7ab0ff" : "#2f3b52"
             }
             contentItem: Text {
                 leftPadding: 12
@@ -183,14 +183,14 @@ Rectangle {
                 x: idiomas.width - width - 12
                 anchors.verticalCenter: parent.verticalCenter
                 text: "▾"
-                color: "#6ee7f2"
+                color: "#7ab0ff"
                 font.pixelSize: 14
             }
             delegate: ItemDelegate {
                 width: idiomas.width
                 height: 32
                 highlighted: idiomas.highlightedIndex === index
-                background: Rectangle { color: highlighted ? "#2e3350" : "#0b0d14" }
+                background: Rectangle { color: highlighted ? "#2f3b52" : "#0b0d14" }
                 contentItem: Text {
                     verticalAlignment: Text.AlignVCenter
                     text: label
@@ -214,7 +214,7 @@ Rectangle {
                 background: Rectangle {
                     radius: 4
                     color: "#0b0d14"
-                    border.color: "#343a52"
+                    border.color: "#2f3b52"
                 }
             }
         }

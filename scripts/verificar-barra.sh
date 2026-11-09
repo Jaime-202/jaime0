@@ -64,7 +64,7 @@ PY
 then ok "config.jsonc valido con los modulos pedidos"; else fallo "config.jsonc invalido"; fi
 
 echo "== Valores de la especificacion =="
-for PAR in "waybar/style.css|border-radius: 9px" "waybar/style.css|rgba.18, 20, 29, 0.82." "waybar/style.css|@define-color rosa +#ff6ea9" "waybar/style.css|@define-color malva +#b59bff" "waybar/style.css|@define-color cian +#6ee7f2" "waybar/style.css|@define-color verde +#a6e87a" "waybar/style.css|@define-color amarillo +#ffe57a" "waybar/style.css|#cpu +\{ color: @verde" "waybar/style.css|#clock +\{ color: @malva" "waybar/config.jsonc|#ff6ea9" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border-radius: *12px" "rofi/jaime0.rasi|#12141de6" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 10" "dunst/dunstrc|#12141de6" "dunst/dunstrc|frame_color = \"#b59bff\"" "dunst/dunstrc|timeout = 5"; do
+for PAR in "waybar/style.css|border-radius: 9px" "waybar/style.css|rgba.18, 20, 29, 0.82." "waybar/style.css|@define-color claro +#a6cbff" "waybar/style.css|#cpu +\{ color: @azul" "waybar/style.css|#clock +\{ color: @claro" "waybar/config.jsonc|#7ab0ff" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border-radius: *12px" "rofi/jaime0.rasi|#12141de6" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 10" "dunst/dunstrc|#12141de6" "dunst/dunstrc|frame_color = \"#7ab0ff\"" "dunst/dunstrc|timeout = 5"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "chroot$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done
@@ -83,7 +83,7 @@ chroot chroot rofi -help 2>&1 | grep -qE '^[[:space:]]*.*wayland' && ok "rofi co
 chroot chroot sh -c 'rofi -help' 2>&1 | grep -iE 'drun|dmenu' | head -2 | cut -c1-100
 chroot chroot rofi -dump-config >/dev/null 2>&1 && ok "rofi -dump-config" || fallo "rofi -dump-config"
 chroot chroot env HOME=/etc/skel rofi -dump-theme >/tmp/vs4tema 2>&1
-grep -q '#b59bff\|rgba ( 181, 155, 255' /tmp/vs4tema && ok "rofi -dump-theme analiza el tema" || { fallo "rofi -dump-theme"; head -5 /tmp/vs4tema; }
+grep -q '#7ab0ff\|rgba ( 122, 176, 255' /tmp/vs4tema && ok "rofi -dump-theme analiza el tema" || { fallo "rofi -dump-theme"; head -5 /tmp/vs4tema; }
 sed 's/location:         center;/location center;;;{/' "chroot$SKEL/rofi/jaime0.rasi" > chroot/tmp/roto.rasi
 chroot chroot env HOME=/tmp rofi -theme /tmp/roto.rasi -dump-theme >/tmp/vs4tema 2>&1
 grep -qiE 'error|fail|unexpected' /tmp/vs4tema && ok "control negativo: rofi detecta un tema roto" || fallo "control negativo de rofi sin efecto"
