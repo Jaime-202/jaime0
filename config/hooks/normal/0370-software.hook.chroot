@@ -1,0 +1,10 @@
+#!/bin/sh
+# Ajustes del software base: carpetas de usuario y base de datos de aplicaciones.
+set -e
+
+systemctl --global enable xdg-user-dirs.service
+
+update-desktop-database /usr/share/applications
+
+# Waybar lleva un parche propio: no debe sustituirlo ni retirarlo ninguna actualizacion.
+apt-mark hold waybar

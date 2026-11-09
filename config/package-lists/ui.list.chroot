@@ -1,0 +1,13 @@
+waybar
+rofi
+dunst
+papirus-icon-theme
+hicolor-icon-theme
+librsvg2-common
+fontconfig
+xz-utils
+btop
+swaylock
+swayidle
+brightnessctl
+playerctl

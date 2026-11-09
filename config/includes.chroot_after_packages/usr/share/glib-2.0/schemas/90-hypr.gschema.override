@@ -1,0 +1,13 @@
+# En Wayland, GTK lee estos valores de GSettings por encima de settings.ini.
+[org.gnome.desktop.interface]
+gtk-theme='Adwaita-dark'
+color-scheme='prefer-dark'
+icon-theme='Papirus-Dark'
+cursor-theme='Adwaita'
+cursor-size=24
+font-name='JetBrainsMono Nerd Font 10'
+monospace-font-name='JetBrainsMono Nerd Font 11'
+document-font-name='JetBrainsMono Nerd Font 11'
+
+[org.gnome.desktop.wm.preferences]
+button-layout=':'

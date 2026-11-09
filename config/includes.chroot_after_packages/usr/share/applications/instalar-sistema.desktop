@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Instalar el sistema
+GenericName=Instalador
+Comment=Instala este sistema en el disco
+Exec=instalar-sistema
+Icon=/etc/calamares/branding/hypr/logo.svg
+Terminal=false
+Categories=System;
+Keywords=instalar;instalador;install;

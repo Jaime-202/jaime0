@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+systemctl enable NetworkManager.service
+systemctl enable bluetooth.service
+systemctl --global enable pipewire.socket
+systemctl --global enable pipewire-pulse.socket
+systemctl --global enable wireplumber.service
+
+# Debian ya no lee /usr/lib/pam.d: estos servicios deben estar en /etc/pam.d.
+for SERVICIO in systemd-user polkit-1; do
+    [ -e "/etc/pam.d/${SERVICIO}" ] || cp "/usr/lib/pam.d/${SERVICIO}" "/etc/pam.d/${SERVICIO}"
+done

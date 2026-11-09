@@ -1,0 +1,11 @@
+thunar
+unzip
+git
+openssh-client
+curl
+wget
+neovim
+xdg-utils
+file
+shared-mime-info
+desktop-file-utils

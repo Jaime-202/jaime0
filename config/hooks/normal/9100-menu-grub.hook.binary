@@ -1,0 +1,18 @@
+#!/bin/sh
+# Nombres propios en el menu de GRUB del medio vivo. Corre dentro de binary/.
+set -e
+
+# El nombre vive en un solo sitio: marca.conf
+. ../chroot/usr/local/share/marca/marca.conf
+
+if [ -f boot/grub/grub.cfg ]; then
+    sed -i \
+        -e 's/Live system ([a-z0-9]* *fail-safe mode)/Modo seguro/' \
+        -e "s/Live system ([a-z0-9]*)/${PRODUCTO} en vivo/" \
+        -e "s/Live system/${PRODUCTO} en vivo/" \
+        boot/grub/grub.cfg
+fi
+for TEMA in boot/grub/live-theme/theme.txt; do
+    [ -f "${TEMA}" ] && sed -i -e "s/^title-text: .*/title-text: \"${PRODUCTO}\"/" "${TEMA}"
+done
+exit 0

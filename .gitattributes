@@ -1,0 +1,6 @@
+# Los scripts y la configuracion deben conservar finales de linea LF
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.qm binary
+*.mo binary

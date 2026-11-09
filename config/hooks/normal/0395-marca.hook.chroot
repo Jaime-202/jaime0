@@ -1,0 +1,41 @@
+#!/bin/sh
+# Identidad del sistema a partir de marca.conf: os-release, avisos de consola y marca de arranque.
+set -e
+. /usr/local/share/marca/marca.conf
+MINUSCULAS="$(printf '%s' "${PRODUCTO}" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' '-')"
+
+# El desvio evita que una actualizacion de base-files devuelva el nombre anterior.
+if [ ! -e /usr/lib/os-release.debian ]; then
+    dpkg-divert --local --no-rename --divert /usr/lib/os-release.debian --add /usr/lib/os-release
+    cp /usr/lib/os-release /usr/lib/os-release.debian
+fi
+CODIGO="$(sed -n 's/^VERSION_CODENAME=//p' /usr/lib/os-release.debian)"
+cat > /usr/lib/os-release <<FIN
+PRETTY_NAME="${PRODUCTO}"
+NAME="${PRODUCTO}"
+ID=${MINUSCULAS}
+ID_LIKE=debian
+VERSION_CODENAME=${CODIGO}
+HOME_URL="https://github.com/Jaime-202/jaime0"
+SUPPORT_URL="https://github.com/Jaime-202/jaime0"
+BUG_REPORT_URL="https://github.com/Jaime-202/jaime0/issues"
+FIN
+ln -sf ../usr/lib/os-release /etc/os-release
+
+for AVISO in /etc/issue /etc/issue.net; do
+    dpkg-divert --local --no-rename --divert "${AVISO}.debian" --add "${AVISO}"
+done
+printf '%s \\n \\l\n\n' "${PRODUCTO}" > /etc/issue
+printf '%s\n' "${PRODUCTO}" > /etc/issue.net
+
+# Marca discreta en la pantalla de arranque y en la de clave de cifrado, generada desde el
+# logo vectorial del instalador. librsvg2-bin se instala solo para esto.
+apt-get -y -qq --no-install-recommends install librsvg2-bin
+rsvg-convert -w 96 -h 96 /etc/calamares/branding/hypr/logo.svg -o /usr/local/share/marca/marca-arranque.png
+apt-get -y -qq purge librsvg2-bin
+apt-get -y -qq autoremove --purge
+TEMA=/usr/share/plymouth/themes/jaime0
+if [ -f /usr/local/share/marca/marca-arranque.png ]; then
+    cp /usr/local/share/marca/marca-arranque.png "${TEMA}/watermark.png"
+    update-initramfs -u
+fi

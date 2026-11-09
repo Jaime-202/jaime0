@@ -1,0 +1,39 @@
+#!/bin/sh
+# Capturas de pantalla: a archivo (Imagenes/Capturas) y al portapapeles.
+# Uso: captura area | pantalla | ventana
+set -u
+MODO="${1:-area}"
+
+xdg-user-dirs-update 2>/dev/null || true
+CARPETA="$(xdg-user-dir PICTURES 2>/dev/null || printf '%s' "${HOME}/Pictures")/Capturas"
+ARCHIVO="${CARPETA}/captura-$(date +%Y%m%d-%H%M%S).png"
+mkdir -p "${CARPETA}" || exit 1
+
+case "${MODO}" in
+    area)
+        REGION=$(slurp) || exit 0
+        [ -n "${REGION}" ] || exit 0
+        grim -g "${REGION}" "${ARCHIVO}" || exit 1
+        ;;
+    pantalla)
+        # Solo el monitor con el foco.
+        SALIDA=$(hyprctl monitors -j | python3 -c 'import json,sys; m=[x for x in json.load(sys.stdin) if x.get("focused")]; print(m[0]["name"] if m else "")')
+        if [ -n "${SALIDA}" ]; then grim -o "${SALIDA}" "${ARCHIVO}" || exit 1; else grim "${ARCHIVO}" || exit 1; fi
+        ;;
+    ventana)
+        REGION=$(hyprctl activewindow -j | python3 -c 'import json,sys
+try:
+    v=json.load(sys.stdin); x,y=v["at"]; w,h=v["size"]; print(f"{x},{y} {w}x{h}")
+except Exception:
+    pass')
+        [ -n "${REGION}" ] || { notify-send --app-name=captura "Captura" "No hay ventana activa"; exit 0; }
+        grim -g "${REGION}" "${ARCHIVO}" || exit 1
+        ;;
+    *)
+        echo "Uso: captura area|pantalla|ventana" >&2
+        exit 2
+        ;;
+esac
+
+wl-copy --type image/png < "${ARCHIVO}" || exit 1
+notify-send --app-name=captura --expire-time=5000 "Captura guardada" "${ARCHIVO}" || true

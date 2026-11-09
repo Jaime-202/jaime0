@@ -1,0 +1,9 @@
+#!/bin/sh
+# Espanol ya generado: las carpetas de usuario toman su nombre de este idioma.
+# Va al final porque el hook 1020 de live-build reescribe /etc/default/locale.
+set -e
+
+sed -i -E 's/^# *(es_ES\.UTF-8 UTF-8)/\1/' /etc/locale.gen
+grep -qx 'es_ES.UTF-8 UTF-8' /etc/locale.gen || echo 'es_ES.UTF-8 UTF-8' >> /etc/locale.gen
+locale-gen
+printf 'LANG=es_ES.UTF-8\n' > /etc/default/locale

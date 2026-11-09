@@ -1,0 +1,24 @@
+#!/bin/sh
+# Solo en el medio vivo. El instalador llama a setxkbmap al elegir distribucion, pero en
+# Wayland no hay servidor X: esto aplica la eleccion a Hyprland para que las claves que se
+# escriban despues salgan con el teclado elegido.
+CAPA=""
+VARIANTE=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -layout) CAPA="$2"; shift 2 ;;
+        -variant) VARIANTE="$2"; shift 2 ;;
+        -query|-print) exit 0 ;;
+        *) shift ;;
+    esac
+done
+[ -n "${CAPA}" ] || exit 0
+
+for ZOCALO in /run/user/*/hypr/*/.socket.sock; do
+    [ -S "${ZOCALO}" ] || continue
+    DIR="$(dirname "${ZOCALO}")"
+    XDG_RUNTIME_DIR="$(dirname "$(dirname "${DIR}")")" \
+    HYPRLAND_INSTANCE_SIGNATURE="$(basename "${DIR}")" \
+        hyprctl eval "hl.config({ input = { kb_layout = \"${CAPA}\", kb_variant = \"${VARIANTE}\" } })" >/dev/null 2>&1
+done
+exit 0

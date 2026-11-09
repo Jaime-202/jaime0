@@ -1,0 +1,35 @@
+#!/bin/sh
+# Corre dentro del sistema de destino, despues de quitar los paquetes de vivo.
+# Borra lo que no pertenece a ningun paquete y solo tiene sentido en la ISO.
+rm -f /usr/local/bin/instalar-sistema
+rm -f /usr/local/bin/setxkbmap
+rm -f /usr/share/applications/instalar-sistema.desktop
+rm -f /usr/local/sbin/hypr-instalar-grub
+rm -rf /usr/lib/live /etc/live /var/lib/live
+rm -rf /etc/calamares /var/cache/hypr-grub
+rm -rf /usr/share/calamares
+# El acceso del sistema instalado siempre pide usuario y clave.
+if [ -f /etc/greetd/config.toml ]; then
+    sed -i '/^\[initial_session\]/,$d' /etc/greetd/config.toml
+fi
+
+# Arranque seguro: la ruta de reserva del firmware (EFI/BOOT) debe empezar por shim y llevar
+# su propio grub.cfg, que el instalador no deja ahi.
+if [ -d /sys/firmware/efi/efivars ]; then
+    SHIM="$(find /boot/efi/EFI -mindepth 2 -maxdepth 2 -iname shimx64.efi ! -ipath '/boot/efi/EFI/BOOT/*' | head -1)"
+    if [ -n "${SHIM}" ]; then
+        DIR="$(dirname "${SHIM}")"
+        mkdir -p /boot/efi/EFI/BOOT
+        cp -f "${DIR}/shimx64.efi" /boot/efi/EFI/BOOT/BOOTX64.EFI
+        cp -f "${DIR}/grubx64.efi" /boot/efi/EFI/BOOT/grubx64.efi
+        cp -f "${DIR}/mmx64.efi" /boot/efi/EFI/BOOT/mmx64.efi
+        cp -f "${DIR}/grub.cfg" /boot/efi/EFI/BOOT/grub.cfg
+    fi
+fi
+
+# Las dependencias de lo que se ha quitado (Qt 6 del instalador, sobre todo).
+DEBIAN_FRONTEND=noninteractive apt-get -y -qq autoremove --purge >/dev/null 2>&1 || true
+apt-get -qq clean
+
+rm -f /usr/local/sbin/hypr-limpiar-vivo
+exit 0

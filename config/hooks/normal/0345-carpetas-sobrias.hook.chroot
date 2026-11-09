@@ -1,0 +1,17 @@
+#!/bin/sh
+# Carpetas de Papirus en azul grisaceo, con el mismo metodo que papirus-folders: los nombres
+# normales pasan a ser enlaces a la variante de color que ya trae el paquete.
+set -e
+
+cuenta=0
+for CARPETA in /usr/share/icons/Papirus*/*/places; do
+    [ -d "${CARPETA}" ] || continue
+    cd "${CARPETA}"
+    for ICONO in folder-bluegrey*.svg user-bluegrey*.svg; do
+        [ -e "${ICONO}" ] || continue
+        NORMAL=$(printf '%s' "${ICONO}" | sed 's/-bluegrey//')
+        ln -sf "${ICONO}" "${NORMAL}"
+        cuenta=$((cuenta + 1))
+    done
+done
+test "${cuenta}" -gt 0

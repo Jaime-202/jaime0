@@ -1,0 +1,3 @@
+Package: gnome-shell plasma-desktop plasma-workspace xfce4 xfce4-session cinnamon cinnamon-desktop-environment mate-desktop-environment mate-session-manager lxde lxde-core lxsession nautilus dolphin
+Pin: release a=*
+Pin-Priority: -1

@@ -1,0 +1,11 @@
+# /etc/greetd/config.toml
+# Acceso de Jaime0: greetd con tuigreet en la consola, sin servidor grafico propio.
+# Los colores son los de la consola, que el kernel toma de la paleta jaime0 (vt.default_*).
+# En el sistema en vivo, live-config anade [initial_session] para entrar sin clave.
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --time --time-format '%a %d/%m  %H:%M' --remember --asterisks --greeting 'Jaime0' --width 56 --window-padding 1 --container-padding 2 --prompt-padding 1 --theme 'border=magenta;title=lightmagenta;greet=lightmagenta;prompt=cyan;input=white;text=white;time=blue;action=yellow;button=lightmagenta;container=black' --cmd iniciar-sesion"
+user = "_greetd"

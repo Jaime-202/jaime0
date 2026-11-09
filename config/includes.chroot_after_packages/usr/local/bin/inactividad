@@ -1,0 +1,11 @@
+#!/bin/sh
+# Bloqueo y suspension por inactividad (swayidle). No actua en la sesion en vivo,
+# donde el usuario no conoce la clave.
+[ -d /run/live/medium ] && exit 0
+
+exec swayidle -w \
+    timeout 600  'bloquear' \
+    timeout 660  "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" \
+         resume  "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" \
+    timeout 1800 'systemctl suspend' \
+    before-sleep 'bloquear'

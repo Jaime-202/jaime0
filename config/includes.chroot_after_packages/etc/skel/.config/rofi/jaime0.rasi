@@ -1,0 +1,105 @@
+/* ~/.config/rofi/jaime0.rasi
+   Lanzador centrado: fondo oscuro translucido, borde malva, buscador en pildora y
+   seleccion en rosa. El blur lo aplica Hyprland. */
+
+* {
+    fondo:        #12141de6;
+    superficie:   #252939;
+    texto:        #e0e4f2;
+    tenue:        #7a819e;
+    rosa:         #ff6ea9;
+    malva:        #b59bff;
+    cian:         #6ee7f2;
+    oscuro:       #12141d;
+    transparente: #00000000;
+
+    background-color: @transparente;
+    text-color:       @texto;
+}
+
+window {
+    location:         center;
+    anchor:           center;
+    width:            620px;
+    border:           2px;
+    border-color:     @malva;
+    border-radius:    12px;
+    background-color: @fondo;
+}
+
+mainbox {
+    spacing:  10px;
+    padding:  16px;
+    children: [ inputbar, message, listview ];
+}
+
+inputbar {
+    spacing:          10px;
+    padding:          8px 14px;
+    border-radius:    10px;
+    background-color: @superficie;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color: @rosa;
+}
+
+entry {
+    placeholder:       "buscar…";
+    placeholder-color: @tenue;
+    cursor:            text;
+}
+
+message {
+    padding:          8px;
+    border-radius:    10px;
+    background-color: @superficie;
+}
+
+textbox {
+    text-color: @texto;
+}
+
+listview {
+    lines:        8;
+    columns:      1;
+    spacing:      4px;
+    fixed-height: true;
+    scrollbar:    false;
+    cycle:        true;
+}
+
+element {
+    spacing:       12px;
+    padding:       6px 12px;
+    border-radius: 8px;
+}
+
+element-icon {
+    size:             20px;
+    background-color: @transparente;
+}
+
+element-text {
+    background-color: @transparente;
+    text-color:       inherit;
+    vertical-align:   0.5;
+}
+
+element selected.normal,
+element selected.active,
+element selected.urgent {
+    background-color: @rosa;
+    text-color:       @oscuro;
+}
+
+element normal.active,
+element alternate.active {
+    text-color: @cian;
+}
+
+element normal.urgent,
+element alternate.urgent {
+    text-color: #ff5c72;
+}

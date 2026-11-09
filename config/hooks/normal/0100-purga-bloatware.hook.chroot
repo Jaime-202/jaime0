@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+PURGAR="tasksel tasksel-data reportbug python3-reportbug installation-report ifupdown exim4-base exim4-config exim4-daemon-light"
+PROHIBIDOS="xserver-xorg xserver-xorg-core gnome-shell plasma-desktop plasma-workspace xfce4 xfce4-session cinnamon cinnamon-desktop-environment mate-desktop-environment mate-session-manager lxde lxde-core lxsession nautilus dolphin"
+
+instalado() {
+    dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+}
+
+for PAQUETE in ${PURGAR}; do
+    if instalado "${PAQUETE}"; then
+        apt-get purge -y "${PAQUETE}"
+    fi
+done
+
+apt-get autoremove --purge -y
+apt-get clean
+
+for PAQUETE in ${PROHIBIDOS}; do
+    if instalado "${PAQUETE}"; then
+        echo "ERROR: paquete prohibido instalado: ${PAQUETE}" >&2
+        exit 1
+    fi
+done

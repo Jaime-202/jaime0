@@ -1,0 +1,23 @@
+#!/bin/sh
+# Cursor discreto: Adwaita, del paquete adwaita-icon-theme (ya instalado), a 24 px.
+# Sin descargas: el tema llamativo de antes (Catppuccin) ya no se usa.
+set -e
+
+test -d /usr/share/icons/Adwaita/cursors
+
+# Tema por defecto para programas que no leen XCURSOR_THEME.
+# /usr/share/icons/default/index.theme es una alternativa de Debian: no se escribe a mano.
+if [ -f /usr/share/icons/Adwaita/cursor.theme ]; then
+    TEMA=/usr/share/icons/Adwaita/cursor.theme
+else
+    mkdir -p /usr/share/icons/jaime0-cursor
+    TEMA=/usr/share/icons/jaime0-cursor/cursor.theme
+    cat > "${TEMA}" <<FIN
+[Icon Theme]
+Name=Default
+Comment=Cursor por defecto de Jaime0
+Inherits=Adwaita
+FIN
+fi
+update-alternatives --install /usr/share/icons/default/index.theme x-cursor-theme "${TEMA}" 100
+update-alternatives --set x-cursor-theme "${TEMA}"

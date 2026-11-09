@@ -1,0 +1,56 @@
+# ~/.config/starship.toml
+# Prompt minimalista: directorio, rama y ❯ a la izquierda; duracion y hora a la derecha.
+
+add_newline = true
+palette = "jaime0"
+format = "$directory$git_branch$git_status$character"
+right_format = "$cmd_duration$status$time"
+
+[directory]
+format = "[$path]($style)[$read_only]($read_only_style) "
+style = "fg:cyan bold"
+truncation_length = 3
+truncate_to_repo = true
+truncation_symbol = "…/"
+home_symbol = "~"
+read_only = " "
+read_only_style = "fg:yellow"
+
+[git_branch]
+format = "[ $branch]($style) "
+style = "fg:mauve"
+
+[git_status]
+format = "[$all_status$ahead_behind]($style)"
+style = "fg:yellow"
+
+[character]
+success_symbol = "[❯](fg:pink bold)"
+error_symbol = "[❯](fg:red bold)"
+vimcmd_symbol = "[❮](fg:green bold)"
+
+[cmd_duration]
+min_time = 2000
+format = "[ $duration ](fg:overlay)"
+
+[status]
+disabled = false
+format = "[ $status ]($style)"
+style = "fg:red"
+
+[time]
+disabled = false
+format = "[ $time]($style)"
+time_format = "%H:%M:%S"
+style = "fg:blue"
+
+[palettes.jaime0]
+pink = "#ff6ea9"
+mauve = "#b59bff"
+cyan = "#6ee7f2"
+green = "#a6e87a"
+yellow = "#ffe57a"
+blue = "#7ab0ff"
+red = "#ff5c72"
+text = "#e0e4f2"
+overlay = "#7a819e"

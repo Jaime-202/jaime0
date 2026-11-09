@@ -1,0 +1,36 @@
+#!/bin/sh
+# Corre dentro del sistema de destino. Instala el GRUB del firmware real desde los
+# paquetes que viajan en la ISO, sin red. grub-pc y grub-efi-amd64 son incompatibles
+# entre si, por eso no se instalan al compilar.
+set -e
+export DEBIAN_FRONTEND=noninteractive
+
+if [ -d /sys/firmware/efi/efivars ]; then
+    PAQUETE=grub-efi-amd64
+else
+    PAQUETE=grub-pc
+fi
+
+dpkg -i /var/cache/hypr-grub/${PAQUETE}_*.deb
+
+# Oculta los textos "Loading Linux" e "initial ramdisk" antes de Plymouth.
+sed -i 's/^quiet_boot="0"/quiet_boot="1"/' /etc/grub.d/10_linux
+
+# Menu de arranque con el nombre del sistema y en espanol.
+sed -i -e 's/OS="${GRUB_DISTRIBUTOR} GNU\/Linux"/OS="${GRUB_DISTRIBUTOR}"/' \
+       -e 's/Advanced options for %s/Opciones avanzadas de %s/g' /etc/grub.d/10_linux
+sed -i 's/recovery mode/modo seguro/' /etc/grub.d/10_linux
+sed -i 's/UEFI Firmware Settings/Ajustes del firmware UEFI/' /etc/grub.d/30_uefi-firmware 2>/dev/null || true
+
+# El instalador deja las lineas de crypttab sin opciones cuando /boot no esta cifrado, y
+# Debian las trataria como cifrado "plain". Hay que declarar que son LUKS.
+if [ -s /etc/crypttab ]; then
+    sed -i -E '/^[[:space:]]*(#|$)/! s/^([^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+none)[[:space:]]*$/\1 luks,discard/' /etc/crypttab
+fi
+
+# El aviso de la clave, en espanol y sin el identificador interno del disco.
+sed -i 's/keyscriptarg="Please unlock disk $CRYPTTAB_NAME: "/keyscriptarg="Escribe la clave de cifrado del disco: "/' /usr/lib/cryptsetup/functions
+
+# Con el mapa de teclado en el initramfs, la clave de cifrado se escribe con la
+# distribucion elegida y no con la americana.
+sed -i 's/^#\?KEYMAP=.*/KEYMAP=y/' /etc/initramfs-tools/initramfs.conf

@@ -1,0 +1,32 @@
+#!/bin/sh
+# Prepara Calamares: permisos, imagenes de marca y paquetes de GRUB sin red.
+set -e
+
+chmod 755 /usr/lib/live/config/0086-greetd-vivo
+chmod 755 /usr/local/sbin/hypr-instalar-grub
+chmod 755 /usr/local/sbin/hypr-limpiar-vivo
+chmod 755 /usr/local/bin/instalar-sistema
+chmod 644 /usr/share/applications/instalar-sistema.desktop
+
+
+# Esta entrada del paquete usa pkexec y no abre en Wayland; queda solo la nuestra.
+rm -f /usr/share/applications/calamares.desktop
+
+# iputils-ping se configura antes de que exista setcap, y ping se queda sin permisos.
+setcap cap_net_raw+ep /usr/bin/ping
+
+chmod 755 /usr/local/bin/setxkbmap
+
+# El nombre del producto se define solo en marca.conf.
+. /usr/local/share/marca/marca.conf
+MARCA=/etc/calamares/branding/hypr
+sed -i "s/@PRODUCTO@/${PRODUCTO}/g" "${MARCA}/branding.desc"
+sed -i "s/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR=\"${PRODUCTO}\"/" /etc/default/grub.d/90-hypr.cfg
+sed -i "s/^title-text: .*/title-text: \"${PRODUCTO}\"/" /usr/share/grub/themes/hypr/theme.txt
+
+mkdir -p /var/cache/hypr-grub
+cd /var/cache/hypr-grub
+apt-get download grub-pc grub-efi-amd64
+ls grub-pc_*.deb grub-efi-amd64_*.deb
+chown -R root:root /var/cache/hypr-grub
+chmod 644 /var/cache/hypr-grub/*.deb

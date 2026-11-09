@@ -1,0 +1,32 @@
+#!/bin/sh
+# Arranca Hyprland. Si no llega a abrirse (GPU sin soporte, arranque con nomodeset...),
+# explica lo ocurrido y abre una consola, en lugar de dejar la pantalla en negro.
+inicio=$(date +%s)
+start-hyprland
+estado=$?
+duracion=$(( $(date +%s) - inicio ))
+
+# Un cierre tras haber usado la sesion vuelve al acceso; si acaba enseguida, no pudo abrirse.
+[ "${duracion}" -ge 20 ] && exit "${estado}"
+
+# Solo la terminal de control es accesible al usuario; ahi se ve el mensaje.
+exec </dev/tty >/dev/tty 2>&1
+
+. /usr/local/share/marca/marca.conf
+printf '\033[?25h'
+clear
+cat <<FIN
+${PRODUCTO}: no se ha podido abrir el escritorio (codigo ${estado}).
+
+Lo mas probable es que este equipo no tenga una aceleracion grafica compatible:
+  - Has arrancado en modo seguro (nomodeset), que desactiva la grafica.
+  - Tarjeta NVIDIA: instala su controlador, tienes los pasos en el README del proyecto.
+  - Maquina virtual: activa la aceleracion 3D.
+
+El detalle esta en:  journalctl -b -p err
+
+Tienes una consola para reparar el sistema: la red se configura con  nmtui
+Escribe  exit  para volver a la pantalla de acceso.
+
+FIN
+exec "${SHELL:-/bin/sh}" -l

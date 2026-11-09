@@ -1,0 +1,12 @@
+#!/bin/sh
+# Oculta del lanzador las entradas que sobran. Los programas siguen disponibles.
+set -e
+
+for ENTRADA in thunar-bulk-rename thunar-settings qt5ct qt6ct nwg-look nm-connection-editor \
+    org.xfce.mousepad nvim kitty-open blueman-adapters; do
+    F="/usr/share/applications/${ENTRADA}.desktop"
+    [ -f "$F" ] && sed -i "/^NoDisplay=false/d" "$F"
+    if [ -f "$F" ] && ! grep -q '^NoDisplay=true' "$F"; then
+        sed -i '0,/^\[Desktop Entry\]/s//[Desktop Entry]\nNoDisplay=true/' "$F"
+    fi
+done

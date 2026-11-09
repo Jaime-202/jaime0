@@ -1,0 +1,22 @@
+#!/bin/sh
+# JetBrainsMono Nerd Font no esta en Debian: se instala desde la release oficial,
+# con version fijada y SHA256 comprobado.
+set -e
+
+VERSION="v3.5.1"
+SHA256="04d5e8f903693f9dd13e16f867e994834e681eb3c72c0d337a770dcda09010cf"
+URL="https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION}/JetBrainsMono.tar.xz"
+DESTINO="/usr/share/fonts/truetype/jetbrains-mono-nerd"
+TMP="$(mktemp -d)"
+
+curl -fsSL --retry 3 -o "${TMP}/fuente.tar.xz" "${URL}"
+echo "${SHA256}  ${TMP}/fuente.tar.xz" | sha256sum -c -
+
+mkdir -p "${DESTINO}" "${TMP}/x"
+tar -xJf "${TMP}/fuente.tar.xz" -C "${TMP}/x"
+install -m 0644 "${TMP}"/x/JetBrainsMonoNerdFont-*.ttf "${DESTINO}/"
+install -m 0644 "${TMP}/x/OFL.txt" "${DESTINO}/OFL.txt"
+
+rm -rf "${TMP}"
+fc-cache -f
+fc-list | grep -q "JetBrainsMono Nerd Font"

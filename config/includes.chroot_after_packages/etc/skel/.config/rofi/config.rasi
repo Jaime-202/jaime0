@@ -1,0 +1,17 @@
+/* ~/.config/rofi/config.rasi */
+configuration {
+    modes: "drun,run";
+    show-icons: true;
+    icon-theme: "Papirus-Dark";
+    font: "JetBrainsMono Nerd Font 11";
+    drun-display-format: "{name}";
+    display-drun: " ";
+    display-run: " ";
+    display-dmenu: " ";
+    matching: "fuzzy";
+    sort: true;
+    case-sensitive: false;
+    terminal: "kitty";
+}
+
+@theme "jaime0"

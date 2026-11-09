@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="thunar" version="1.0">
+  <property name="hidden-bookmarks" type="array">
+    <value type="string" value="trash:///"/>
+    <value type="string" value="computer:///"/>
+    <value type="string" value="recent:///"/>
+    <value type="string" value="network:///"/>
+  </property>
+  <property name="last-side-pane" type="string" value="ThunarShortcutsPane"/>
+</channel>

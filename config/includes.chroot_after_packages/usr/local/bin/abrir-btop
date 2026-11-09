@@ -1,0 +1,25 @@
+#!/bin/sh
+# Abre btop como ventana normal del mosaico (se mueve con SUPER + Shift + flechas).
+# Si ya hay uno abierto, lo enfoca en vez de abrir otro.
+set -u
+
+DIRECCION=$(hyprctl clients -j 2>/dev/null | python3 -c '
+import json, sys
+try:
+    ventanas = json.load(sys.stdin)
+except Exception:
+    ventanas = []
+for v in ventanas:
+    if v.get("class") == "btop":
+        print(v.get("address", ""))
+        break
+')
+
+if [ -n "${DIRECCION}" ]; then
+    hyprctl dispatch "hl.dsp.focus({ window = \"address:${DIRECCION}\" })" >/dev/null
+    exit 0
+fi
+
+# Letra menor que la terminal normal: asi btop (minimo 80x24) cabe en media pantalla
+# incluso a 1280 px de ancho.
+exec kitty --class btop --title btop -o font_size=8 -e btop

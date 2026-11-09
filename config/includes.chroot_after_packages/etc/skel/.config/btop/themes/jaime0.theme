@@ -1,0 +1,55 @@
+# Tema jaime0 para btop: fondo transparente, cajas con borde de color y graficos en degradado.
+theme[main_bg]=""
+theme[main_fg]="#e0e4f2"
+theme[title]="#e0e4f2"
+theme[hi_fg]="#ff6ea9"
+theme[selected_bg]="#2e3350"
+theme[selected_fg]="#f2f4fb"
+theme[inactive_fg]="#565c78"
+theme[graph_text]="#b6bcd4"
+theme[meter_bg]="#252939"
+theme[proc_misc]="#6ee7f2"
+
+# Bordes de cada caja
+theme[cpu_box]="#a6e87a"
+theme[mem_box]="#ffe57a"
+theme[net_box]="#ff6ea9"
+theme[proc_box]="#b59bff"
+theme[div_line]="#343a52"
+
+# Temperatura
+theme[temp_start]="#a6e87a"
+theme[temp_mid]="#ffe57a"
+theme[temp_end]="#ff5c72"
+
+# CPU
+theme[cpu_start]="#6ee7f2"
+theme[cpu_mid]="#b59bff"
+theme[cpu_end]="#ff6ea9"
+
+# Memoria y discos
+theme[free_start]="#a6e87a"
+theme[free_mid]="#6ee7f2"
+theme[free_end]="#7ab0ff"
+theme[cached_start]="#7ab0ff"
+theme[cached_mid]="#b59bff"
+theme[cached_end]="#ff6ea9"
+theme[available_start]="#ffe57a"
+theme[available_mid]="#ffab6e"
+theme[available_end]="#ff6ea9"
+theme[used_start]="#6ee7f2"
+theme[used_mid]="#b59bff"
+theme[used_end]="#ff6ea9"
+
+# Red
+theme[download_start]="#6ee7f2"
+theme[download_mid]="#7ab0ff"
+theme[download_end]="#b59bff"
+theme[upload_start]="#ffe57a"
+theme[upload_mid]="#ffab6e"
+theme[upload_end]="#ff6ea9"
+
+# Procesos
+theme[process_start]="#a6e87a"
+theme[process_mid]="#6ee7f2"
+theme[process_end]="#b59bff"
