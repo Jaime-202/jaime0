@@ -1,20 +1,23 @@
 // ~/.config/waybar/config.jsonc
-// Barra de pildoras compactas con iconos Nerd Font; cada modulo tiene su color (style.css).
+// Barra fina y continua: escritorios a la izquierda, hora en el centro y estado a la derecha.
+// Sin titulo de ventana ni reproductor: la barra solo muestra lo que se consulta de un vistazo.
+// Los intervalos son largos a proposito; lo que cambia por eventos (escritorios, volumen,
+// campana) no se sondea.
 {
     "layer": "top",
     "position": "top",
-    "height": 30,
-    "margin-top": 6,
-    "margin-left": 8,
-    "margin-right": 8,
+    "height": 26,
+    "margin-top": 0,
+    "margin-left": 0,
+    "margin-right": 0,
     "margin-bottom": 0,
-    "spacing": 6,
+    "spacing": 0,
     "exclusive": true,
     "fixed-center": true,
 
-    "modules-left": ["custom/logo", "hyprland/workspaces", "hyprland/window"],
-    "modules-center": ["mpris"],
-    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "clock", "custom/notificaciones", "group/bandeja", "custom/power"],
+    "modules-left": ["custom/logo", "hyprland/workspaces"],
+    "modules-center": ["clock"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "custom/notificaciones", "group/bandeja", "custom/power"],
 
     "custom/logo": {
         "format": "",
@@ -24,6 +27,7 @@
         "on-click-right": "atajos --rofi"
     },
 
+    // Activo en verde, ocupados en gris claro y vacios en gris (style.css).
     "hyprland/workspaces": {
         "format": "{icon}",
         "format-icons": {
@@ -41,41 +45,15 @@
         "show-special": false
     },
 
-    "hyprland/window": {
-        "format": "{title}",
-        "rewrite": {
-            "(.+)": "  $1"
-        },
-        "max-length": 36,
-        "separate-outputs": true,
-        "icon": false
-    },
-
-    // Se oculta solo si no hay nada sonando.
-    "mpris": {
-        "format": "{player_icon}  {title} · {artist}",
-        "format-paused": "{status_icon}  {title} · {artist}",
-        "player-icons": {
-            "default": "",
-            "spotify": ""
-        },
-        "status-icons": {
-            "paused": ""
-        },
-        "title-len": 26,
-        "artist-len": 18,
-        "tooltip": false
-    },
-
     "cpu": {
-        "interval": 5,
+        "interval": 10,
         "format": " {usage}%",
         "tooltip": false,
         "on-click": "abrir-btop"
     },
 
     "memory": {
-        "interval": 10,
+        "interval": 15,
         "format": " {percentage}%",
         "tooltip-format": "RAM: {used:0.1f} / {total:0.1f} GB\nSwap: {swapUsed:0.1f} / {swapTotal:0.1f} GB",
         "on-click": "abrir-btop"
@@ -94,6 +72,7 @@
         "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
     },
 
+    // Cable: "cable"; Wi-Fi: nombre de la red; sin conexion: aviso en rojo (style.css).
     "network": {
         "interval": 10,
         "format-wifi": " {essid}",
@@ -103,9 +82,11 @@
         "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",
         "tooltip-format-ethernet": "{ifname}\n{ipaddr}/{cidr}",
         "tooltip-format-disconnected": "Sin conexión",
+        "max-length": 24,
         "on-click": "kitty --class nmtui-flotante -e nmtui"
     },
 
+    // Sin adaptador no se muestra nada; apagado o encendido, solo el icono en gris.
     "bluetooth": {
         "format": "",
         "format-disabled": " off",
@@ -131,19 +112,20 @@
         "tooltip-format": "{timeTo}"
     },
 
+    // Sin segundos: se redibuja una vez por minuto.
     "clock": {
-        "interval": 1,
-        "format": " {:%d/%m/%Y %H:%M:%S}",
+        "interval": 60,
+        "format": " {:%d/%m  %H:%M}",
         "tooltip-format": "<tt>{calendar}</tt>",
         "calendar": {
             "mode": "month",
             "weeks-pos": "",
             "on-scroll": 1,
             "format": {
-                "months": "<span color='#7ab0ff'><b>{}</b></span>",
-                "days": "<span color='#e0e4f2'>{}</span>",
-                "weekdays": "<span color='#7ab0ff'><b>{}</b></span>",
-                "today": "<span color='#12141d' background='#a6cbff'><b>{}</b></span>"
+                "months": "<span color='#d8e2e8'><b>{}</b></span>",
+                "days": "<span color='#a7b4bc'>{}</span>",
+                "weekdays": "<span color='#71818c'>{}</span>",
+                "today": "<span color='#080b0d' background='#54e58a'><b>{}</b></span>"
             }
         },
         "actions": {
@@ -153,13 +135,15 @@
     },
 
     // Campana: clic para pausar o reanudar las notificaciones; clic derecho, la ultima otra vez.
+    // No se sondea: se lee al arrancar y se relee con la senal 8 (pkill -RTMIN+8 waybar), que
+    // envia quien cambia el estado de pausa (el clic de aqui).
     "custom/notificaciones": {
         "exec": "notificaciones-waybar",
         "return-type": "json",
-        "interval": 5,
+        "interval": "once",
+        "signal": 8,
         "on-click": "dunstctl set-paused toggle; pkill -RTMIN+8 waybar",
-        "on-click-right": "dunstctl history-pop",
-        "signal": 8
+        "on-click-right": "dunstctl history-pop"
     },
 
     // La bandeja queda recogida: se despliega al pasar el raton por la flecha.
@@ -180,7 +164,7 @@
     },
 
     "tray": {
-        "icon-size": 15,
+        "icon-size": 14,
         "spacing": 8,
         "show-passive-items": true
     },

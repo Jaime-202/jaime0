@@ -30,7 +30,7 @@ alias la='ls -lAh'
 alias grep='grep --color=auto'
 
 # Autosugerencias en gris de la paleta jaime0
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#565c78'
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=#71818c'
 if [[ -r /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh ]]; then
     source /usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 fi
