@@ -1,5 +1,6 @@
 # ~/.config/starship.toml
 # Prompt minimalista: directorio, rama y ❯ a la izquierda; duracion y hora a la derecha.
+# Todo en grises; solo el ❯ va en verde (en rojo si la orden anterior fallo).
 
 add_newline = true
 palette = "jaime0"
@@ -8,7 +9,7 @@ right_format = "$cmd_duration$status$time"
 
 [directory]
 format = "[$path]($style)[$read_only]($read_only_style) "
-style = "fg:cyan bold"
+style = "fg:text bold"
 truncation_length = 3
 truncate_to_repo = true
 truncation_symbol = "…/"
@@ -18,7 +19,7 @@ read_only_style = "fg:yellow"
 
 [git_branch]
 format = "[ $branch]($style) "
-style = "fg:mauve"
+style = "fg:subtext"
 
 [git_status]
 format = "[$all_status$ahead_behind]($style)"
@@ -42,15 +43,13 @@ style = "fg:red"
 disabled = false
 format = "[ $time]($style)"
 time_format = "%H:%M:%S"
-style = "fg:blue"
+style = "fg:overlay"
 
 [palettes.jaime0]
-pink = "#7ab0ff"
-mauve = "#7ab0ff"
-cyan = "#7ab0ff"
-green = "#a6cbff"
-yellow = "#a6cbff"
-blue = "#7ab0ff"
-red = "#c96a78"
-text = "#e0e4f2"
-overlay = "#7a819e"
+pink = "#54e58a"
+green = "#54e58a"
+yellow = "#d9a54a"
+red = "#d9625b"
+text = "#d8e2e8"
+subtext = "#a7b4bc"
+overlay = "#71818c"

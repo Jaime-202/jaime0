@@ -1,6 +1,6 @@
 -- ~/.config/hypr/hyprland.lua
 -- Configuracion de Hyprland de Jaime0, sobre Debian Forky (sintaxis Lua de Hyprland 0.56 y 0.57).
--- Paleta jaime0: fondo #12141d, azul #7ab0ff y pizarra #2f3b52; el resto son derivados.
+-- Paleta jaime0: negro #080b0d, verde #54e58a (solo lo activo) y bordes #26343a.
 --
 -- Los atajos se declaran con atajo(): cada uno lleva su descripcion, que es lo que lista
 -- el comando "atajos". Los atajos propios del usuario van en atajos-usuario.lua, junto a
@@ -18,7 +18,7 @@ local screenshot  = "captura area"
 local navegador   = "abrir-navegador"
 local monitorSis  = "abrir-btop"
 local polkitAgent = "/usr/bin/lxpolkit"
-local fondo       = "/usr/share/backgrounds/jaime0/aurora.jpg"
+local fondo       = "/usr/share/backgrounds/jaime0/jaime0.png"
 
 --------------------------------------------------------------------------------
 -- Entorno: maquina virtual y teclado
@@ -132,19 +132,21 @@ hl.config({
         gaps_in      = 4,
         gaps_out     = 8,
         border_size  = 2,
+        -- Borde fino: verde solido y algo apagado en la ventana activa, gris en las demas.
         col = {
-            active_border   = { colors = { "rgba(7ab0ffff)", "rgba(a6cbffff)" }, angle = 45 },
-            inactive_border = "rgba(2f3b52cc)",
+            active_border   = "rgba(54e58acc)",
+            inactive_border = "rgba(26343aff)",
         },
         resize_on_border = false,
         allow_tearing    = false,
     },
 
     decoration = {
-        rounding           = 10,
+        rounding           = 8,
         rounding_power     = 2,
+        -- Ventanas opacas: el texto se lee mejor y no hay que difuminar lo que hay detras.
         active_opacity     = 1.0,
-        inactive_opacity   = 0.96,
+        inactive_opacity   = 1.0,
         fullscreen_opacity = 1.0,
 
         -- Sin sombras: no aportan con bordes de color y cuestan una pasada por ventana.
@@ -152,14 +154,15 @@ hl.config({
             enabled = false,
         },
 
-        -- Blur moderado y barato; en maquina virtual se apaga.
+        -- Blur minimo (una pasada) solo para lo translucido: kitty, rofi y dunst.
+        -- En maquina virtual se apaga.
         blur = {
             enabled           = not esVirtual,
-            size              = 5,
-            passes            = 2,
-            noise             = 0.01,
-            vibrancy          = 0.10,
-            brightness        = 0.85,
+            size              = 3,
+            passes            = 1,
+            noise             = 0.0,
+            vibrancy          = 0.0,
+            brightness        = 0.80,
             new_optimizations = true,
             xray              = false,
             ignore_opacity    = true,
@@ -212,7 +215,7 @@ hl.config({
 })
 
 --------------------------------------------------------------------------------
--- Animaciones: cortas y con pocas curvas
+-- Animaciones: cortas (unos 200-300 ms) y con pocas curvas
 --------------------------------------------------------------------------------
 hl.curve("suave",  { type = "bezier", points = { {0.25, 1.0}, {0.5, 1.0} } })
 hl.curve("salida", { type = "bezier", points = { {0.4, 0.0},  {0.2, 1.0} } })
@@ -220,10 +223,10 @@ hl.curve("salida", { type = "bezier", points = { {0.4, 0.0},  {0.2, 1.0} } })
 hl.animation({ leaf = "windowsIn",   enabled = true,  speed = 3, bezier = "suave",  style = "popin 85%" })
 hl.animation({ leaf = "windowsOut",  enabled = true,  speed = 2, bezier = "salida", style = "popin 85%" })
 hl.animation({ leaf = "windowsMove", enabled = true,  speed = 3, bezier = "suave" })
-hl.animation({ leaf = "fade",        enabled = true,  speed = 3, bezier = "salida" })
+hl.animation({ leaf = "fade",        enabled = true,  speed = 2, bezier = "salida" })
 hl.animation({ leaf = "border",      enabled = false, speed = 1, bezier = "suave" })
-hl.animation({ leaf = "layers",      enabled = true,  speed = 3, bezier = "suave" })
-hl.animation({ leaf = "workspaces",  enabled = true,  speed = 4, bezier = "suave",  style = "slide" })
+hl.animation({ leaf = "layers",      enabled = true,  speed = 2, bezier = "suave" })
+hl.animation({ leaf = "workspaces",  enabled = true,  speed = 3, bezier = "suave",  style = "slide" })
 
 hl.gesture({
     fingers   = 3,
@@ -335,17 +338,18 @@ end
 -- Reglas de ventana (se evaluan en orden; la ultima coincidencia gana)
 --------------------------------------------------------------------------------
 
--- Kitty lleva su propia transparencia de fondo (kitty.conf), asi el texto queda nitido.
+-- Kitty lleva su propia transparencia de fondo, muy ligera (kitty.conf), asi el texto queda nitido.
 hl.window_rule({
     name    = "opacidad-terminal",
     match   = { class = "^(kitty|btop|nmtui-flotante|atajos-flotante)$" },
     opacity = "1.0 override 1.0 override",
 })
 
+-- Thunar opaco, como el resto de ventanas (antes era translucido y obligaba a difuminar).
 hl.window_rule({
     name    = "opacidad-archivos",
     match   = { class = "^[Tt]hunar$" },
-    opacity = "0.94 override 0.90 override",
+    opacity = "1.0 override 1.0 override",
 })
 
 -- Flotantes y centradas
@@ -444,15 +448,9 @@ hl.window_rule({
 })
 
 --------------------------------------------------------------------------------
--- Reglas de capa: blur en panel, lanzador y notificaciones
+-- Reglas de capa: blur en lanzador y notificaciones, que son algo translucidos.
+-- La barra tiene fondo opaco: difuminar detras de ella no se veria y costaria una pasada.
 --------------------------------------------------------------------------------
-hl.layer_rule({
-    name         = "blur-waybar",
-    match        = { namespace = "^waybar$" },
-    blur         = true,
-    ignore_alpha = 0.3,
-})
-
 hl.layer_rule({
     name         = "blur-rofi",
     match        = { namespace = "^rofi$" },

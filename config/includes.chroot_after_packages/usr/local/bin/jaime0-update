@@ -1,0 +1,1608 @@
+#!/usr/bin/python3 -I
+# jaime0-update: actualiza una instalacion de Jaime0 sin descargar la ISO ni reinstalar.
+#
+# Fuente oficial: GitHub Releases. Cada publicacion lleva tres archivos:
+#   manifiesto.json      version, canal, cambios, componentes y SHA-256 de cada archivo
+#   manifiesto.json.sig  firma Ed25519 del manifiesto (se comprueba con la clave publica
+#                        /usr/share/jaime0/firma-actualizaciones.pem)
+#   jaime0-VERSION.tar.gz  los archivos propios de Jaime0
+# Los paquetes de Debian se actualizan con apt, nunca con este programa.
+#
+# Los archivos se clasifican comparando tres huellas: la del disco, la nueva y las de
+# todas las versiones oficiales anteriores. Lo que el usuario ha cambiado no se pisa:
+# queda intacto y la version nueva se deja al lado como ARCHIVO.jaime0-nuevo. La unica
+# excepcion es /usr/share/jaime0 (version, manifiesto y clave), que es del actualizador.
+# Documentacion completa: docs/actualizaciones.md del repositorio.
+
+import argparse
+import datetime
+import difflib
+import hashlib
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+
+try:
+    import fcntl
+except ImportError:  # Solo en las pruebas fuera de Linux
+    fcntl = None
+
+PROGRAMA = "jaime0-update"
+RUTA_PROGRAMA = "/usr/local/bin/jaime0-update"
+API_DEFECTO = "https://api.github.com/repos/Jaime-202/jaime0/releases?per_page=100"
+CANALES = ("stable", "beta", "experimental")
+CANAL_DE_SUFIJO = {"": "stable", "beta": "beta", "exp": "experimental"}
+NIVEL_CANAL = {"experimental": 0, "beta": 1, "stable": 2}
+FORMATO_MANIFIESTO = 1
+COPIAS_CONSERVADAS = 5
+NUEVO = ".jaime0-nuevo"
+
+# Rutas que una actualizacion puede tocar. Aunque el manifiesto este firmado, nada fuera
+# de aqui se escribe ni se borra nunca (defensa en profundidad).
+PREFIJOS_PERMITIDOS = (
+    "etc/skel/",
+    "etc/jaime0/",
+    "etc/default/grub.d/",
+    "etc/fonts/",
+    "etc/systemd/",
+    "usr/local/bin/",
+    "usr/local/share/marca/",
+    "usr/lib/systemd/user/",
+    "usr/share/jaime0/",
+    "usr/share/backgrounds/jaime0/",
+    "usr/share/glib-2.0/schemas/",
+    "usr/share/grub/themes/",
+    "usr/share/qt6ct/",
+)
+# El canal elegido es del usuario: solo se crea si falta.
+SOLO_SI_FALTA = ("etc/jaime0/update.conf",)
+
+
+def es_root():
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+# Modo de prueba: JAIME0_RAIZ apunta a un sistema de mentira. Solo sin privilegios: con
+# root la raiz es siempre "/" y las descargas solo pueden ser HTTPS.
+RAIZ = os.environ.get("JAIME0_RAIZ", "/") if not es_root() else "/"
+MODO_PRUEBA = RAIZ != "/"
+
+
+def ruta(*partes):
+    componentes = []
+    for parte in partes:
+        componentes.extend(p for p in parte.split("/") if p)
+    return os.path.join(RAIZ, *componentes)
+
+
+ARCHIVO_VERSION = ruta("usr/share/jaime0/version")
+MANIFIESTO_INSTALADO = ruta("usr/share/jaime0/manifiesto.json")
+CLAVE_PUBLICA = ruta("usr/share/jaime0/firma-actualizaciones.pem")
+ARCHIVO_CONF = ruta("etc/jaime0/update.conf")
+DIR_CACHE = ruta("var/cache/jaime0-update")
+DIR_COPIAS = ruta("var/backups/jaime0")
+DIR_ESTADO = ruta("var/lib/jaime0")
+CONFLICTOS_SISTEMA = ruta("var/lib/jaime0/conflictos.json")
+# Copia del manifiesto con el que se instalo el equipo (la deja la ISO). Dice que archivos
+# tenia /etc/skel al crear los usuarios, para saber que borro cada uno.
+MANIFIESTO_ORIGEN = ruta("var/lib/jaime0/manifiesto-instalacion.json")
+REGISTRO_SISTEMA = ruta("var/log/jaime0-update.log")
+# En /run (0755, de root) y no en /run/lock, donde cualquier usuario puede crear archivos.
+CERROJO_SISTEMA = ruta("run/jaime0-update.lock")
+
+
+def carpeta_personal():
+    return os.environ.get("HOME") or os.path.expanduser("~")
+
+
+def dir_estado_usuario():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(carpeta_personal(), ".local", "state")
+    return os.path.join(base, "jaime0")
+
+
+# ------------------------------------------------------------------------------------
+# Salida
+# ------------------------------------------------------------------------------------
+COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+
+def _c(codigo, texto):
+    return f"\033[{codigo}m{texto}\033[0m" if COLOR else texto
+
+
+def verde(t):
+    return _c("38;2;84;229;138", t)
+
+
+def cian(t):
+    return _c("38;2;85;205;224", t)
+
+
+def tenue(t):
+    return _c("38;2;113;129;140", t)
+
+
+def rojo(t):
+    return _c("38;2;229;84;101", t)
+
+
+def ambar(t):
+    return _c("38;2;229;192;84", t)
+
+
+def titulo(texto):
+    print()
+    print(verde("▍") + " " + _c("1", texto))
+
+
+def limpio(texto):
+    """Quita caracteres de control de textos que llegan de fuera (notas, mensajes de GitHub)."""
+    return re.sub(r"[\x00-\x1f\x7f-\x9f]", "", str(texto))
+
+
+def info(texto):
+    print("  " + texto)
+
+
+def aviso(texto):
+    print("  " + ambar("!") + " " + texto, file=sys.stderr)
+
+
+class Fallo(Exception):
+    """Error que se explica al usuario sin traza."""
+
+
+def preguntar(texto, opciones):
+    if opciones.si:
+        return True
+    if not sys.stdin.isatty():
+        aviso("Sin terminal interactiva: usa --si para confirmar.")
+        return False
+    try:
+        respuesta = input("  " + texto + " [s/N] ").strip().lower()
+    except EOFError:
+        return False
+    return respuesta in ("s", "si", "sí", "y", "yes")
+
+
+def registrar(archivo, mensaje):
+    try:
+        os.makedirs(os.path.dirname(archivo), exist_ok=True)
+        marca = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        with open(archivo, "a", encoding="utf-8") as f:
+            f.write(f"{marca} {mensaje}\n")
+    except OSError:
+        pass
+
+
+def registro_actual():
+    if es_root() or MODO_PRUEBA:
+        return REGISTRO_SISTEMA
+    return os.path.join(dir_estado_usuario(), "registro.log")
+
+
+# ------------------------------------------------------------------------------------
+# Utilidades
+# ------------------------------------------------------------------------------------
+def sha256(datos):
+    return hashlib.sha256(datos).hexdigest()
+
+
+def sha256_archivo(camino):
+    h = hashlib.sha256()
+    with open(camino, "rb") as f:
+        for bloque in iter(lambda: f.read(1 << 16), b""):
+            h.update(bloque)
+    return h.hexdigest()
+
+
+def leer_json(camino, defecto=None):
+    try:
+        with open(camino, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return defecto
+    except (OSError, ValueError) as e:
+        raise Fallo(f"No se puede leer {camino}: {e}")
+
+
+def escribir_atomico(destino, datos, modo=0o644):
+    """Escribe en un temporal del mismo directorio y lo renombra: o queda el archivo
+    anterior o el nuevo, nunca uno a medias."""
+    carpeta = os.path.dirname(destino)
+    os.makedirs(carpeta, mode=0o755, exist_ok=True)
+    descriptor, temporal = tempfile.mkstemp(prefix=".jaime0-", dir=carpeta)
+    try:
+        with os.fdopen(descriptor, "wb") as f:
+            f.write(datos)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(temporal, modo)
+        os.replace(temporal, destino)
+    except BaseException:
+        try:
+            os.unlink(temporal)
+        except OSError:
+            pass
+        raise
+
+
+def escribir_json(destino, datos, modo=0o644):
+    texto = json.dumps(datos, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+    escribir_atomico(destino, texto.encode("utf-8"), modo)
+
+
+def leer_conf():
+    conf = {"canal": "stable", "api": API_DEFECTO}
+    try:
+        with open(ARCHIVO_CONF, encoding="utf-8") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea or linea.startswith("#") or "=" not in linea:
+                    continue
+                clave, valor = linea.split("=", 1)
+                conf[clave.strip()] = valor.strip()
+    except FileNotFoundError:
+        pass
+    if conf["canal"] not in CANALES:
+        aviso(f"Canal desconocido en {ARCHIVO_CONF}: {conf['canal']}. Se usa stable.")
+        conf["canal"] = "stable"
+    return conf
+
+
+class Cerrojo:
+    """Impide dos actualizaciones a la vez sobre el mismo destino."""
+
+    def __init__(self, camino):
+        self.camino = camino
+        self.f = None
+
+    def __enter__(self):
+        if fcntl is None:
+            return self
+        os.makedirs(os.path.dirname(self.camino), exist_ok=True)
+        try:
+            fd = os.open(self.camino, os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+                         | getattr(os, "O_CLOEXEC", 0), 0o600)
+        except OSError as e:
+            raise Fallo(f"No se puede abrir el cerrojo {self.camino}: {e}")
+        self.f = os.fdopen(fd, "r+")
+        try:
+            fcntl.flock(self.f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise Fallo("Ya hay otra operación de jaime0-update en curso.")
+        return self
+
+    def __exit__(self, *exc):
+        if self.f:
+            self.f.close()
+
+
+# ------------------------------------------------------------------------------------
+# Versiones y canales
+# ------------------------------------------------------------------------------------
+PATRON_VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:-(beta|exp)\.(\d+))?$")
+
+
+def clave_version(version):
+    m = PATRON_VERSION.fullmatch(version) if isinstance(version, str) else None
+    if not m:
+        return None
+    mayor, menor, parche, sufijo, n = m.groups()
+    return (int(mayor), int(menor), int(parche), NIVEL_CANAL[CANAL_DE_SUFIJO[sufijo or ""]], int(n or 0))
+
+
+def canal_de(version):
+    m = PATRON_VERSION.fullmatch(version) if isinstance(version, str) else None
+    return CANAL_DE_SUFIJO[m.group(4) or ""] if m else None
+
+
+def admitida_en_canal(version, canal):
+    """stable solo recibe estables; beta, estables y beta; experimental, todo."""
+    return NIVEL_CANAL[canal_de(version)] >= NIVEL_CANAL[canal]
+
+
+def version_instalada():
+    try:
+        with open(ARCHIVO_VERSION, encoding="utf-8") as f:
+            version = f.read().strip()
+    except FileNotFoundError:
+        return None
+    return version if clave_version(version) else None
+
+
+# ------------------------------------------------------------------------------------
+# Red y firma
+# ------------------------------------------------------------------------------------
+def comprobar_url(url):
+    esquema = urllib.parse.urlparse(url).scheme
+    if esquema == "https" or (MODO_PRUEBA and esquema == "file"):
+        return
+    raise Fallo(f"Origen no permitido (solo HTTPS): {url}")
+
+
+class _SoloHTTPS(urllib.request.HTTPRedirectHandler):
+    """Cada redireccion se comprueba antes de seguirla, no solo la URL final."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        comprobar_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_ABRIDOR = urllib.request.build_opener(_SoloHTTPS)
+LIMITE_JSON = 8 << 20
+LIMITE_FIRMA = 1024
+LIMITE_CARGA = 512 << 20
+PLAZO_TOTAL = 900  # segundos por descarga, aunque el servidor gotee
+
+
+def descargar(url, progreso=None, limite=LIMITE_JSON):
+    comprobar_url(url)
+    peticion = urllib.request.Request(url, headers={
+        "User-Agent": f"{PROGRAMA}/{version_instalada() or '0'}",
+        "Accept": "application/octet-stream, application/json",
+    })
+    try:
+        inicio = time.monotonic()
+        with _ABRIDOR.open(peticion, timeout=30) as r:
+            comprobar_url(r.geturl())
+            total = int(r.headers.get("Content-Length") or 0)
+            partes, leido = [], 0
+            while True:
+                bloque = r.read(1 << 16)
+                if not bloque:
+                    break
+                leido += len(bloque)
+                if time.monotonic() - inicio > PLAZO_TOTAL:
+                    raise Fallo(f"La descarga tarda demasiado: {url}")
+                if leido > limite:
+                    raise Fallo(f"Descarga demasiado grande: {url}")
+                partes.append(bloque)
+                if progreso and total:
+                    _barra(progreso, leido, total)
+            if progreso and total:
+                print(file=sys.stderr)
+            return b"".join(partes)
+    except Fallo:
+        raise
+    except Exception as e:
+        raise Fallo(f"No se pudo descargar {url}: {e}")
+
+
+def _barra(nombre, hecho, total):
+    if not sys.stderr.isatty():
+        return
+    ancho = 28
+    lleno = int(ancho * hecho / total)
+    texto = f"\r  {nombre} [{'━' * lleno}{' ' * (ancho - lleno)}] {hecho * 100 // total:3d} %  {hecho / 1048576:.1f} MiB"
+    sys.stderr.write(verde(texto) if lleno == ancho else texto)
+    sys.stderr.flush()
+
+
+def verificar_firma(datos, firma):
+    if not os.path.isfile(CLAVE_PUBLICA):
+        raise Fallo(f"Falta la clave pública de firma: {CLAVE_PUBLICA}")
+    openssl = "/usr/bin/openssl" if os.path.exists("/usr/bin/openssl") else (
+        shutil.which("openssl") if MODO_PRUEBA else None)
+    if not openssl:
+        raise Fallo("Falta openssl, necesario para comprobar la firma.")
+    with tempfile.TemporaryDirectory() as tmp:
+        datos_tmp = os.path.join(tmp, "manifiesto.json")
+        firma_tmp = os.path.join(tmp, "manifiesto.json.sig")
+        with open(datos_tmp, "wb") as f:
+            f.write(datos)
+        with open(firma_tmp, "wb") as f:
+            f.write(firma)
+        r = subprocess.run(
+            [openssl, "pkeyutl", "-verify", "-pubin", "-inkey", CLAVE_PUBLICA,
+             "-rawin", "-in", datos_tmp, "-sigfile", firma_tmp],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return r.returncode == 0
+
+
+# ------------------------------------------------------------------------------------
+# Publicaciones y manifiestos
+# ------------------------------------------------------------------------------------
+def listar_publicaciones(conf):
+    """Publicaciones de GitHub con manifiesto firmado, de la mas nueva a la mas vieja."""
+    try:
+        datos = json.loads(descargar(conf["api"]).decode("utf-8"))
+    except ValueError:
+        raise Fallo("La respuesta de GitHub no es válida.")
+    if not isinstance(datos, list):
+        mensaje = limpio(datos.get("message"))[:200] if isinstance(datos, dict) and datos.get("message") else None
+        raise Fallo(f"GitHub no devolvió la lista de publicaciones{': ' + mensaje if mensaje else ''}.")
+    publicaciones = []
+    for p in datos:
+        version = (p.get("tag_name") or "").lstrip("v")
+        if p.get("draft") or not clave_version(version):
+            continue
+        adjuntos = {a.get("name"): a.get("browser_download_url") for a in p.get("assets", [])}
+        if "manifiesto.json" not in adjuntos or "manifiesto.json.sig" not in adjuntos:
+            continue
+        publicaciones.append({"version": version, "adjuntos": adjuntos, "nombre": p.get("name") or version})
+    publicaciones.sort(key=lambda p: clave_version(p["version"]), reverse=True)
+    return publicaciones
+
+
+def validar_ruta_relativa(rel):
+    if (not rel or rel.startswith("/") or "\\" in rel or "\0" in rel
+            or any(p in ("", ".", "..") for p in rel.split("/"))):
+        raise Fallo(f"Ruta no válida en el manifiesto: {rel!r}")
+    if not rel.startswith(PREFIJOS_PERMITIDOS):
+        raise Fallo(f"El manifiesto intenta escribir fuera de lo permitido: {rel}")
+
+
+def validar_manifiesto(m, version_esperada=None):
+    if not isinstance(m, dict) or m.get("formato") != FORMATO_MANIFIESTO:
+        raise Fallo("Formato de manifiesto no compatible: actualiza jaime0-update a mano.")
+    version = m.get("version")
+    if not clave_version(version):
+        raise Fallo("El manifiesto no indica una versión válida.")
+    if version_esperada and version != version_esperada:
+        raise Fallo(f"El manifiesto es de {version}, se esperaba {version_esperada}.")
+    if m.get("canal") != canal_de(version):
+        raise Fallo("El canal del manifiesto no coincide con su versión.")
+    archivos = m.get("archivos")
+    if not isinstance(archivos, dict) or not archivos:
+        raise Fallo("El manifiesto no lista archivos.")
+    for rel, datos in archivos.items():
+        validar_ruta_relativa(rel)
+        if not isinstance(datos, dict):
+            raise Fallo(f"Entrada no válida para {rel}")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(datos.get("sha256", ""))):
+            raise Fallo(f"Huella no válida para {rel}")
+        if datos.get("modo") not in ("644", "755"):
+            raise Fallo(f"Permisos no válidos para {rel}")
+    carga = m.get("carga") or {}
+    if not re.fullmatch(r"jaime0-[0-9A-Za-z.\-]+\.tar\.gz", str(carga.get("nombre", ""))):
+        raise Fallo("El manifiesto no indica la carga.")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(carga.get("sha256", ""))):
+        raise Fallo("El manifiesto no indica la huella de la carga.")
+    tamano = carga.get("tamano")
+    if not isinstance(tamano, int) or not 0 < tamano <= LIMITE_CARGA:
+        raise Fallo("El manifiesto no indica un tamaño de carga válido.")
+    # El historico decide que se borra: sus rutas pasan los mismos filtros que los archivos.
+    historico = m.get("historico", {})
+    if not isinstance(historico, dict):
+        raise Fallo("Histórico no válido.")
+    for rel, huellas in historico.items():
+        validar_ruta_relativa(rel)
+        if not isinstance(huellas, list) or not all(
+                isinstance(h, str) and re.fullmatch(r"[0-9a-f]{64}", h) for h in huellas):
+            raise Fallo(f"Histórico no válido para {rel}")
+    requisitos = m.get("requisitos") or {}
+    if not isinstance(requisitos, dict) or (
+            requisitos.get("version_minima") and not clave_version(requisitos["version_minima"])):
+        raise Fallo("Requisitos no válidos en el manifiesto.")
+    for campo in ("cambios", "problemas_conocidos", "paquetes"):
+        if not isinstance(m.get(campo, []), list) or not all(isinstance(x, str) for x in m.get(campo, [])):
+            raise Fallo(f"Campo no válido en el manifiesto: {campo}")
+    return m
+
+
+HUELLAS_MANIFIESTO = {}
+
+
+def obtener_manifiesto(publicacion, huella_esperada=None):
+    datos = descargar(publicacion["adjuntos"]["manifiesto.json"])
+    firma = descargar(publicacion["adjuntos"]["manifiesto.json.sig"], limite=LIMITE_FIRMA)
+    if huella_esperada and sha256(datos) != huella_esperada:
+        raise Fallo("El manifiesto ha cambiado desde que lo revisaste. No se instala nada.")
+    HUELLAS_MANIFIESTO[publicacion["version"]] = sha256(datos)
+    if not verificar_firma(datos, firma):
+        raise Fallo(f"La firma del manifiesto de {publicacion['version']} NO es válida. "
+                    "No se instala nada.")
+    try:
+        manifiesto = json.loads(datos.decode("utf-8"))
+    except ValueError:
+        raise Fallo("El manifiesto firmado no es JSON válido.")
+    return validar_manifiesto(manifiesto, publicacion["version"])
+
+
+def buscar_actualizacion(conf, instalada):
+    """Devuelve (publicacion, manifiesto) de la version mas nueva del canal, o (None, None)."""
+    base = clave_version(instalada) if instalada else (0, 0, 0, 0, 0)
+    for p in listar_publicaciones(conf):
+        if not admitida_en_canal(p["version"], conf["canal"]):
+            continue
+        if clave_version(p["version"]) <= base:
+            return None, None
+        return p, obtener_manifiesto(p)
+    return None, None
+
+
+def leer_carga(manifiesto, datos):
+    """Lee la carga en memoria y comprueba cada archivo contra el manifiesto firmado."""
+    if sha256(datos) != manifiesto["carga"]["sha256"]:
+        raise Fallo("La carga descargada no coincide con el manifiesto firmado.")
+    contenido = {}
+    try:
+        with tarfile.open(fileobj=io.BytesIO(datos), mode="r:gz") as tar:
+            for miembro in tar.getmembers():
+                if miembro.isdir():
+                    continue
+                if not miembro.isfile():
+                    raise Fallo(f"La carga contiene un elemento no permitido: {miembro.name}")
+                validar_ruta_relativa(miembro.name)
+                contenido[miembro.name] = tar.extractfile(miembro).read()
+    except tarfile.TarError as e:
+        raise Fallo(f"La carga está dañada: {e}")
+    esperados = set(manifiesto["archivos"])
+    if set(contenido) != esperados:
+        raise Fallo("La carga no tiene exactamente los archivos del manifiesto.")
+    for rel, datos_archivo in contenido.items():
+        if sha256(datos_archivo) != manifiesto["archivos"][rel]["sha256"]:
+            raise Fallo(f"Huella incorrecta en la carga: {rel}")
+    return contenido
+
+
+def componente_de(rel):
+    if rel.startswith("etc/skel/"):
+        return "escritorio"
+    if rel.startswith("usr/local/bin/"):
+        return "herramientas"
+    if rel.startswith(("usr/share/backgrounds/", "usr/share/grub/themes/", "usr/share/qt6ct/")):
+        return "temas"
+    return "sistema"
+
+
+# ------------------------------------------------------------------------------------
+# Plan: que hacer con cada archivo
+# ------------------------------------------------------------------------------------
+# nuevo        no existe y no existia: se instala
+# restaurar    archivo de sistema borrado: se vuelve a instalar
+# actualizar   esta como en una version oficial: se reemplaza
+# igual        ya esta al dia
+# conflicto    el usuario lo cambio: se conserva y la nueva va a ARCHIVO.jaime0-nuevo
+# borrado      el usuario lo borro: se respeta
+# enlace       es un enlace simbolico: no se toca
+# eliminar     ya no forma parte de Jaime0 y no se cambio: se borra (con copia)
+# conservar    ya no forma parte de Jaime0 pero se cambio: se deja
+QUE_CAMBIA = ("nuevo", "restaurar", "actualizar", "conflicto", "eliminar")
+# Version, manifiesto y clave son del propio actualizador: nunca son personalizaciones.
+PROPIOS_DEL_ACTUALIZADOR = ("usr/share/jaime0/",)
+
+
+def huellas_oficiales(manifiesto, anterior, rel):
+    huellas = set(manifiesto.get("historico", {}).get(rel, []))
+    if anterior and rel in anterior.get("archivos", {}):
+        huellas.add(anterior["archivos"][rel]["sha256"])
+    huellas.update((anterior or {}).get("historico", {}).get(rel, []))
+    return huellas
+
+
+def clasificar(destino, sha_nuevo, oficiales, existia, respetar_borrado):
+    if os.path.islink(destino):
+        return "enlace"
+    if not os.path.exists(destino):
+        if existia:
+            return "borrado" if respetar_borrado else "restaurar"
+        return "nuevo"
+    actual = sha256_archivo(destino)
+    if actual == sha_nuevo:
+        return "igual"
+    if actual in oficiales:
+        return "actualizar"
+    return "conflicto"
+
+
+def planificar(manifiesto, anterior, archivos, destino_de, existia, respetar_borrado):
+    """archivos: rutas relativas del manifiesto que se gestionan aqui.
+    anterior: manifiesto de la version instalada (o None)."""
+    plan = []
+    for rel in sorted(archivos):
+        destino = destino_de(rel)
+        if rel in SOLO_SI_FALTA and (os.path.exists(destino) or os.path.islink(destino)):
+            plan.append({"rel": rel, "destino": destino, "accion": "igual"})
+            continue
+        accion = clasificar(destino, manifiesto["archivos"][rel]["sha256"],
+                            huellas_oficiales(manifiesto, anterior, rel),
+                            existia(rel), respetar_borrado(rel))
+        if accion == "conflicto" and rel.startswith(PROPIOS_DEL_ACTUALIZADOR):
+            accion = "actualizar"
+        plan.append({"rel": rel, "destino": destino, "accion": accion})
+    # Lo que desaparece en la version nueva: lo que traia la instalada o cualquier version
+    # oficial anterior (asi tambien se limpia al venir de versiones sin manifiesto).
+    retirados = set((anterior or {}).get("archivos", {})) | set(manifiesto.get("historico", {}))
+    for rel in sorted(retirados - set(manifiesto["archivos"])):
+        validar_ruta_relativa(rel)
+        destino = destino_de(rel)
+        if destino is None or not os.path.isfile(destino) or os.path.islink(destino):
+            continue
+        if sha256_archivo(destino) in huellas_oficiales(manifiesto, anterior, rel):
+            plan.append({"rel": rel, "destino": destino, "accion": "eliminar"})
+        else:
+            plan.append({"rel": rel, "destino": destino, "accion": "conservar"})
+    # La version del sistema se escribe la ultima: si algo falla antes, sigue la anterior.
+    plan.sort(key=lambda p: p["rel"] == "usr/share/jaime0/version")
+    return plan
+
+
+ETIQUETAS = {
+    "nuevo": verde("nuevo     "),
+    "restaurar": verde("restaurar "),
+    "actualizar": cian("actualizar"),
+    "conflicto": ambar("conflicto "),
+    "eliminar": rojo("eliminar  "),
+    "conservar": tenue("conservar "),
+    "borrado": tenue("borrado   "),
+    "enlace": tenue("enlace    "),
+}
+
+
+def mostrar_plan(plan, detalle=False):
+    cuenta = {}
+    for p in plan:
+        cuenta[p["accion"]] = cuenta.get(p["accion"], 0) + 1
+    resumen = ", ".join(f"{n} {a}" for a, n in sorted(cuenta.items()) if a != "igual")
+    info(resumen or "Nada que cambiar.")
+    for p in plan:
+        if p["accion"] == "igual":
+            continue
+        if detalle or p["accion"] in ("conflicto", "eliminar", "conservar", "borrado", "enlace"):
+            info(f"{ETIQUETAS[p['accion']]}  {mostrar_ruta(p['destino'])}")
+    if cuenta.get("conflicto"):
+        info(tenue("Los conflictos conservan tu archivo; la versión nueva queda al lado como *" + NUEVO))
+    if cuenta.get("borrado"):
+        info(tenue("Los archivos que borraste no se vuelven a crear."))
+
+
+def mostrar_ruta(camino):
+    casa = carpeta_personal()
+    if camino == casa or camino.startswith(casa + os.sep):
+        return "~" + camino[len(casa):].replace(os.sep, "/")
+    if MODO_PRUEBA and camino.startswith(RAIZ):
+        return "/" + os.path.relpath(camino, RAIZ).replace(os.sep, "/")
+    return camino
+
+
+def mostrar_diferencias(plan, nuevos):
+    for p in plan:
+        if p["accion"] not in ("actualizar", "conflicto"):
+            continue
+        try:
+            with open(p["destino"], encoding="utf-8") as f:
+                actual = f.read().splitlines(keepends=True)
+            nuevo = nuevos[p["rel"]].decode("utf-8").splitlines(keepends=True)
+        except (UnicodeDecodeError, OSError):
+            info(tenue(f"{mostrar_ruta(p['destino'])}: archivo binario, cambia completo"))
+            continue
+        ruta_mostrada = mostrar_ruta(p["destino"])
+        for linea in difflib.unified_diff(actual, nuevo, ruta_mostrada + " (actual)", ruta_mostrada + " (nuevo)"):
+            linea = linea.rstrip("\n")
+            if linea.startswith("+") and not linea.startswith("+++"):
+                linea = verde(linea)
+            elif linea.startswith("-") and not linea.startswith("---"):
+                linea = rojo(linea)
+            print(linea)
+
+
+# ------------------------------------------------------------------------------------
+# Transacciones: copia de cada archivo antes de tocarlo y diario en disco
+# ------------------------------------------------------------------------------------
+class Transaccion:
+    """Antes de cambiar un archivo guarda su copia y lo anota en el diario. Si el proceso
+    se corta, 'recuperar' deja todo como antes; 'revertir' deshace una ya terminada."""
+
+    def __init__(self, base, origen, destino_version, alcance):
+        marca = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        self.dir = os.path.join(base, f"{marca}_{origen or 'desconocida'}_{destino_version}")
+        os.makedirs(os.path.join(self.dir, "archivos"), mode=0o700)
+        self.diario = os.path.join(self.dir, "diario.json")
+        self.datos = {"estado": "aplicando", "desde": origen, "hasta": destino_version,
+                      "alcance": alcance, "inicio": marca, "entradas": []}
+        self._anotadas = set()
+        self._guardar()
+        self._escrituras = 0
+
+    def _guardar(self):
+        escribir_json(self.diario, self.datos, 0o600)
+
+    def _respaldar(self, destino):
+        if destino in self._anotadas:
+            return
+        entrada = {"ruta": destino, "existia": os.path.lexists(destino)}
+        if entrada["existia"]:
+            if os.path.islink(destino) or not os.path.isfile(destino):
+                raise Fallo(f"No se modifica algo que no es un archivo normal: {destino}")
+            copia = os.path.join(self.dir, "archivos", str(len(self.datos["entradas"])))
+            shutil.copy2(destino, copia)
+            entrada["copia"] = copia
+            entrada["modo"] = oct(os.stat(destino).st_mode & 0o7777)
+        self.datos["entradas"].append(entrada)
+        self._anotadas.add(destino)
+        self._guardar()  # El diario llega al disco antes que el cambio
+
+    def _fallo_simulado(self):
+        # Solo en pruebas: mata el proceso a mitad, como un corte de luz, para ensayar
+        # la recuperacion en la siguiente ejecucion.
+        limite = os.environ.get("JAIME0_PRUEBA_CORTE") if MODO_PRUEBA else None
+        self._escrituras += 1
+        if limite and self._escrituras > int(limite):
+            os._exit(99)
+
+    def escribir(self, destino, datos, modo):
+        self._respaldar(destino)
+        self._fallo_simulado()
+        escribir_atomico(destino, datos, modo)
+
+    def borrar(self, destino):
+        self._respaldar(destino)
+        self._fallo_simulado()
+        os.remove(destino)
+
+    def terminar(self, extra=None):
+        self.datos["estado"] = "completada"
+        self.datos["fin"] = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        if extra:
+            self.datos.update(extra)
+        self._guardar()
+
+
+def comprobar_entrada_diario(diario_ruta, entrada):
+    """Un diario no puede pedir restaurar nada fuera de lo que gestiona Jaime0."""
+    destino = entrada["ruta"]
+    sistema = os.path.realpath(diario_ruta).startswith(os.path.realpath(DIR_COPIAS) + os.sep)
+    if sistema:
+        rel = os.path.relpath(destino, RAIZ).replace(os.sep, "/")
+        if rel.endswith(NUEVO):
+            rel = rel[:-len(NUEVO)]
+        validar_ruta_relativa(rel)
+    elif not dentro_de_casa(destino):
+        raise Fallo(f"El diario apunta fuera de tu carpeta personal: {destino}")
+    if entrada.get("existia"):
+        carpeta = os.path.realpath(os.path.join(os.path.dirname(diario_ruta), "archivos"))
+        if os.path.dirname(os.path.realpath(entrada.get("copia", ""))) != carpeta:
+            raise Fallo("El diario apunta a una copia fuera de su transacción.")
+
+
+def restaurar_diario(diario_ruta, estado_final):
+    if hasattr(os, "geteuid") and os.stat(diario_ruta).st_uid != os.geteuid():
+        raise Fallo(f"El diario {diario_ruta} no es de este usuario: no se usa.")
+    datos = leer_json(diario_ruta)
+    for entrada in datos["entradas"]:
+        comprobar_entrada_diario(diario_ruta, entrada)
+    for entrada in reversed(datos["entradas"]):
+        destino = entrada["ruta"]
+        if entrada["existia"]:
+            with open(entrada["copia"], "rb") as f:
+                contenido = f.read()
+            escribir_atomico(destino, contenido, int(entrada.get("modo", "0o644"), 8))
+        elif os.path.lexists(destino):
+            os.remove(destino)
+    datos["estado"] = estado_final
+    escribir_json(diario_ruta, datos, 0o600)
+    return datos
+
+
+def diarios(base):
+    if not os.path.isdir(base):
+        return []
+    lista = []
+    try:
+        nombres = sorted(os.listdir(base))
+    except PermissionError:
+        return []
+    for nombre in nombres:
+        diario = os.path.join(base, nombre, "diario.json")
+        if os.path.isfile(diario):
+            lista.append(diario)
+    return lista
+
+
+def recuperar_interrumpidas(base):
+    """Deshace cualquier transaccion que quedo a medias. Devuelve cuantas habia."""
+    n = 0
+    for diario in diarios(base):
+        datos = leer_json(diario)
+        if datos.get("estado") == "aplicando":
+            restaurar_diario(diario, "recuperada")
+            aviso(f"Se deshizo una actualización interrumpida ({datos.get('desde')} → {datos.get('hasta')}).")
+            n += 1
+    return n
+
+
+def podar_copias(base):
+    terminadas = [d for d in diarios(base) if leer_json(d).get("estado") != "aplicando"]
+    for diario in terminadas[:-COPIAS_CONSERVADAS]:
+        shutil.rmtree(os.path.dirname(diario), ignore_errors=True)
+
+
+def aplicar_plan(plan, nuevos, manifiesto, transaccion, conflictos):
+    for p in plan:
+        accion, destino, rel = p["accion"], p["destino"], p["rel"]
+        if accion in ("nuevo", "restaurar", "actualizar"):
+            modo = 0o755 if manifiesto["archivos"][rel]["modo"] == "755" else 0o644
+            transaccion.escribir(destino, nuevos[rel], modo)
+            conflictos.pop(destino, None)
+        elif accion == "conflicto":
+            modo = 0o755 if manifiesto["archivos"][rel]["modo"] == "755" else 0o644
+            transaccion.escribir(destino + NUEVO, nuevos[rel], modo)
+            conflictos[destino] = {"rel": rel, "version": manifiesto["version"],
+                                   "sha256_nuevo": manifiesto["archivos"][rel]["sha256"]}
+        elif accion == "eliminar":
+            transaccion.borrar(destino)
+
+
+# ------------------------------------------------------------------------------------
+# Fase de sistema (root)
+# ------------------------------------------------------------------------------------
+def destino_sistema(rel):
+    return ruta(rel)
+
+
+def paquetes_que_faltan(paquetes):
+    faltan = []
+    for paquete in paquetes:
+        if not re.fullmatch(r"[a-z0-9][a-z0-9+.\-]+", paquete):
+            raise Fallo(f"Nombre de paquete no válido en el manifiesto: {paquete}")
+        r = subprocess.run(["dpkg-query", "-W", "-f=${Status}", paquete],
+                           capture_output=True, text=True)
+        if "install ok installed" not in r.stdout:
+            faltan.append(paquete)
+    return faltan
+
+
+def actualizar_os_release():
+    """VERSION y VERSION_ID de /usr/lib/os-release siguen a usr/share/jaime0/version."""
+    camino = ruta("usr/lib/os-release")
+    version = version_instalada()
+    if not version or not os.path.isfile(camino) or os.path.islink(camino):
+        return
+    with open(camino, encoding="utf-8") as f:
+        lineas = [l for l in f.read().splitlines() if not l.startswith(("VERSION=", "VERSION_ID="))]
+    lineas += [f'VERSION="{version}"', f"VERSION_ID={version}"]
+    escribir_atomico(camino, ("\n".join(lineas) + "\n").encode("utf-8"), 0o644)
+
+
+def acciones_posteriores(cambiados):
+    """Lo que hay que hacer tras cambiar ciertos archivos. Devuelve avisos para el usuario."""
+    avisos = set()
+    if "usr/share/jaime0/version" in cambiados:
+        actualizar_os_release()
+    if any(r.startswith("etc/default/grub.d/") or r.startswith("usr/share/grub/") for r in cambiados):
+        if not MODO_PRUEBA and shutil.which("update-grub"):
+            subprocess.run(["update-grub"], stdout=subprocess.DEVNULL)
+        avisos.add("reinicio")
+    if any(r.startswith("usr/share/glib-2.0/schemas/") for r in cambiados) and not MODO_PRUEBA:
+        subprocess.run(["glib-compile-schemas", "/usr/share/glib-2.0/schemas"], stderr=subprocess.DEVNULL)
+    if any(r.startswith("etc/systemd/") for r in cambiados):
+        if not MODO_PRUEBA:
+            subprocess.run(["systemctl", "daemon-reload"], stderr=subprocess.DEVNULL)
+        avisos.add("reinicio")
+    temporizadores = [os.path.basename(r) for r in cambiados
+                      if r.startswith("usr/lib/systemd/user/") and r.endswith(".timer")]
+    if temporizadores and not MODO_PRUEBA:
+        subprocess.run(["systemctl", "--global", "enable", "--"] + temporizadores, stderr=subprocess.DEVNULL)
+    if any(r.startswith(("etc/skel/", "usr/share/backgrounds/", "usr/lib/systemd/user/", "etc/fonts/"))
+           for r in cambiados):
+        avisos.add("sesion")
+    return avisos
+
+
+def fase_sistema(version, opciones):
+    """Descarga, verifica y aplica una version. Corre como root (o en modo de prueba)."""
+    if not es_root() and not MODO_PRUEBA:
+        raise Fallo("La fase de sistema necesita privilegios de administrador.")
+    with Cerrojo(CERROJO_SISTEMA):
+        recuperar_interrumpidas(DIR_COPIAS)
+        conf = leer_conf()
+        instalada = version_instalada()
+        publicacion = next((p for p in listar_publicaciones(conf) if p["version"] == version), None)
+        if not publicacion:
+            raise Fallo(f"No se encuentra la publicación {version} con manifiesto firmado.")
+        manifiesto = obtener_manifiesto(publicacion, getattr(opciones, "manifiesto_sha256", None))
+        if instalada and clave_version(version) <= clave_version(instalada) and not opciones.reinstalar:
+            raise Fallo(f"{version} no es más nueva que la instalada ({instalada}).")
+        if not admitida_en_canal(version, conf["canal"]) and not opciones.reinstalar:
+            raise Fallo(f"{version} no pertenece al canal {conf['canal']}.")
+        minima = (manifiesto.get("requisitos") or {}).get("version_minima")
+        if minima and instalada and clave_version(instalada) < clave_version(minima):
+            raise Fallo(f"Esta versión necesita tener instalada al menos la {minima}. "
+                        "Actualiza antes a esa versión o reinstala desde la ISO.")
+
+        nombre_carga = manifiesto["carga"]["nombre"]
+        if nombre_carga not in publicacion["adjuntos"]:
+            raise Fallo(f"La publicación no incluye {nombre_carga}.")
+        datos = descargar(publicacion["adjuntos"][nombre_carga], progreso="Descargando",
+                          limite=manifiesto["carga"]["tamano"])
+        nuevos = leer_carga(manifiesto, datos)
+        os.makedirs(DIR_CACHE, mode=0o700, exist_ok=True)
+        escribir_atomico(os.path.join(DIR_CACHE, nombre_carga), datos, 0o600)
+
+        faltan = paquetes_que_faltan(manifiesto.get("paquetes", [])) if not MODO_PRUEBA else []
+        if faltan:
+            info(f"Paquetes necesarios: {' '.join(faltan)}")
+            r = subprocess.run(["apt-get", "install", "-y", "--no-install-recommends"] + faltan)
+            if r.returncode != 0:
+                raise Fallo("apt no pudo instalar los paquetes necesarios. No se ha cambiado ningún archivo de "
+                            "Jaime0; revisa con apt si quedó algún paquete a medias.")
+
+        anterior = leer_json(MANIFIESTO_INSTALADO)
+        previas = set((anterior or {}).get("archivos", {})) | set(manifiesto.get("historico", {}))
+        plan = planificar(
+            manifiesto, anterior, list(manifiesto["archivos"]), destino_sistema,
+            existia=lambda rel: rel in previas,
+            # En /etc el administrador manda; en /usr se reponen los archivos borrados.
+            respetar_borrado=lambda rel: rel.startswith("etc/"))
+
+        transaccion = Transaccion(DIR_COPIAS, instalada, version, "sistema")
+        conflictos = leer_json(CONFLICTOS_SISTEMA, {})
+        try:
+            aplicar_plan(plan, nuevos, manifiesto, transaccion, conflictos)
+            transaccion.escribir(MANIFIESTO_INSTALADO,
+                                 (json.dumps(manifiesto, ensure_ascii=False, indent=1, sort_keys=True) + "\n").encode(),
+                                 0o644)
+        except BaseException as e:
+            aviso("La actualización se ha interrumpido: se deshacen los cambios.")
+            restaurar_diario(transaccion.diario, "recuperada")
+            registrar(REGISTRO_SISTEMA, f"ERROR {instalada} -> {version}: {e!r}; cambios deshechos")
+            if isinstance(e, Fallo):
+                raise
+            raise Fallo(f"Actualización interrumpida ({e}). Los archivos de Jaime0 siguen en {instalada}.")
+        transaccion.terminar({"plan": [{k: p[k] for k in ("rel", "accion")} for p in plan]})
+        escribir_json(CONFLICTOS_SISTEMA, conflictos)
+
+        cambiados = [p["rel"] for p in plan if p["accion"] in ("nuevo", "restaurar", "actualizar", "eliminar")]
+        avisos = acciones_posteriores(cambiados)
+        podar_copias(DIR_COPIAS)
+        n_conf = sum(1 for p in plan if p["accion"] == "conflicto")
+        registrar(REGISTRO_SISTEMA, f"OK {instalada} -> {version}: {len(cambiados)} cambios, "
+                                    f"{n_conf} conflictos; copia en {transaccion.dir}")
+        escribir_json(os.path.join(DIR_ESTADO, "ultima.json"),
+                      {"version": version, "avisos": sorted(avisos), "copia": transaccion.dir})
+        return plan, avisos
+
+
+# ------------------------------------------------------------------------------------
+# Fase de usuario: ~/.config y demas a partir de /etc/skel (sin privilegios)
+# ------------------------------------------------------------------------------------
+def destino_usuario(rel):
+    if not rel.startswith("etc/skel/"):
+        return None
+    return os.path.join(carpeta_personal(), *rel[len("etc/skel/"):].split("/"))
+
+
+def dentro_de_casa(destino):
+    """Evita escribir a traves de carpetas que son enlaces hacia fuera de la carpeta personal."""
+    casa = os.path.realpath(carpeta_personal())
+    real = os.path.realpath(os.path.dirname(destino))
+    return real == casa or real.startswith(casa + os.sep)
+
+
+def plan_usuario():
+    manifiesto = leer_json(MANIFIESTO_INSTALADO)
+    if not manifiesto:
+        return None, None, None, None
+    estado = leer_json(os.path.join(dir_estado_usuario(), "estado.json"), {})
+    if "archivos" in estado:
+        previas = set(estado["archivos"])
+    else:
+        # Primera vez: lo que traia /etc/skel cuando se instalo el sistema.
+        previas = set((leer_json(MANIFIESTO_ORIGEN, {}) or {}).get("archivos", {}))
+    anterior = None
+    if estado.get("manifiesto_archivos"):
+        anterior = {"archivos": estado["manifiesto_archivos"]}
+    propios = [r for r in manifiesto["archivos"] if r.startswith("etc/skel/")]
+
+    # El contenido sale de /etc/skel, ya actualizado por la fase de sistema. Si el
+    # administrador tiene ahi un conflicto, se usa la version oficial nueva.
+    nuevos, sin_fuente = {}, []
+    for rel in propios:
+        esperado = manifiesto["archivos"][rel]["sha256"]
+        for candidato in (ruta(rel), ruta(rel) + NUEVO):
+            if os.path.isfile(candidato) and not os.path.islink(candidato) and sha256_archivo(candidato) == esperado:
+                with open(candidato, "rb") as f:
+                    nuevos[rel] = f.read()
+                break
+        else:
+            sin_fuente.append(rel)
+    gestionados = [r for r in propios if r in nuevos]
+    plan = planificar(
+        manifiesto, anterior, gestionados, destino_usuario,
+        existia=lambda rel: rel in previas,
+        respetar_borrado=lambda rel: True)
+    plan = [p for p in plan if p["destino"] is not None]
+    for p in plan:
+        if p["accion"] in QUE_CAMBIA and not dentro_de_casa(p["destino"]):
+            p["accion"] = "enlace"
+    return manifiesto, plan, nuevos, sin_fuente
+
+
+def fase_usuario(opciones, preguntar_antes=True):
+    if es_root():
+        raise Fallo("La parte de usuario se aplica sin sudo: ejecuta jaime0-update como tu usuario.")
+    manifiesto, plan, nuevos, sin_fuente = plan_usuario()
+    if manifiesto is None:
+        aviso("No hay manifiesto instalado: este sistema aún no usa jaime0-update.")
+        return False
+    base = dir_estado_usuario()
+    estado_ruta = os.path.join(base, "estado.json")
+    estado = leer_json(estado_ruta, {})
+    pendiente = [p for p in plan if p["accion"] in QUE_CAMBIA]
+    titulo(f"Tu configuración ({mostrar_ruta(carpeta_personal())})")
+    for rel in sin_fuente:
+        aviso(f"/{rel} no coincide con la versión oficial: no se usa para tu carpeta.")
+    if not pendiente:
+        info("Al día.")
+        guardar_estado_usuario(estado_ruta, estado, manifiesto, plan)
+        return True
+    mostrar_plan(plan, detalle=opciones.detalle)
+    if opciones.revisar:
+        mostrar_diferencias(plan, nuevos)
+    if preguntar_antes and not preguntar("¿Aplicar estos cambios a tu configuración?", opciones):
+        info("Sin cambios en tu configuración.")
+        return False
+    with Cerrojo(os.path.join(base, ".cerrojo")):
+        copias = os.path.join(base, "copias")
+        recuperar_interrumpidas(copias)
+        transaccion = Transaccion(copias, estado.get("version"), manifiesto["version"], "usuario")
+        conflictos = leer_json(os.path.join(base, "conflictos.json"), {})
+        try:
+            aplicar_plan(plan, nuevos, manifiesto, transaccion, conflictos)
+        except BaseException as e:
+            restaurar_diario(transaccion.diario, "recuperada")
+            registrar(os.path.join(base, "registro.log"), f"ERROR usuario {manifiesto['version']}: {e!r}")
+            raise Fallo(f"No se pudo aplicar tu configuración ({e}). Queda como estaba.")
+        transaccion.terminar({"plan": [{"rel": p["rel"], "accion": p["accion"]} for p in plan]})
+        escribir_json(os.path.join(base, "conflictos.json"), conflictos)
+        guardar_estado_usuario(estado_ruta, estado, manifiesto, plan)
+        podar_copias(copias)
+    n_conf = sum(1 for p in plan if p["accion"] == "conflicto")
+    registrar(os.path.join(base, "registro.log"),
+              f"OK usuario -> {manifiesto['version']}: {len(pendiente) - n_conf} cambios, {n_conf} conflictos")
+    info(verde("✓") + f" Configuración actualizada. Copia de lo anterior en {mostrar_ruta(transaccion.dir)}")
+    if n_conf:
+        info(f"Revisa los conflictos con: {PROGRAMA} conflictos")
+    return True
+
+
+def guardar_estado_usuario(estado_ruta, estado, manifiesto, plan):
+    estado.update({
+        "version": manifiesto["version"],
+        "archivos": sorted(p["rel"] for p in plan if p["rel"] in manifiesto["archivos"]),
+        "manifiesto_archivos": {r: d for r, d in manifiesto["archivos"].items() if r.startswith("etc/skel/")},
+    })
+    escribir_json(estado_ruta, estado)
+
+
+# ------------------------------------------------------------------------------------
+# Comandos
+# ------------------------------------------------------------------------------------
+def en_vivo():
+    return os.path.isdir("/run/live/medium") and not MODO_PRUEBA
+
+
+def ejecutar_como_root(argumentos):
+    """Ejecuta la parte privilegiada. Siempre el programa instalado, nunca una copia
+    del usuario."""
+    if MODO_PRUEBA:
+        return None
+    if es_root():
+        return None
+    if not os.path.exists("/usr/bin/sudo"):
+        raise Fallo("Hace falta sudo para esta operación.")
+    return subprocess.call(["/usr/bin/sudo", RUTA_PROGRAMA] + argumentos)
+
+
+def mostrar_publicacion(manifiesto):
+    canal = manifiesto["canal"]
+    color_canal = verde if canal == "stable" else (ambar if canal == "beta" else rojo)
+    info(f"Versión     {verde(manifiesto['version'])}   canal {color_canal(canal)}   fecha {manifiesto.get('fecha', '?')}")
+    if canal == "beta":
+        info(ambar("Versión beta: funciones nuevas en pruebas, puede tener errores."))
+    elif canal == "experimental":
+        info(rojo("Versión experimental: cambios en desarrollo, sin garantías."))
+    compat = manifiesto.get("compatibilidad") or {}
+    if compat:
+        info("Compatible  " + ", ".join(f"{k} {v}" for k, v in compat.items()))
+    req = manifiesto.get("requisitos") or {}
+    if req.get("version_minima"):
+        info(f"Requiere    Jaime0 {req['version_minima']} o posterior")
+    if manifiesto.get("componentes"):
+        info("Componentes " + ", ".join(manifiesto["componentes"]))
+    if manifiesto.get("paquetes"):
+        info("Paquetes    " + " ".join(manifiesto["paquetes"]))
+    if manifiesto.get("cambios"):
+        titulo("Cambios")
+        for c in manifiesto["cambios"]:
+            info("• " + limpio(c))
+    if manifiesto.get("problemas_conocidos"):
+        titulo("Problemas conocidos")
+        for c in manifiesto["problemas_conocidos"]:
+            info(ambar("• ") + limpio(c))
+    reinicio = manifiesto.get("reinicio")
+    if reinicio == "sistema":
+        info(ambar("Necesitará reiniciar el equipo."))
+    elif reinicio == "sesion":
+        info("Necesitará cerrar la sesión y volver a entrar.")
+
+
+def cmd_estado(opciones):
+    conf = leer_conf()
+    instalada = version_instalada()
+    titulo("Jaime0")
+    info(f"Versión instalada  {verde(instalada or 'desconocida')}")
+    info(f"Canal              {conf['canal']}")
+    ultima = leer_json(os.path.join(DIR_ESTADO, "ultima.json"))
+    if ultima:
+        info(f"Última operación   {ultima.get('version')}  ({tenue(ultima.get('copia', ''))})")
+    estado = leer_json(os.path.join(dir_estado_usuario(), "estado.json"), {})
+    if not es_root():
+        tu = estado.get("version") or "sin sincronizar"
+        color = verde if tu == instalada else ambar
+        info(f"Tu configuración   {color(tu)}")
+    pendientes = len(leer_json(CONFLICTOS_SISTEMA, {}) or {})
+    if not es_root():
+        pendientes += len(leer_json(os.path.join(dir_estado_usuario(), "conflictos.json"), {}) or {})
+    info(f"Conflictos         {ambar(str(pendientes)) if pendientes else '0'}")
+    for diario in diarios(DIR_COPIAS):
+        if leer_json(diario).get("estado") == "aplicando":
+            info(rojo("Hay una actualización interrumpida: ejecuta 'sudo jaime0-update recuperar'."))
+    return 0
+
+
+def cmd_comprobar(opciones):
+    conf = leer_conf()
+    instalada = version_instalada()
+    try:
+        publicacion, manifiesto = buscar_actualizacion(conf, instalada)
+    except Fallo as e:
+        if opciones.silencioso:
+            registrar(registro_actual(), f"comprobar: {e}")
+            return 1
+        raise
+    if not publicacion:
+        if not opciones.silencioso:
+            info(verde("✓") + f" Jaime0 {instalada or ''} está al día en el canal {conf['canal']}.")
+        return 0
+    if opciones.notificar:
+        notificar(manifiesto)
+    if not opciones.silencioso:
+        titulo(f"Hay una actualización: {instalada or '?'} → {manifiesto['version']}")
+        mostrar_publicacion(manifiesto)
+        print()
+        info(f"Para instalarla: {verde(PROGRAMA)}")
+    return 100  # Codigo propio: hay actualizacion
+
+
+def notificar(manifiesto):
+    """Aviso discreto, una sola vez por version. Nunca inicia la actualizacion."""
+    avisado = os.path.join(dir_estado_usuario(), "avisado")
+    try:
+        with open(avisado, encoding="utf-8") as f:
+            if f.read().strip() == manifiesto["version"]:
+                return
+    except FileNotFoundError:
+        pass
+    if not shutil.which("notify-send"):
+        return
+    os.makedirs(os.path.dirname(avisado), exist_ok=True)
+    with open(avisado, "w", encoding="utf-8") as f:
+        f.write(manifiesto["version"] + "\n")
+    try:
+        r = subprocess.run(
+            ["notify-send", "--app-name=Jaime0", "--icon=system-software-update", "--wait",
+             "--action=cambios=Ver los cambios",
+             f"Jaime0 {manifiesto['version']} disponible",
+             f"Canal {manifiesto['canal']}. Cuando quieras, ejecuta: {PROGRAMA}"],
+            capture_output=True, text=True, timeout=900)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    if r.stdout.strip() == "cambios" and shutil.which("kitty"):
+        subprocess.Popen(["kitty", "--class", "jaime0-update", "-e", "sh", "-c",
+                          f"{PROGRAMA} cambios; printf '\\nPulsa Intro para cerrar. '; read -r _"],
+                         start_new_session=True)
+
+
+def cmd_cambios(opciones):
+    conf = leer_conf()
+    objetivo = opciones.version
+    if objetivo:
+        publicacion = next((p for p in listar_publicaciones(conf) if p["version"] == objetivo.lstrip("v")), None)
+        if not publicacion:
+            raise Fallo(f"No existe la publicación {objetivo}.")
+        manifiesto = obtener_manifiesto(publicacion)
+    else:
+        publicacion, manifiesto = buscar_actualizacion(conf, version_instalada())
+        if not manifiesto:
+            manifiesto = leer_json(MANIFIESTO_INSTALADO)
+            if not manifiesto:
+                raise Fallo("No hay actualizaciones ni manifiesto instalado.")
+            info(tenue("No hay actualizaciones: estos son los cambios de la versión instalada."))
+    titulo(f"Jaime0 {manifiesto['version']}")
+    mostrar_publicacion(manifiesto)
+    return 0
+
+
+def cmd_actualizar(opciones):
+    if en_vivo():
+        raise Fallo("Estás en la sesión en vivo: instala Jaime0 antes de actualizarlo.")
+    conf = leer_conf()
+    instalada = version_instalada()
+    titulo("Buscando actualizaciones")
+    info(f"Instalada {verde(instalada or 'desconocida')} · canal {conf['canal']}")
+    publicacion, manifiesto = buscar_actualizacion(conf, instalada)
+    hecho_sistema = False
+    if publicacion:
+        titulo(f"Actualización disponible: {instalada or '?'} → {manifiesto['version']}")
+        mostrar_publicacion(manifiesto)
+        titulo("Archivos del sistema")
+        # Vista previa sin privilegios: se lee la carga y se compara con el disco.
+        datos = descargar(publicacion["adjuntos"][manifiesto["carga"]["nombre"]], progreso="Descargando",
+                          limite=manifiesto["carga"]["tamano"])
+        nuevos = leer_carga(manifiesto, datos)
+        anterior = leer_json(MANIFIESTO_INSTALADO)
+        previas = set((anterior or {}).get("archivos", {})) | set(manifiesto.get("historico", {}))
+        plan = planificar(manifiesto, anterior, list(manifiesto["archivos"]), destino_sistema,
+                          existia=lambda rel: rel in previas,
+                          respetar_borrado=lambda rel: rel.startswith("etc/"))
+        mostrar_plan(plan, detalle=opciones.detalle)
+        if opciones.revisar:
+            mostrar_diferencias(plan, nuevos)
+        if not preguntar(f"¿Instalar Jaime0 {manifiesto['version']}?", opciones):
+            info("No se ha instalado nada.")
+            return 0
+        argumentos = ["_sistema", manifiesto["version"],
+                      "--manifiesto-sha256", HUELLAS_MANIFIESTO[manifiesto["version"]]]
+        codigo = ejecutar_como_root(argumentos)
+        if codigo is None:
+            plan, avisos = fase_sistema(manifiesto["version"], opciones)
+        elif codigo != 0:
+            raise Fallo("La actualización del sistema no se completó. Detalle en /var/log/jaime0-update.log")
+        info(verde("✓") + f" Sistema actualizado a {manifiesto['version']}.")
+        hecho_sistema = True
+    else:
+        info(verde("✓") + " Los componentes de Jaime0 están al día.")
+
+    if not es_root():
+        fase_usuario(opciones)
+    else:
+        usuario = os.environ.get("SUDO_USER")
+        if usuario and usuario != "root" and os.path.exists("/usr/sbin/runuser"):
+            argumentos = [RUTA_PROGRAMA, "usuario"] + (["--si"] if opciones.si else [])
+            subprocess.call(["/usr/sbin/runuser", "-u", usuario, "--"] + argumentos)
+
+    if not opciones.sin_paquetes:
+        titulo("Paquetes de Debian")
+        info("Los paquetes del sistema se actualizan con apt (Hyprland, kernel, programas...).")
+        if preguntar("¿Buscar e instalar actualizaciones de paquetes con apt?", opciones):
+            actualizar_paquetes(opciones)
+
+    ultima = leer_json(os.path.join(DIR_ESTADO, "ultima.json"), {}) if hecho_sistema else {}
+    avisos = set(ultima.get("avisos", []))
+    if os.path.exists("/run/reboot-required"):
+        avisos.add("reinicio")
+    if "reinicio" in avisos:
+        info(ambar("Reinicia el equipo para terminar de aplicar la actualización."))
+    elif "sesion" in avisos:
+        info("Cierra la sesión y vuelve a entrar para ver todos los cambios del escritorio.")
+    return 0
+
+
+def actualizar_paquetes(opciones):
+    if MODO_PRUEBA:
+        info(tenue("(modo de prueba: no se ejecuta apt)"))
+        return
+    prefijo = [] if es_root() else ["sudo"]
+    if subprocess.call(prefijo + ["apt-get", "update"]) != 0:
+        raise Fallo("apt-get update ha fallado (¿hay red?).")
+    extra = ["-y"] if opciones.si else []
+    if subprocess.call(prefijo + ["apt-get", "full-upgrade"] + extra) != 0:
+        raise Fallo("apt-get full-upgrade no terminó bien. Revisa los mensajes de apt.")
+    registrar(registro_actual(), "apt full-upgrade completado")
+
+
+def cmd_usuario(opciones):
+    return 0 if fase_usuario(opciones) else 1
+
+
+def cmd_sistema_interno(opciones):
+    plan, avisos = fase_sistema(opciones.version, opciones)
+    mostrar_plan(plan)
+    return 0
+
+
+def cmd_canal(opciones):
+    conf = leer_conf()
+    if not opciones.nuevo:
+        titulo("Canal de actualizaciones")
+        for canal, texto in (("stable", "versiones probadas, recomendado"),
+                             ("beta", "funciones nuevas en pruebas, puede fallar"),
+                             ("experimental", "en desarrollo, sin garantías")):
+            marca = verde("●") if canal == conf["canal"] else tenue("○")
+            info(f"{marca} {canal:<13} {tenue(texto)}")
+        info(tenue(f"Cambiar: {PROGRAMA} canal stable|beta|experimental"))
+        return 0
+    nuevo = opciones.nuevo
+    if nuevo not in CANALES:
+        raise Fallo(f"Canal desconocido: {nuevo}. Usa stable, beta o experimental.")
+    if nuevo == conf["canal"]:
+        info(f"Ya estás en el canal {nuevo}.")
+        return 0
+    if NIVEL_CANAL[nuevo] < NIVEL_CANAL[conf["canal"]]:
+        aviso(f"El canal {nuevo} recibe versiones menos probadas que {conf['canal']}.")
+    else:
+        info(tenue("Al volver a un canal más estable no se desinstala nada: recibirás la siguiente "
+                   "versión de ese canal cuando sea más nueva que la instalada."))
+    if not preguntar(f"¿Cambiar al canal {nuevo}?", opciones):
+        return 0
+    codigo = ejecutar_como_root(["_canal", nuevo])
+    if codigo is None:
+        return cmd_canal_interno(opciones)
+    return codigo
+
+
+def cmd_canal_interno(opciones):
+    nuevo = opciones.nuevo
+    if nuevo not in CANALES:
+        raise Fallo("Canal desconocido.")
+    lineas, cambiado = [], False
+    try:
+        with open(ARCHIVO_CONF, encoding="utf-8") as f:
+            lineas = f.read().splitlines()
+    except FileNotFoundError:
+        lineas = ["# Configuracion de jaime0-update"]
+    for i, linea in enumerate(lineas):
+        if re.match(r"^\s*canal\s*=", linea):
+            lineas[i] = f"canal={nuevo}"
+            cambiado = True
+    if not cambiado:
+        lineas.append(f"canal={nuevo}")
+    escribir_atomico(ARCHIVO_CONF, ("\n".join(lineas) + "\n").encode("utf-8"), 0o644)
+    registrar(REGISTRO_SISTEMA, f"canal -> {nuevo}")
+    info(verde("✓") + f" Canal cambiado a {nuevo}.")
+    return 0
+
+
+def todos_los_conflictos():
+    resultado = []
+    for destino, datos in (leer_json(CONFLICTOS_SISTEMA, {}) or {}).items():
+        resultado.append(("sistema", destino, datos))
+    if not es_root():
+        for destino, datos in (leer_json(os.path.join(dir_estado_usuario(), "conflictos.json"), {}) or {}).items():
+            resultado.append(("usuario", destino, datos))
+    return resultado
+
+
+def cmd_conflictos(opciones):
+    lista = todos_los_conflictos()
+    titulo("Conflictos pendientes")
+    if not lista:
+        info("Ninguno.")
+        return 0
+    for alcance, destino, datos in lista:
+        info(f"{ambar('●')} {mostrar_ruta(destino)}  {tenue(alcance + ' · ' + datos.get('version', ''))}")
+    print()
+    info("Tu archivo sigue en uso. La versión nueva está al lado, terminada en " + NUEVO)
+    info(f"Ver diferencias:   {PROGRAMA} resolver RUTA --diferencias")
+    info(f"Usar la nueva:     {PROGRAMA} resolver RUTA --usar-nueva   (se guarda copia de la tuya)")
+    info(f"Quedarte la tuya:  {PROGRAMA} resolver RUTA --mantener")
+    return 0
+
+
+def cmd_resolver(opciones):
+    objetivo = os.path.abspath(os.path.expanduser(opciones.ruta))
+    if objetivo.endswith(NUEVO):
+        objetivo = objetivo[:-len(NUEVO)]
+    # En modo de prueba, una ruta absoluta del sistema se refiere a la raiz de mentira.
+    if MODO_PRUEBA and not objetivo.startswith((os.path.abspath(RAIZ), os.path.abspath(carpeta_personal()))):
+        objetivo = os.path.abspath(ruta(opciones.ruta))
+    encontrado = next(((a, d, x) for a, d, x in todos_los_conflictos()
+                       if os.path.normcase(d) == os.path.normcase(objetivo)), None)
+    if not encontrado:
+        raise Fallo(f"No hay ningún conflicto pendiente para {opciones.ruta}. Mira: {PROGRAMA} conflictos")
+    alcance, destino, datos = encontrado
+    nuevo = destino + NUEVO
+    if opciones.diferencias or not (opciones.usar_nueva or opciones.mantener):
+        try:
+            with open(destino, encoding="utf-8") as f:
+                actual = f.read().splitlines(keepends=True)
+        except FileNotFoundError:
+            actual = []
+        with open(nuevo, encoding="utf-8") as f:
+            propuesta = f.read().splitlines(keepends=True)
+        for linea in difflib.unified_diff(actual, propuesta, "tuyo", "nuevo de Jaime0"):
+            linea = linea.rstrip("\n")
+            print(verde(linea) if linea.startswith("+") else rojo(linea) if linea.startswith("-") else linea)
+        if not (opciones.usar_nueva or opciones.mantener):
+            info(tenue("Decide con --usar-nueva o --mantener."))
+            return 0
+    if alcance == "sistema" and not es_root() and not MODO_PRUEBA:
+        argumentos = ["resolver", destino] + (["--usar-nueva"] if opciones.usar_nueva else ["--mantener"])
+        return ejecutar_como_root(argumentos)
+    base = DIR_COPIAS if alcance == "sistema" else os.path.join(dir_estado_usuario(), "copias")
+    lista_ruta = CONFLICTOS_SISTEMA if alcance == "sistema" else os.path.join(dir_estado_usuario(), "conflictos.json")
+    transaccion = Transaccion(base, datos.get("version"), datos.get("version"), "resolver")
+    if opciones.usar_nueva:
+        if not os.path.isfile(nuevo) or sha256_archivo(nuevo) != datos.get("sha256_nuevo"):
+            raise Fallo(f"{nuevo} falta o ha cambiado: no se usa.")
+        with open(nuevo, "rb") as f:
+            contenido = f.read()
+        modo = os.stat(nuevo).st_mode & 0o777
+        transaccion.escribir(destino, contenido, modo)
+        transaccion.borrar(nuevo)
+        mensaje = f"Usada la versión nueva. Tu archivo anterior está en {mostrar_ruta(transaccion.dir)}"
+    else:
+        if os.path.lexists(nuevo):
+            transaccion.borrar(nuevo)
+        mensaje = "Te quedas con tu versión."
+    transaccion.terminar()
+    lista = leer_json(lista_ruta, {})
+    lista.pop(destino, None)
+    escribir_json(lista_ruta, lista)
+    registrar(registro_actual(), f"resuelto {destino}: {'nueva' if opciones.usar_nueva else 'mantener'}")
+    info(verde("✓") + " " + mensaje)
+    return 0
+
+
+def cmd_historial(opciones):
+    titulo("Historial")
+    for archivo in (REGISTRO_SISTEMA, os.path.join(dir_estado_usuario(), "registro.log")):
+        try:
+            with open(archivo, encoding="utf-8") as f:
+                lineas = f.read().splitlines()[-opciones.lineas:]
+        except (FileNotFoundError, PermissionError):
+            continue
+        info(tenue(mostrar_ruta(archivo)))
+        for linea in lineas:
+            info(linea)
+    return 0
+
+
+def cmd_revertir(opciones):
+    """Deshace la ultima actualizacion de los archivos de Jaime0. No toca los paquetes."""
+    alcance = "usuario" if opciones.usuario else "sistema"
+    if alcance == "usuario" and es_root():
+        raise Fallo("revertir --usuario se ejecuta sin sudo, como tu usuario.")
+    if alcance == "sistema" and not es_root() and not MODO_PRUEBA:
+        return ejecutar_como_root(["revertir"] + (["--si"] if opciones.si else []))
+    base = DIR_COPIAS if alcance == "sistema" else os.path.join(dir_estado_usuario(), "copias")
+    candidatos = [d for d in diarios(base)
+                  if leer_json(d).get("estado") == "completada" and leer_json(d).get("alcance") == alcance]
+    if not candidatos:
+        raise Fallo("No hay ninguna actualización que revertir.")
+    diario = candidatos[-1]
+    datos = leer_json(diario)
+    titulo(f"Revertir {alcance}: {datos.get('hasta')} → {datos.get('desde')}")
+    info(f"Se restauran {len(datos['entradas'])} archivos desde {mostrar_ruta(os.path.dirname(diario))}.")
+    info(tenue("Solo los archivos de Jaime0; los paquetes de Debian no cambian."))
+    if not preguntar("¿Revertir?", opciones):
+        return 0
+    with Cerrojo(CERROJO_SISTEMA if alcance == "sistema" else os.path.join(dir_estado_usuario(), ".cerrojo")):
+        # Lo actual se guarda antes, para poder deshacer la reversion.
+        previa = Transaccion(base, datos.get("hasta"), datos.get("desde"), "reversion")
+        for entrada in datos["entradas"]:
+            if os.path.lexists(entrada["ruta"]):
+                previa._respaldar(entrada["ruta"])
+        previa.terminar()
+        restaurar_diario(diario, "revertida")
+        if alcance == "sistema":
+            # GRUB, esquemas y systemd vuelven a leer lo restaurado.
+            acciones_posteriores([os.path.relpath(e["ruta"], RAIZ).replace(os.sep, "/")
+                                  for e in datos["entradas"]])
+    if alcance == "usuario":
+        estado_ruta = os.path.join(dir_estado_usuario(), "estado.json")
+        estado = leer_json(estado_ruta, {})
+        estado["version"] = datos.get("desde")
+        escribir_json(estado_ruta, estado)
+    registrar(registro_actual(), f"revertido {alcance} {datos.get('hasta')} -> {datos.get('desde')}")
+    info(verde("✓") + f" Revertido. Lo que había antes de revertir está en {mostrar_ruta(previa.dir)}")
+    return 0
+
+
+def cmd_recuperar(opciones):
+    if not es_root() and not MODO_PRUEBA:
+        recuperar_interrumpidas(os.path.join(dir_estado_usuario(), "copias"))
+        return ejecutar_como_root(["recuperar"])
+    with Cerrojo(CERROJO_SISTEMA):
+        n = recuperar_interrumpidas(DIR_COPIAS)
+    info(verde("✓") + (f" {n} operaciones interrumpidas deshechas." if n else " No había nada interrumpido."))
+    return 0
+
+
+def construir_argumentos():
+    p = argparse.ArgumentParser(
+        prog=PROGRAMA,
+        description="Actualiza Jaime0 sin reinstalar: componentes propios desde GitHub Releases "
+                    "(firmados) y paquetes de Debian con apt.")
+    p.add_argument("-s", "--si", action="store_true", help="responde sí a todas las preguntas")
+    sub = p.add_subparsers(dest="orden")
+
+    a = sub.add_parser("actualizar", help="buscar, revisar e instalar (lo que hace sin argumentos)")
+    for x in (a, p):
+        x.add_argument("--revisar", action="store_true", help="muestra las diferencias antes de instalar")
+        x.add_argument("--detalle", action="store_true", help="lista todos los archivos que cambian")
+        x.add_argument("--sin-paquetes", action="store_true", help="no ofrece actualizar con apt")
+    a.add_argument("-s", "--si", action="store_true", default=argparse.SUPPRESS)
+
+    c = sub.add_parser("comprobar", help="solo mira si hay una versión nueva")
+    c.add_argument("--notificar", action="store_true", help="avisa con una notificación (una vez por versión)")
+    c.add_argument("--silencioso", action="store_true")
+
+    v = sub.add_parser("cambios", help="cambios de la versión disponible o de una concreta")
+    v.add_argument("version", nargs="?")
+
+    sub.add_parser("estado", help="versión, canal y conflictos")
+
+    k = sub.add_parser("canal", help="ver o cambiar el canal (stable, beta, experimental)")
+    k.add_argument("nuevo", nargs="?")
+    k.add_argument("-s", "--si", action="store_true", default=argparse.SUPPRESS)
+
+    sub.add_parser("conflictos", help="archivos tuyos que no se sobrescribieron")
+
+    r = sub.add_parser("resolver", help="resolver un conflicto")
+    r.add_argument("ruta")
+    g = r.add_mutually_exclusive_group()
+    g.add_argument("--usar-nueva", action="store_true")
+    g.add_argument("--mantener", action="store_true")
+    r.add_argument("--diferencias", action="store_true")
+
+    h = sub.add_parser("historial", help="registro de operaciones")
+    h.add_argument("-n", "--lineas", type=int, default=20)
+
+    rv = sub.add_parser("revertir", help="deshace la última actualización de los archivos de Jaime0")
+    rv.add_argument("--usuario", action="store_true", help="revierte tu configuración en vez del sistema")
+    rv.add_argument("-s", "--si", action="store_true", default=argparse.SUPPRESS)
+
+    sub.add_parser("recuperar", help="deshace una actualización que se cortó a medias")
+
+    u = sub.add_parser("usuario", help="aplica a tu carpeta personal la configuración nueva")
+    u.add_argument("--revisar", action="store_true")
+    u.add_argument("--detalle", action="store_true")
+    u.add_argument("-s", "--si", action="store_true", default=argparse.SUPPRESS)
+
+    # Internas: la parte privilegiada, lanzada con sudo por el propio programa.
+    s = sub.add_parser("_sistema")
+    s.add_argument("version")
+    s.add_argument("--reinstalar", action="store_true")
+    s.add_argument("--manifiesto-sha256")
+    ki = sub.add_parser("_canal")
+    ki.add_argument("nuevo")
+    return p
+
+
+def main(argv=None):
+    # Con una configuracion regional sin UTF-8 (consola de rescate, C/POSIX) los simbolos
+    # se sustituyen en vez de abortar.
+    for flujo in (sys.stdout, sys.stderr):
+        try:
+            flujo.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    opciones = construir_argumentos().parse_args(argv)
+    for nombre, defecto in (("revisar", False), ("detalle", False), ("sin_paquetes", False),
+                            ("reinstalar", False), ("si", False)):
+        if not hasattr(opciones, nombre):
+            setattr(opciones, nombre, defecto)
+    ordenes = {
+        None: cmd_actualizar, "actualizar": cmd_actualizar, "comprobar": cmd_comprobar,
+        "cambios": cmd_cambios, "estado": cmd_estado, "canal": cmd_canal,
+        "conflictos": cmd_conflictos, "resolver": cmd_resolver, "historial": cmd_historial,
+        "revertir": cmd_revertir, "recuperar": cmd_recuperar, "usuario": cmd_usuario,
+        "_sistema": cmd_sistema_interno, "_canal": cmd_canal_interno,
+    }
+    try:
+        return ordenes[opciones.orden](opciones)
+    except Fallo as e:
+        print("  " + rojo("✗") + " " + str(e), file=sys.stderr)
+        registrar(registro_actual(), f"ERROR {opciones.orden or 'actualizar'}: {e}")
+        return 1
+    except KeyboardInterrupt:
+        print(file=sys.stderr)
+        aviso("Cancelado.")
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,14 +1,15 @@
 /* ~/.config/rofi/jaime0.rasi
-   Lanzador centrado: fondo oscuro translucido, borde azul, buscador en pildora y
-   seleccion en azul. El blur lo aplica Hyprland. */
+   Lanzador centrado: fondo negro casi opaco, borde fino gris, buscador sobrio y
+   seleccion discreta con el texto en verde. El blur (minimo) lo aplica Hyprland. */
 
 * {
-    fondo:        #12141de6;
-    superficie:   #252939;
-    texto:        #e0e4f2;
-    tenue:        #7a819e;
-    azul:         #7ab0ff;
-    oscuro:       #12141d;
+    fondo:        #080b0df0;
+    superficie:   #151c21;
+    borde:        #26343a;
+    texto:        #d8e2e8;
+    tenue:        #71818c;
+    verde:        #54e58a;
+    rojo:         #d9625b;
     transparente: #00000000;
 
     background-color: @transparente;
@@ -19,9 +20,9 @@ window {
     location:         center;
     anchor:           center;
     width:            620px;
-    border:           2px;
-    border-color:     @azul;
-    border-radius:    12px;
+    border:           1px;
+    border-color:     @borde;
+    border-radius:    8px;
     background-color: @fondo;
 }
 
@@ -34,13 +35,13 @@ mainbox {
 inputbar {
     spacing:          10px;
     padding:          8px 14px;
-    border-radius:    10px;
+    border-radius:    6px;
     background-color: @superficie;
     children:         [ prompt, entry ];
 }
 
 prompt {
-    text-color: @azul;
+    text-color: @verde;
 }
 
 entry {
@@ -51,7 +52,7 @@ entry {
 
 message {
     padding:          8px;
-    border-radius:    10px;
+    border-radius:    6px;
     background-color: @superficie;
 }
 
@@ -71,7 +72,9 @@ listview {
 element {
     spacing:       12px;
     padding:       6px 12px;
-    border-radius: 8px;
+    border-radius: 6px;
+    border:        0 0 0 2px;
+    border-color:  @transparente;
 }
 
 element-icon {
@@ -88,16 +91,17 @@ element-text {
 element selected.normal,
 element selected.active,
 element selected.urgent {
-    background-color: @azul;
-    text-color:       @oscuro;
+    background-color: @superficie;
+    border-color:     @verde;
+    text-color:       @verde;
 }
 
 element normal.active,
 element alternate.active {
-    text-color: @azul;
+    text-color: @verde;
 }
 
 element normal.urgent,
 element alternate.urgent {
-    text-color: #c96a78;
+    text-color: @rojo;
 }

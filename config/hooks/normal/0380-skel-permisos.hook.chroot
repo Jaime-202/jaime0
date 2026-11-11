@@ -14,8 +14,11 @@ find /etc/skel -type f | while IFS= read -r ARCHIVO; do
     fi
 done
 
-chown root:root /usr/local/bin/captura-area /usr/local/bin/menu-energia /usr/local/bin/tiempo-waybar
-chmod 755 /usr/local/bin/captura-area /usr/local/bin/menu-energia /usr/local/bin/tiempo-waybar
+chown root:root /usr/local/bin/captura-area /usr/local/bin/menu-energia
+chmod 755 /usr/local/bin/captura-area /usr/local/bin/menu-energia
+# tiempo-waybar ya no forma parte del sistema (la barra no lo usaba): se quita si queda
+# de una compilacion anterior con el mismo chroot.
+rm -f /usr/local/bin/tiempo-waybar
 
 if grep -rlE '/home/builder|builder@' /etc/skel; then
     echo "ERROR: /etc/skel depende de la maquina de construccion" >&2

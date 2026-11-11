@@ -8,7 +8,7 @@ import QtQuick.Layouts
 
 Rectangle {
     id: bienvenida
-    color: "#12141d"
+    color: "#080b0d"
 
     readonly property string fuente: "JetBrainsMono Nerd Font"
     readonly property string producto: Branding.string(Branding.ProductName)
@@ -38,7 +38,7 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             text: "Te damos la bienvenida a " + bienvenida.producto
-            color: "#f2f4fb"
+            color: "#eef4f7"
             font.family: bienvenida.fuente
             font.pixelSize: 26
             font.bold: true
@@ -49,7 +49,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.topMargin: 10
             text: "Este asistente te guiará para instalar " + bienvenida.producto + " en tu equipo. No se modificará nada hasta que confirmes el último paso."
-            color: "#b6bcd4"
+            color: "#a7b4bc"
             font.family: bienvenida.fuente
             font.pixelSize: 14
             lineHeight: 1.25
@@ -59,7 +59,7 @@ Rectangle {
         Text {
             Layout.topMargin: 28
             text: "COMPROBACIÓN DEL EQUIPO"
-            color: "#7ab0ff"
+            color: "#54e58a"
             font.family: bienvenida.fuente
             font.pixelSize: 12
             font.bold: true
@@ -70,14 +70,14 @@ Rectangle {
             Layout.topMargin: 10
             Layout.preferredHeight: Math.max(bienvenida.total, 1) * 38 + 12
             radius: 4
-            color: "#171a26"
-            border.color: "#252939"
+            color: "#101519"
+            border.color: "#26343a"
 
             Text {
                 anchors.centerIn: parent
                 visible: bienvenida.total === 0
                 text: "Comprobando tu equipo…"
-                color: "#b6bcd4"
+                color: "#a7b4bc"
                 font.family: bienvenida.fuente
                 font.pixelSize: 13
             }
@@ -93,7 +93,7 @@ Rectangle {
                     width: listado.width
                     height: 38
 
-                    readonly property color tono: satisfied ? "#a6cbff" : (mandatory ? "#c96a78" : "#a6cbff")
+                    readonly property color tono: satisfied ? "#54e58a" : (mandatory ? "#d9625b" : "#d9a54a")
 
                     Rectangle {
                         id: indicador
@@ -119,7 +119,7 @@ Rectangle {
                         anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
                         text: String(satisfied ? details : negatedText).split("<br")[0].split(String.fromCharCode(10))[0]
-                        color: satisfied ? "#e0e4f2" : "#f2f4fb"
+                        color: satisfied ? "#d8e2e8" : "#eef4f7"
                         font.family: bienvenida.fuente
                         font.pixelSize: 13
                         wrapMode: Text.WordWrap
@@ -135,7 +135,7 @@ Rectangle {
             text: config.requirementsModel.satisfiedMandatory
                 ? "Puedes continuar: lo marcado con ! es solo una recomendación."
                 : "Este equipo no cumple lo mínimo para instalar " + bienvenida.producto + ". Corrige lo marcado con ✕ para poder continuar."
-            color: config.requirementsModel.satisfiedMandatory ? "#a6cbff" : "#d99aa3"
+            color: config.requirementsModel.satisfiedMandatory ? "#54e58a" : "#e8908a"
             font.family: bienvenida.fuente
             font.pixelSize: 13
             wrapMode: Text.WordWrap
@@ -145,7 +145,7 @@ Rectangle {
 
         Text {
             text: "IDIOMA DE LA INSTALACIÓN"
-            color: "#7ab0ff"
+            color: "#54e58a"
             font.family: bienvenida.fuente
             font.pixelSize: 12
             font.bold: true
@@ -167,15 +167,15 @@ Rectangle {
 
             background: Rectangle {
                 radius: 4
-                color: "#0b0d14"
-                border.color: idiomas.hovered ? "#7ab0ff" : "#2f3b52"
+                color: "#080b0d"
+                border.color: idiomas.hovered ? "#54e58a" : "#26343a"
             }
             contentItem: Text {
                 leftPadding: 12
                 rightPadding: 32
                 verticalAlignment: Text.AlignVCenter
                 text: idiomas.displayText
-                color: "#e0e4f2"
+                color: "#d8e2e8"
                 font: idiomas.font
                 elide: Text.ElideRight
             }
@@ -183,18 +183,18 @@ Rectangle {
                 x: idiomas.width - width - 12
                 anchors.verticalCenter: parent.verticalCenter
                 text: "▾"
-                color: "#7ab0ff"
+                color: "#54e58a"
                 font.pixelSize: 14
             }
             delegate: ItemDelegate {
                 width: idiomas.width
                 height: 32
                 highlighted: idiomas.highlightedIndex === index
-                background: Rectangle { color: highlighted ? "#2f3b52" : "#0b0d14" }
+                background: Rectangle { color: highlighted ? "#26343a" : "#080b0d" }
                 contentItem: Text {
                     verticalAlignment: Text.AlignVCenter
                     text: label
-                    color: highlighted ? "#f2f4fb" : "#e0e4f2"
+                    color: highlighted ? "#eef4f7" : "#d8e2e8"
                     font: idiomas.font
                     elide: Text.ElideRight
                 }
@@ -213,8 +213,8 @@ Rectangle {
                 }
                 background: Rectangle {
                     radius: 4
-                    color: "#0b0d14"
-                    border.color: "#2f3b52"
+                    color: "#080b0d"
+                    border.color: "#26343a"
                 }
             }
         }

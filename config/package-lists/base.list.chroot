@@ -26,3 +26,4 @@ xz-utils
 zstd
 intel-microcode
 amd64-microcode
+openssl

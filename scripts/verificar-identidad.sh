@@ -58,7 +58,8 @@ grep -q 'pam_env.so readenv=1 envfile=/etc/default/locale' chroot/etc/pam.d/gree
 grep -q 'EnvironmentFile=-/etc/default/locale' chroot/etc/systemd/system/greetd.service.d/10-idioma.conf && ok "tuigreet recibe el idioma del sistema" || fallo "greetd.service sin idioma"
 
 echo "== Fondo =="
-[ -s chroot/usr/share/backgrounds/jaime0/aurora.jpg ] && ok "aurora.jpg ($(du -k chroot/usr/share/backgrounds/jaime0/aurora.jpg | cut -f1) KiB)" || fallo "falta el fondo"
+[ -s chroot/usr/share/backgrounds/jaime0/jaime0.png ] && ok "jaime0.png ($(du -k chroot/usr/share/backgrounds/jaime0/jaime0.png | cut -f1) KiB)" || fallo "falta el fondo"
+[ -e chroot/usr/share/backgrounds/jaime0/aurora.jpg ] && fallo "queda el fondo antiguo aurora.jpg" || ok "sin el fondo antiguo"
 
 echo "== atajos (sin sesion) =="
 mount -t proc proc chroot/proc 2>/dev/null

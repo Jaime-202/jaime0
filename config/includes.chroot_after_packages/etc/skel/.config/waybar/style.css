@@ -1,20 +1,23 @@
 /* ~/.config/waybar/style.css
-   Pildoras oscuras y separadas, en dos tonos de azul.
-   El blur lo aplica Hyprland con layer_rule. */
+   Barra continua, fina y opaca, con una linea inferior de borde. Sin pildoras: los
+   modulos son texto con iconos en gris; el verde solo marca lo activo (escritorio
+   actual, logo, dia de hoy) y el rojo o el ambar, los avisos. */
 
-@define-color fondo     rgba(18, 20, 29, 0.82);
-@define-color borde     rgba(47, 59, 82, 0.90);
-@define-color texto     #e0e4f2;
-@define-color tenue     #7a819e;
-@define-color claro     #a6cbff;
-@define-color azul      #7ab0ff;
-@define-color rojo      #c96a78;
-@define-color naranja   #c9a26b;
+@define-color fondo     #080b0d;
+@define-color superficie #151c21;
+@define-color borde     #26343a;
+@define-color texto     #d8e2e8;
+@define-color medio     #a7b4bc;
+@define-color gris      #71818c;
+@define-color apagado   #45545c;
+@define-color verde     #54e58a;
+@define-color rojo      #d9625b;
+@define-color ambar     #d9a54a;
 
 * {
     font-family: "JetBrainsMono Nerd Font", monospace;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 600;
     min-height: 0;
     border: none;
     border-radius: 0;
@@ -22,14 +25,15 @@
 }
 
 window#waybar {
-    background: transparent;
+    background: @fondo;
+    border-bottom: 1px solid @borde;
     color: @texto;
 }
 
 tooltip {
-    background: rgba(11, 13, 20, 0.97);
-    border: 1px solid @claro;
-    border-radius: 8px;
+    background: @fondo;
+    border: 1px solid @borde;
+    border-radius: 6px;
 }
 
 tooltip label {
@@ -37,11 +41,8 @@ tooltip label {
     padding: 4px;
 }
 
-/* Todas las pildoras */
+/* Todos los modulos: solo texto, con la misma separacion */
 #custom-logo,
-#workspaces,
-#window,
-#mpris,
 #cpu,
 #memory,
 #pulseaudio,
@@ -50,63 +51,54 @@ tooltip label {
 #battery,
 #clock,
 #custom-notificaciones,
-#bandeja,
+#custom-bandeja,
 #custom-power {
-    background: @fondo;
-    border: 1px solid @borde;
-    border-radius: 9px;
-    padding: 2px 10px;
-}
-
-#custom-logo        { color: @claro;  font-size: 14px; padding: 2px 11px 2px 9px; }
-#window             { color: @texto; font-weight: 600; }
-#mpris              { color: @azul; }
-#mpris.paused       { color: @tenue; }
-#cpu                { color: @azul; }
-#memory             { color: @azul; }
-#pulseaudio         { color: @claro; }
-#pulseaudio.muted   { color: @tenue; }
-#network            { color: @claro; }
-#network.disconnected { color: @rojo; }
-#bluetooth          { color: @claro; }
-#bluetooth.off,
-#bluetooth.disabled { color: @tenue; }
-#battery            { color: @azul; }
-#battery.aviso      { color: @naranja; }
-#battery.critico    { color: @rojo; }
-#clock              { color: @claro; }
-#custom-notificaciones          { color: @claro; }
-#custom-notificaciones.pausadas { color: @tenue; }
-#custom-bandeja     { color: @tenue; padding: 0 4px; }
-#tray               { padding: 0 2px; }
-#custom-power       { color: @claro; padding: 2px 11px 2px 9px; }
-
-/* Sin ventana activa no se dibuja una pildora vacia */
-window#waybar.empty #window {
     background: transparent;
-    border-color: transparent;
-    padding: 0;
-    margin: 0;
+    padding: 0 8px;
 }
 
-/* Escritorios como puntos: el activo relleno y en azul claro */
+#custom-logo        { color: @verde; font-size: 13px; padding: 0 10px 0 12px; }
+#cpu                { color: @gris; }
+#memory             { color: @gris; }
+#pulseaudio         { color: @medio; }
+#pulseaudio.muted   { color: @apagado; }
+#network            { color: @medio; }
+#network.linked     { color: @ambar; }
+#network.disconnected { color: @rojo; }
+#bluetooth          { color: @gris; }
+#bluetooth.off,
+#bluetooth.disabled { color: @apagado; }
+#bluetooth.connected { color: @medio; }
+#battery            { color: @medio; }
+#battery.charging,
+#battery.plugged    { color: @medio; }
+#battery.aviso      { color: @ambar; }
+#battery.critico    { color: @rojo; }
+#clock              { color: @texto; }
+#custom-notificaciones          { color: @gris; }
+#custom-notificaciones.pausadas { color: @apagado; }
+#custom-bandeja     { color: @apagado; padding: 0 4px; }
+#tray               { padding: 0 4px; }
+#custom-power       { color: @gris; padding: 0 12px 0 8px; }
+
+/* Escritorios como circulos: activo en verde, ocupados en gris claro, vacios en gris */
 #workspaces {
-    padding: 2px 6px;
+    padding: 0 4px;
 }
 
 #workspaces button {
     background: transparent;
-    color: @azul;
-    padding: 0 5px;
-    border-radius: 6px;
+    color: @texto;
+    padding: 0 4px;
+    border-radius: 4px;
 }
 
 #workspaces button.empty {
-    color: #565c78;
+    color: @apagado;
 }
 
 #workspaces button.active {
-    color: @claro;
+    color: @verde;
 }
 
 #workspaces button.urgent {
@@ -114,9 +106,10 @@ window#waybar.empty #window {
 }
 
 #workspaces button:hover {
-    background: rgba(122, 176, 255, 0.18);
+    background: @superficie;
 }
 
+/* Al pasar el raton solo se aclara el texto */
 #custom-logo:hover,
 #cpu:hover,
 #memory:hover,
@@ -125,10 +118,15 @@ window#waybar.empty #window {
 #bluetooth:hover,
 #clock:hover,
 #custom-notificaciones:hover,
+#custom-bandeja:hover {
+    color: @texto;
+}
+
 #custom-power:hover {
-    border-color: @claro;
+    color: @rojo;
 }
 
 #tray > .needs-attention {
     background: @rojo;
+    border-radius: 4px;
 }

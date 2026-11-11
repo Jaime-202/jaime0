@@ -49,7 +49,7 @@ capas() { hyprctl layers | grep -oE 'namespace: [a-z-]+' | cut -d' ' -f2; }
 clientes() { hyprctl clients | grep -E '^[[:space:]]+class:' | awk '{print $2}'; }
 activo() { hyprctl activeworkspace | head -1 | sed -E 's/^workspace (ID )?([0-9-]+).*/\2/'; }
 clic() {
-    hyprctl dispatch "hl.dsp.cursor.move({ x = $1, y = 22 })" >/dev/null
+    hyprctl dispatch "hl.dsp.cursor.move({ x = $1, y = 13 })" >/dev/null
     wlrctl pointer move 1 0; wlrctl pointer move -1 0; sleep 0.5
     wlrctl pointer click left
 }
@@ -87,7 +87,7 @@ hyprctl dispatch 'hl.dsp.focus({ workspace = 1 })' >/dev/null; sleep 1
 grim "$XDG_RUNTIME_DIR/s4-barra.png"
 
 # El calendario ya no abre otro programa: es el tooltip del reloj.
-hyprctl dispatch "hl.dsp.cursor.move({ x = $X_RELOJ, y = 22 })" >/dev/null
+hyprctl dispatch "hl.dsp.cursor.move({ x = $X_RELOJ, y = 13 })" >/dev/null
 wlrctl pointer move 1 0; wlrctl pointer move -1 0; sleep 3
 grim "$XDG_RUNTIME_DIR/s4-calendario.png"
 clientes | grep -qi gsimplecal && fallo "sigue abriendose gsimplecal" || ok "el reloj no abre programas externos"

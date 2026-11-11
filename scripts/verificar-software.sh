@@ -71,12 +71,12 @@ c = configparser.ConfigParser(); c.optionxform = str; c.read(sys.argv[1], encodi
 assert c["Default Applications"]["inode/directory"] == "thunar.desktop"
 assert not any(x in "".join(c["Default Applications"].values()) for x in ("firefox", "imv", "zathura", "FileRoller"))
 PY
-for B in captura-area menu-energia tiempo-waybar; do
+for B in captura-area menu-energia; do
     [ "$(stat -c '%a %U' chroot/usr/local/bin/$B)" = "755 root" ] && ok "$B 755 root" || fallo "$B: $(stat -c '%a %U' chroot/usr/local/bin/$B)"
 done
 
-echo "== Modulo de tiempo =="
-sh -n chroot/usr/local/bin/tiempo-waybar && ok "tiempo-waybar: sintaxis" || fallo "tiempo-waybar: sintaxis"
+echo "== Modulo de tiempo (retirado) =="
+[ -e chroot/usr/local/bin/tiempo-waybar ] && fallo "tiempo-waybar sigue en el sistema" || ok "sin tiempo-waybar: la barra no consulta servicios externos"
 
 echo "== Preparar pruebas =="
 cp /etc/resolv.conf chroot/etc/resolv.conf
@@ -113,19 +113,6 @@ for U in pruebau pruebaa; do
     chroot --userspec=$U:$U chroot env HOME=/home/$U zsh -ic 'echo zsh-ok-$ZSH_VERSION' 2>/dev/null | grep -q zsh-ok && ok "$U: zsh interactivo carga .zshrc" || fallo "$U: zsh interactivo"
     chroot --userspec=$U:$U chroot env HOME=/home/$U XDG_RUNTIME_DIR=/tmp/vc$U sh -c "mkdir -p /tmp/vc$U; chmod 700 /tmp/vc$U; Hyprland --verify-config --config /home/$U/.config/hypr/hyprland.lua" 2>&1 | tail -1 | grep -q 'config ok' && ok "$U: --verify-config da config ok" || fallo "$U: --verify-config"
 done
-
-echo "== Tiempo con red, sin red y con respuesta invalida =="
-TW="chroot --userspec=pruebau:pruebau chroot env HOME=/home/pruebau PATH=/usr/local/bin:/usr/bin:/bin"
-$TW rm -f /home/pruebau/.cache/tiempo-waybar.json
-S=$(date +%s); J=$($TW env TIEMPO_URL=https://127.0.0.1:9/ tiempo-waybar); D=$(( $(date +%s)-S ))
-[ "$J" = '{"text":""}' ] && [ "$D" -le 9 ] && ok "sin red: texto vacio en ${D} s, el modulo se oculta" || fallo "sin red: '$J' en ${D} s"
-J=$($TW env TIEMPO_URL=https://deb.debian.org/debian/dists/forky/Release tiempo-waybar)
-[ "$J" = '{"text":""}' ] && ok "respuesta invalida: texto vacio" || fallo "respuesta invalida: '$J'"
-J=$($TW tiempo-waybar); echo "Respuesta real: $J"
-python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert "°" in d["text"] and d["tooltip"]' "$J" && ok "con red: JSON valido con temperatura" || fallo "con red: '$J'"
-J2=$($TW env TIEMPO_URL=https://127.0.0.1:9/ tiempo-waybar)
-[ "$J2" = "$J" ] && ok "la cache se reutiliza sin volver a consultar" || fallo "cache: '$J2'"
-$TW rm -f /home/pruebau/.cache/tiempo-waybar.json
 
 echo "== Herramientas sin interfaz =="
 CMD='cd "$HOME"; mkdir -p t; cd t

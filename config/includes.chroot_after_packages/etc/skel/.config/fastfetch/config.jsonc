@@ -1,14 +1,14 @@
 // ~/.config/fastfetch/config.jsonc
 // Marca Jaime0 (J0) en color a la izquierda y datos agrupados en arbol: OS, WM y PC.
 // Los colores son los ANSI de la terminal, que en Kitty siguen la paleta jaime0:
-// 34 azul y 94 azul claro.
+// 32 verde (la J, el titulo y los grupos), 37 gris claro, 90 gris y 36 cian.
 {
     "logo": {
         "type": "file",
         "source": "~/.config/fastfetch/logo.txt",
         "color": {
-            "1": "94",
-            "2": "34"
+            "1": "32",
+            "2": "37"
         },
         "padding": {
             "top": 1,
@@ -19,9 +19,9 @@
     "display": {
         "separator": " → ",
         "color": {
-            "keys": "34",
-            "title": "94",
-            "output": "97"
+            "keys": "90",
+            "title": "32",
+            "output": "37"
         },
         "key": {
             "width": 8
@@ -30,23 +30,23 @@
     "modules": [
         { "type": "title", "format": " {user-name}@{host-name}" },
         "break",
-        { "type": "os", "key": "OS", "keyColor": "34", "format": "{pretty-name} {arch}" },
-        { "type": "kernel", "key": "│ ├", "keyColor": "34", "format": "{release}" },
-        { "type": "packages", "key": "│ ├", "keyColor": "34", "format": "{all}" },
-        { "type": "uptime", "key": "│ └", "keyColor": "34" },
+        { "type": "os", "key": "OS", "keyColor": "32", "format": "{name} {version-id}" },
+        { "type": "kernel", "key": "│ ├", "keyColor": "90", "format": "{release}" },
+        { "type": "packages", "key": "│ ├", "keyColor": "90", "format": "{all}" },
+        { "type": "uptime", "key": "│ └", "keyColor": "90" },
         "break",
-        { "type": "wm", "key": "WM", "keyColor": "94", "format": "{pretty-name} {version}" },
-        { "type": "terminal", "key": "│ ├", "keyColor": "94", "format": "{pretty-name} {version}" },
-        { "type": "shell", "key": "│ ├", "keyColor": "94", "format": "{pretty-name} {version}" },
-        { "type": "terminalfont", "key": "│ └", "keyColor": "94", "format": "{name} {size}pt" },
+        { "type": "wm", "key": "WM", "keyColor": "32", "format": "{pretty-name} {version}" },
+        { "type": "terminal", "key": "│ ├", "keyColor": "90", "format": "{pretty-name} {version}" },
+        { "type": "shell", "key": "│ ├", "keyColor": "90", "format": "{pretty-name} {version}" },
+        { "type": "terminalfont", "key": "│ └", "keyColor": "90", "format": "{name}" },
         "break",
-        { "type": "host", "key": "PC", "keyColor": "34", "format": "{name}" },
-        { "type": "cpu", "key": "│ ├", "keyColor": "34", "format": "{name} ({cores-logical})" },
-        { "type": "gpu", "key": "│ ├", "keyColor": "34", "format": "{name}" },
-        { "type": "memory", "key": "│ ├", "keyColor": "34" },
-        { "type": "disk", "key": "│ ├", "keyColor": "34", "folders": "/" },
-        { "type": "display", "key": "│ └", "keyColor": "34", "format": "{width}x{height} @ {refresh-rate} Hz" },
+        { "type": "host", "key": "PC", "keyColor": "32", "format": "{name}" },
+        { "type": "cpu", "key": "│ ├", "keyColor": "90", "format": "{name} ({cores-logical})" },
+        { "type": "gpu", "key": "│ ├", "keyColor": "90", "format": "{name}" },
+        { "type": "memory", "key": "│ ├", "keyColor": "90" },
+        { "type": "disk", "key": "│ ├", "keyColor": "90", "folders": "/" },
+        { "type": "display", "key": "│ └", "keyColor": "90", "format": "{width}x{height} @ {refresh-rate} Hz" },
         "break",
-        { "type": "custom", "format": "  {#34}● {#94}● {#90}● {#37}●" }
+        { "type": "custom", "format": "  {#32}● {#36}● {#90}● {#37}●" }
     ]
 }

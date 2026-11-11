@@ -22,7 +22,7 @@ images:
 slideshow: "show.qml"
 slideshowAPI: 2
 style:
-    SidebarBackground: "#0b0d14"
-    SidebarText: "#9aa0bc"
-    SidebarTextCurrent: "#f2f4fb"
-    SidebarBackgroundCurrent: "#171a26"
+    SidebarBackground: "#080b0d"
+    SidebarText: "#a7b4bc"
+    SidebarTextCurrent: "#eef4f7"
+    SidebarBackgroundCurrent: "#101519"

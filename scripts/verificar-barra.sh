@@ -43,9 +43,17 @@ if python3 - "chroot$SKEL/waybar/config.jsonc" <<'PY'
 import json, re, sys
 t = re.sub(r'^\s*//.*$', '', open(sys.argv[1], encoding='utf-8').read(), flags=re.M)
 d = json.loads(t)
-assert d['modules-left'] == ['custom/logo', 'hyprland/workspaces', 'hyprland/window']
-assert d['modules-center'] == ['mpris']
-assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'battery', 'clock', 'custom/notificaciones', 'group/bandeja', 'custom/power']
+assert d['modules-left'] == ['custom/logo', 'hyprland/workspaces']
+assert d['modules-center'] == ['clock']
+assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'battery', 'custom/notificaciones', 'group/bandeja', 'custom/power']
+assert 'hyprland/window' not in d and 'mpris' not in d
+assert 22 <= d['height'] <= 28
+# Rendimiento: nada se sondea mas a menudo de lo necesario.
+assert d['clock']['interval'] >= 30 and '%S' not in d['clock']['format']
+assert d['cpu']['interval'] >= 5 and d['memory']['interval'] >= 10
+assert d['network']['interval'] >= 10 and d['battery']['interval'] >= 60
+assert d['custom/notificaciones']['interval'] == 'once' and d['custom/notificaciones']['signal'] == 8
+assert 'pkill -RTMIN+8 waybar' in d['custom/notificaciones']['on-click']
 assert d['group/bandeja']['modules'] == ['custom/bandeja', 'tray']
 assert 'on-click' not in d['clock'] and '{calendar}' in d['clock']['tooltip-format']
 assert d['custom/notificaciones']['exec'] == 'notificaciones-waybar'
@@ -64,11 +72,19 @@ PY
 then ok "config.jsonc valido con los modulos pedidos"; else fallo "config.jsonc invalido"; fi
 
 echo "== Valores de la especificacion =="
-for PAR in "waybar/style.css|border-radius: 9px" "waybar/style.css|rgba.18, 20, 29, 0.82." "waybar/style.css|@define-color claro +#a6cbff" "waybar/style.css|#cpu +\{ color: @azul" "waybar/style.css|#clock +\{ color: @claro" "waybar/config.jsonc|#7ab0ff" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border-radius: *12px" "rofi/jaime0.rasi|#12141de6" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 10" "dunst/dunstrc|#12141de6" "dunst/dunstrc|frame_color = \"#7ab0ff\"" "dunst/dunstrc|timeout = 5"; do
+for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@define-color verde +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 6" "dunst/dunstrc|frame_width = 1" "dunst/dunstrc|#080b0df0" "dunst/dunstrc|frame_color = \"#54e58a\"" "dunst/dunstrc|frame_color = \"#d9625b\"" "dunst/dunstrc|timeout = 5"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "chroot$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done
 [ "$(grep -c '^ *timeout = 5$' "chroot$SKEL/dunst/dunstrc")" = "3" ] && ok "timeout 5 s en las tres urgencias" || fallo "timeout incompleto"
+python3 - "chroot$SKEL/waybar/style.css" <<'PY' && ok "style.css: llaves equilibradas y colores definidos" || fallo "style.css: llaves o colores sin definir"
+import re, sys
+t = re.sub(r'/\*.*?\*/', '', open(sys.argv[1], encoding='utf-8').read(), flags=re.S)
+assert t.count('{') == t.count('}')
+definidos = set(re.findall(r'@define-color\s+([\w-]+)', t))
+usados = set(re.findall(r'@([\w-]+)', t)) - {'define-color'}
+assert usados <= definidos, usados - definidos
+PY
 grep -q "hl.dsp.exit()" chroot/usr/local/bin/menu-energia && ok "menu-energia usa hl.dsp.exit()" || fallo "dispatcher de salida"
 for O in Apagar Reiniciar Suspender "Cerrar sesión"; do grep -q "$O" chroot/usr/local/bin/menu-energia && ok "menu: $O" || fallo "menu sin $O"; done
 
@@ -83,7 +99,7 @@ chroot chroot rofi -help 2>&1 | grep -qE '^[[:space:]]*.*wayland' && ok "rofi co
 chroot chroot sh -c 'rofi -help' 2>&1 | grep -iE 'drun|dmenu' | head -2 | cut -c1-100
 chroot chroot rofi -dump-config >/dev/null 2>&1 && ok "rofi -dump-config" || fallo "rofi -dump-config"
 chroot chroot env HOME=/etc/skel rofi -dump-theme >/tmp/vs4tema 2>&1
-grep -q '#7ab0ff\|rgba ( 122, 176, 255' /tmp/vs4tema && ok "rofi -dump-theme analiza el tema" || { fallo "rofi -dump-theme"; head -5 /tmp/vs4tema; }
+grep -qi '#54e58a\|rgba ( 84, 229, 138' /tmp/vs4tema && ok "rofi -dump-theme analiza el tema" || { fallo "rofi -dump-theme"; head -5 /tmp/vs4tema; }
 sed 's/location:         center;/location center;;;{/' "chroot$SKEL/rofi/jaime0.rasi" > chroot/tmp/roto.rasi
 chroot chroot env HOME=/tmp rofi -theme /tmp/roto.rasi -dump-theme >/tmp/vs4tema 2>&1
 grep -qiE 'error|fail|unexpected' /tmp/vs4tema && ok "control negativo: rofi detecta un tema roto" || fallo "control negativo de rofi sin efecto"

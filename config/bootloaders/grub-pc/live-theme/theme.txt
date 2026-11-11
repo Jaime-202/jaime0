@@ -1,5 +1,5 @@
-desktop-color: "#12141d"
-title-color: "#7ab0ff"
+desktop-color: "#080b0d"
+title-color: "#54e58a"
 title-font: "Unifont Regular 16"
 title-text: "Jaime0"
 message-font: "Unifont Regular 16"
@@ -10,9 +10,9 @@ terminal-font: "Unifont Regular 16"
         width = 60%
         top = 35%
         height = 40%
-        item_color = "#e0e4f2"
+        item_color = "#d8e2e8"
         item_font = "Unifont Regular 16"
-        selected_item_color = "#7ab0ff"
+        selected_item_color = "#54e58a"
         selected_item_font = "Unifont Regular 16"
         item_height = 24
         item_padding = 4
@@ -28,8 +28,8 @@ terminal-font: "Unifont Regular 16"
         top = 80%
         height = 8
         width = 60%
-        fg_color = "#7ab0ff"
-        bg_color = "#171a26"
-        border_color = "#252939"
+        fg_color = "#54e58a"
+        bg_color = "#101519"
+        border_color = "#26343a"
         show_text = false
 }

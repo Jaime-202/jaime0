@@ -1,0 +1,26 @@
+# Notas de la publicacion 0.2.0-beta.1. Las lee scripts/empaquetar-actualizacion.py
+# y van firmadas dentro del manifiesto.
+fecha = "2026-11-11"
+
+cambios = [
+    "Nueva identidad visual: negro profundo, verde #54E58A como acento y cian ocasional.",
+    "Waybar fina y compacta, sin cápsulas, con intervalos de refresco más largos.",
+    "Hyprland con bordes finos, esquinas de 6-8 px, menos transparencia y blur más ligero.",
+    "Fondo propio generado (malla digital oscura con puntos verdes), sin descargas al compilar.",
+    "Nuevo comando jaime0-update: actualizaciones firmadas desde GitHub Releases, canales stable, beta y experimental, protección de personalizaciones, copias, recuperación y reversión.",
+    "Aviso discreto una vez al día cuando hay una versión nueva (nunca instala solo).",
+]
+
+problemas_conocidos = [
+    "Versión beta: no se ha probado todavía en hardware real ni se ha medido el consumo tras el rediseño.",
+    "Las instalaciones 0.1.x no traen jaime0-update: hay que instalarlo una vez a mano (ver docs/actualizaciones.md) o reinstalar desde la ISO.",
+]
+
+paquetes = []
+
+[requisitos]
+version_minima = "0.1.0"
+
+[compatibilidad]
+base = "Debian Forky (testing)"
+hyprland = "0.56-0.57 (configuración Lua)"

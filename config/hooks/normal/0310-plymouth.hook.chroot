@@ -1,5 +1,5 @@
 #!/bin/sh
-# Plymouth negro y sobrio (#12141d), basado en el tema spinner.
+# Plymouth negro y sobrio (#080b0d), basado en el tema spinner.
 set -e
 
 ORIGEN="/usr/share/plymouth/themes/spinner"
@@ -17,10 +17,10 @@ sed -i \
     -e 's|^Font=.*|Font=Noto Sans 12|' \
     -e 's|^TitleFont=.*|TitleFont=Noto Sans 30|' \
     -e "s|^ImageDir=.*|ImageDir=${DESTINO}|" \
-    -e 's|^BackgroundStartColor=.*|BackgroundStartColor=0x12141d|' \
-    -e 's|^BackgroundEndColor=.*|BackgroundEndColor=0x12141d|' \
-    -e 's|^ProgressBarBackgroundColor=.*|ProgressBarBackgroundColor=0x252939|' \
-    -e 's|^ProgressBarForegroundColor=.*|ProgressBarForegroundColor=0x7ab0ff|' \
+    -e 's|^BackgroundStartColor=.*|BackgroundStartColor=0x080b0d|' \
+    -e 's|^BackgroundEndColor=.*|BackgroundEndColor=0x080b0d|' \
+    -e 's|^ProgressBarBackgroundColor=.*|ProgressBarBackgroundColor=0x151c21|' \
+    -e 's|^ProgressBarForegroundColor=.*|ProgressBarForegroundColor=0x54e58a|' \
     "${DESTINO}/${TEMA}.plymouth"
 
 plymouth-set-default-theme "${TEMA}"
