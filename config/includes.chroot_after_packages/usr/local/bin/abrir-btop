@@ -20,6 +20,6 @@ if [ -n "${DIRECCION}" ]; then
     exit 0
 fi
 
-# Letra menor que la terminal normal: asi btop (minimo 80x24) cabe en media pantalla
+# Letra menor que la terminal normal: asi btop (minimo 80x24) cabe en un cuarto de pantalla
 # incluso a 1280 px de ancho.
-exec kitty --class btop --title btop -o font_size=8 -e btop
+exec kitty --class btop --title btop -o font_size=7 -e btop

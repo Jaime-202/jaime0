@@ -30,7 +30,7 @@
     "modules": [
         { "type": "title", "format": " {user-name}@{host-name}" },
         "break",
-        { "type": "os", "key": "OS", "keyColor": "32", "format": "{pretty-name} {arch}" },
+        { "type": "os", "key": "OS", "keyColor": "32", "format": "{name} {version-id}" },
         { "type": "kernel", "key": "│ ├", "keyColor": "90", "format": "{release}" },
         { "type": "packages", "key": "│ ├", "keyColor": "90", "format": "{all}" },
         { "type": "uptime", "key": "│ └", "keyColor": "90" },
@@ -38,7 +38,7 @@
         { "type": "wm", "key": "WM", "keyColor": "32", "format": "{pretty-name} {version}" },
         { "type": "terminal", "key": "│ ├", "keyColor": "90", "format": "{pretty-name} {version}" },
         { "type": "shell", "key": "│ ├", "keyColor": "90", "format": "{pretty-name} {version}" },
-        { "type": "terminalfont", "key": "│ └", "keyColor": "90", "format": "{name} {size}pt" },
+        { "type": "terminalfont", "key": "│ └", "keyColor": "90", "format": "{name}" },
         "break",
         { "type": "host", "key": "PC", "keyColor": "32", "format": "{name}" },
         { "type": "cpu", "key": "│ ├", "keyColor": "90", "format": "{name} ({cores-logical})" },
