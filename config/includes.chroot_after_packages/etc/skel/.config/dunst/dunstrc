@@ -1,13 +1,14 @@
 # ~/.config/dunst/dunstrc
-# Notificaciones arriba a la derecha: pildora oscura con borde de color. Paleta jaime0.
-# El desplazamiento vertical deja libre la altura de Waybar.
+# Notificaciones arriba a la derecha: tarjeta negra con borde fino. Paleta jaime0:
+# borde gris en las de baja prioridad, verde en las normales y rojo en las criticas.
+# El desplazamiento vertical deja libre la altura de Waybar (26 px).
 
 [global]
     monitor = 0
     follow = none
 
     origin = top-right
-    offset = (8, 54)
+    offset = (8, 36)
     width = 360
     height = (0, 200)
     notification_limit = 5
@@ -18,10 +19,10 @@
     progress_bar_height = 8
     progress_bar_frame_width = 0
     progress_bar_corner_radius = 0
-    highlight = "#7ab0ff"
+    highlight = "#54e58a"
 
     indicate_hidden = true
-    separator_height = 2
+    separator_height = 1
     separator_color = frame
     gap_size = 8
     sort = true
@@ -29,8 +30,8 @@
     padding = 12
     horizontal_padding = 14
     text_icon_padding = 12
-    frame_width = 2
-    corner_radius = 10
+    frame_width = 1
+    corner_radius = 6
 
     font = JetBrainsMono Nerd Font 10
     line_height = 2
@@ -65,22 +66,22 @@
     mouse_right_click = close_all
 
 [urgency_low]
-    background = "#12141de6"
-    foreground = "#e0e4f2"
-    frame_color = "#7ab0ff"
-    highlight = "#7ab0ff"
+    background = "#080b0df0"
+    foreground = "#a7b4bc"
+    frame_color = "#26343a"
+    highlight = "#71818c"
     timeout = 5
 
 [urgency_normal]
-    background = "#12141de6"
-    foreground = "#e0e4f2"
-    frame_color = "#7ab0ff"
-    highlight = "#7ab0ff"
+    background = "#080b0df0"
+    foreground = "#d8e2e8"
+    frame_color = "#54e58a"
+    highlight = "#54e58a"
     timeout = 5
 
 [urgency_critical]
-    background = "#12141de6"
-    foreground = "#e0e4f2"
-    frame_color = "#c96a78"
-    highlight = "#c96a78"
+    background = "#080b0df0"
+    foreground = "#d8e2e8"
+    frame_color = "#d9625b"
+    highlight = "#d9625b"
     timeout = 5

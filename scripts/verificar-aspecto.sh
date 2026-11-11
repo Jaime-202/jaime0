@@ -30,7 +30,7 @@ for F in .zshrc .config/kitty/kitty.conf .config/starship.toml .config/fastfetch
 done
 
 echo "== Valores de la especificacion =="
-for PAR in ".config/kitty/kitty.conf|^font_family +JetBrainsMono Nerd Font$" ".config/kitty/kitty.conf|^font_size +11" ".config/kitty/kitty.conf|^hide_window_decorations +yes$" ".config/kitty/kitty.conf|^window_padding_width +8$" ".config/kitty/kitty.conf|^background_opacity +0.72$" ".config/kitty/kitty.conf|^background +#12141d$" ".config/kitty/kitty.conf|^foreground +#e0e4f2$" ".config/kitty/kitty.conf|^tab_bar_edge +bottom$" ".config/kitty/kitty.conf|^tab_bar_min_tabs +1$" ".config/kitty/kitty.conf|^color5 +#a58aa8$" ".config/btop/btop.conf|^color_theme = \"jaime0\"$" ".config/btop/btop.conf|^rounded_corners = True$" ".config/btop/themes/jaime0.theme|^theme.cpu_box.=\"#a6cbff\"$" ".zshrc|_titulo_orden" ".zshrc|COLUMNS >= 86" ".config/fastfetch/logo.txt|^.1 .*.2" ".config/gtk-3.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/gtk-4.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/qt6ct/qt6ct.conf|^icon_theme=Papirus-Dark$"; do
+for PAR in ".config/kitty/kitty.conf|^font_family +JetBrainsMono Nerd Font$" ".config/kitty/kitty.conf|^font_size +11" ".config/kitty/kitty.conf|^hide_window_decorations +yes$" ".config/kitty/kitty.conf|^window_padding_width +8$" ".config/kitty/kitty.conf|^background_opacity +0.95$" ".config/kitty/kitty.conf|^background +#080b0d$" ".config/kitty/kitty.conf|^foreground +#d8e2e8$" ".config/kitty/kitty.conf|^tab_bar_edge +bottom$" ".config/kitty/kitty.conf|^tab_bar_min_tabs +1$" ".config/kitty/kitty.conf|^color2 +#54e58a$" ".config/kitty/kitty.conf|^color5 +#a68ab5$" ".config/btop/btop.conf|^color_theme = \"jaime0\"$" ".config/btop/btop.conf|^rounded_corners = True$" ".config/btop/themes/jaime0.theme|^theme.cpu_box.=\"#26343a\"$" ".config/btop/themes/jaime0.theme|^theme.hi_fg.=\"#54e58a\"$" ".zshrc|_titulo_orden" ".zshrc|COLUMNS >= 86" ".config/fastfetch/logo.txt|^.1 .*.2" ".config/gtk-3.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/gtk-4.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/qt6ct/qt6ct.conf|^icon_theme=Papirus-Dark$"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done
@@ -40,21 +40,27 @@ d = json.loads(re.sub(r'^\s*//.*$', '', open(sys.argv[1], encoding='utf-8').read
 claves = [m.get('key', '') for m in d['modules'] if isinstance(m, dict)]
 assert 'OS' in claves and 'WM' in claves and 'PC' in claves
 assert sum(1 for k in claves if k.startswith('│ ├')) >= 8 and sum(1 for k in claves if k.startswith('│ └')) == 3
-assert d['logo']['color'] == {'1': '94', '2': '34'}
+assert d['logo']['color'] == {'1': '32', '2': '37'}
 PY
 python3 - "$SKEL/.config/starship.toml" <<'PY' && ok "starship.toml valido" || fallo "starship.toml invalido"
 import sys, tomllib
 d = tomllib.load(open(sys.argv[1], 'rb'))
-assert d['palettes']['jaime0']['pink'] == '#7ab0ff'
+assert d['palettes']['jaime0']['pink'] == '#54e58a'
 assert d['add_newline'] is True and '$time' in d['right_format'] and '$status' in d['right_format'] and d['time']['disabled'] is False
 assert '❯' in d['character']['success_symbol'] and '$directory' in d['format']
 PY
 
 echo "== Paleta: solo colores de la paleta jaime0 =="
+grep -rlE '7ab0ff|a6cbff|12141d|2f3b52|252939|7a819e|e0e4f2|565c78' "$SKEL" chroot/etc/calamares/branding/hypr chroot/usr/share/grub/themes/hypr chroot/usr/share/qt6ct/colors && fallo "quedan colores de la paleta azul anterior" || ok "sin la paleta azul anterior"
 python3 - chroot <<'PY' | tee -a "$SALIDA"
 import pathlib, re, sys
-MARINO = set("12141d 0b0d14 171a26 252939 2f3b52 7ab0ff a6cbff c7dcff e0e4f2 f2f4fb b6bcd4 9aa0bc 7a819e 565c78 454a64 c96a78 d99aa3 c9a26b".split())
-ANSI_KITTY = set("8fb39a a9c7b3 c4ad75 d9c796 7fb0bd a3c8d2 a58aa8 c2adc4".split())
+# Paleta jaime0: negro #080b0d, negro secundario #101519, superficie #151c21 (derivado),
+# bordes #26343a, verde #54e58a, cian #55cde0, grises #d8e2e8 #a7b4bc (derivado) #71818c
+# #45545c (derivado), blanco de seleccion #eef4f7 (derivado), y rojo, rojo claro y ambar
+# solo para errores y avisos.
+PALETA = set("080b0d 101519 151c21 26343a 54e58a 55cde0 d8e2e8 eef4f7 a7b4bc 71818c 45545c d9625b e8908a d9a54a".split())
+# Colores ANSI propios de kitty (los mismos de la consola, vt.default_*).
+ANSI_KITTY = set("6a9fbf 8fb9d2 a68ab5 c2aacd 86efab e8c27a 8adcea".split())
 raiz = pathlib.Path(sys.argv[1])
 rutas = []
 for base in ["etc/skel/.config", "usr/share/qt6ct/colors/jaime0.conf", "etc/greetd/config.toml", "etc/calamares/branding/hypr/stylesheet.qss", "etc/calamares/branding/hypr/branding.desc", "etc/calamares/branding/hypr/logo.svg", "usr/share/grub/themes/hypr/theme.txt"]:
@@ -71,7 +77,7 @@ for f in rutas:
         candidatos = {entero[:6], entero[2:8]} if len(entero) == 8 else {entero}
         if entero == "00000000":  # totalmente transparente: no aporta color
             continue
-        permitidos = MARINO | ANSI_KITTY if f.name == "kitty.conf" else MARINO
+        permitidos = PALETA | ANSI_KITTY if f.name == "kitty.conf" else PALETA
         if not (candidatos & permitidos):
             print(f"[FALLO] color ajeno {m.group(0)} en {f.relative_to(raiz)}")
             ajenos += 1
@@ -79,28 +85,20 @@ print(f"[OK]    {len(rutas)} archivos revisados" if not ajenos else f"[FALLO] {a
 PY
 
 echo "== Fondo y cursores =="
-FONDO=chroot/usr/share/backgrounds/jaime0/aurora.jpg
-python3 - "$FONDO" <<'PY' && ok "fondo: JPEG 2560x1440" || fallo "fondo invalido"
-import struct, sys
+FONDO=chroot/usr/share/backgrounds/jaime0/jaime0.png
+python3 - "$FONDO" <<'PY' && ok "fondo: PNG 2560x1440, menos de 1,5 MB" || fallo "fondo invalido"
+import os, struct, sys
 d = open(sys.argv[1], 'rb').read()
-assert d[:3] == bytes([0xff, 0xd8, 0xff])
-i = 2
-while i < len(d):
-    assert d[i] == 0xff
-    marca = d[i + 1]
-    largo = struct.unpack('>H', d[i + 2:i + 4])[0]
-    if marca in (0xc0, 0xc1, 0xc2):
-        alto, ancho = struct.unpack('>HH', d[i + 5:i + 9])
-        assert (ancho, alto) == (2560, 1440), (ancho, alto)
-        break
-    i += 2 + largo
-else:
-    raise SystemExit(1)
+assert d[:8] == b'\x89PNG\r\n\x1a\n' and d[12:16] == b'IHDR'
+ancho, alto = struct.unpack('>II', d[16:24])
+assert (ancho, alto) == (2560, 1440), (ancho, alto)
+assert os.path.getsize(sys.argv[1]) < 1536 * 1024
 PY
-grep -q 'Tim Rains' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && grep -qi 'dominio publico' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && ok "creditos del fondo" || fallo "faltan los creditos del fondo"
-grep -q '3380b169c328dd23a9ed4e991581c02185e09783cb1fb28b447c4c891f4282a1' config/hooks/normal/0350-fondo.hook.chroot && grep -q 'sha256sum -c' config/hooks/normal/0350-fondo.hook.chroot && ok "descarga del fondo fijada por SHA256" || fallo "descarga del fondo sin fijar"
-grep -q 'ImageOps.colorize(img.convert("L"), black="#0b0d14", mid="#2f3b52", white="#7ab0ff"' config/hooks/normal/0350-fondo.hook.chroot && grep -q 'recoloreada en azul' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && ok "fondo recoloreado con la paleta" || fallo "fondo sin recolorear"
-grep -q 'local fondo       = "/usr/share/backgrounds/jaime0/aurora.jpg"' "$SKEL/.config/hypr/hyprland.lua" && grep -q 'swaybg --image " .. fondo .. " --mode fill' "$SKEL/.config/hypr/hyprland.lua" && ok "swaybg usa el fondo en el autostart" || fallo "swaybg sin el fondo"
+[ -e chroot/usr/share/backgrounds/jaime0/aurora.jpg ] && fallo "queda el fondo antiguo aurora.jpg" || ok "sin el fondo antiguo"
+grep -q 'generar-fondo.py' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && grep -q 'MIT' chroot/usr/share/backgrounds/jaime0/CREDITOS.txt && ok "creditos del fondo" || fallo "faltan los creditos del fondo"
+grep -qE 'curl|wget|apt-get' config/hooks/normal/0350-fondo.hook.chroot && fallo "el hook del fondo descarga o instala algo" || ok "el fondo no se descarga: viene del repositorio"
+cmp -s config/includes.chroot_after_packages/usr/share/backgrounds/jaime0/jaime0.png "$FONDO" && ok "el fondo del chroot es el del repositorio" || fallo "el fondo del chroot no coincide con el del repositorio"
+grep -q 'local fondo       = "/usr/share/backgrounds/jaime0/jaime0.png"' "$SKEL/.config/hypr/hyprland.lua" && grep -q 'swaybg --image " .. fondo .. " --mode fill' "$SKEL/.config/hypr/hyprland.lua" && ok "swaybg usa el fondo en el autostart" || fallo "swaybg sin el fondo"
 C=chroot/usr/share/icons/Adwaita
 [ -f "$C/index.theme" ] && [ "$(ls "$C/cursors" | wc -l)" -gt 50 ] && ok "cursor Adwaita: $(ls "$C/cursors" | wc -l) entradas" || fallo "cursores Adwaita incompletos"
 [ -d chroot/usr/share/icons/catppuccin-mocha-blue-cursors ] && fallo "sigue el cursor Catppuccin" || ok "sin el cursor llamativo de antes"
@@ -125,7 +123,7 @@ echo "== Fondo y acceso =="
 [ -d chroot/usr/local/share/hypr ] && fallo "restos del generador antiguo del fondo" || ok "sin restos del generador antiguo"
 grep -q "^python3-pil" chroot.packages.live && fallo "Pillow en la ISO" || ok "Pillow retirado tras preparar el fondo"
 grep -q "^librsvg2-bin" chroot.packages.live && fallo "librsvg2-bin en la ISO" || ok "librsvg2-bin retirado tras generar la marca"
-grep -q "border=blue;title=lightblue" chroot/etc/greetd/config.toml && grep -q "container=black" chroot/etc/greetd/config.toml && ok "tuigreet con colores de la paleta" || fallo "tuigreet sin tema"
+grep -q "border=darkgray;title=green" chroot/etc/greetd/config.toml && grep -q "container=black" chroot/etc/greetd/config.toml && ok "tuigreet con colores de la paleta" || fallo "tuigreet sin tema"
 grep -q -- "--greeting 'Jaime0'" chroot/etc/greetd/config.toml && ok "tuigreet saluda con Jaime0" || fallo "tuigreet sin saludo Jaime0"
 
 echo "== Zsh por defecto =="

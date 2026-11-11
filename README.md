@@ -1,6 +1,6 @@
 # Jaime0
 
-Sistema operativo ligero, en vivo e instalable, basado en Debian Forky (testing), con Hyprland sobre Wayland. Trae terminales en mosaico en tonos de azul sobre fondo oscuro, un escritorio vacío al entrar y un instalador gráfico propio.
+Sistema operativo ligero, en vivo e instalable, basado en Debian Forky (testing), con Hyprland sobre Wayland. Trae terminales en mosaico sobre negro profundo, con un verde discreto que solo marca lo activo, un escritorio vacío al entrar, un instalador gráfico propio y actualizaciones sin reinstalar con `jaime0-update`.
 
 Este repositorio contiene todo lo necesario para reconstruir la imagen: configuración de live-build, dotfiles de `/etc/skel`, hooks y scripts de verificación. La ISO lista para usar está en [Releases](https://github.com/Jaime-202/jaime0/releases).
 
@@ -17,7 +17,9 @@ Este repositorio contiene todo lo necesario para reconstruir la imagen: configur
 ## Características
 
 - **Ligero:** unos 700 MiB de RAM tras entrar en sesión (medido en una VM con 4 GiB), sin applets residentes ni XWayland activo.
-- **Hyprland con configuración Lua**, con mosaico `dwindle`, blur moderado y animaciones cortas.
+- **Hyprland con configuración Lua**, con mosaico `dwindle`, bordes finos, ventanas opacas, blur mínimo y animaciones cortas.
+- **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, hora en el centro y estado a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto y la campana solo cuando cambia.
+- **Actualizaciones sin reinstalar:** `jaime0-update` instala versiones firmadas desde GitHub Releases (canales stable, beta y experimental), respeta tus personalizaciones, guarda copias y puede revertir. Los paquetes de Debian siguen con `apt`. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
 - **Comando `atajos`:** lista todos los atajos reales y permite añadir los tuyos, comprobando antes que la configuración es válida.
 - **Instalador gráfico** basado en Calamares: borrar el disco, instalar junto a otro sistema o particionar a mano, con cifrado LUKS opcional y sin necesidad de red.
 - **Arranque seguro (Secure Boot):** con shim y GRUB firmados por Debian, en el sistema en vivo y en el instalado.
@@ -220,7 +222,9 @@ En Windows con la **Integridad de memoria** activada, VirtualBox funciona sobre 
 
 ## Paleta
 
-Tres colores base, y el resto son derivados: fondo oscuro `#12141d`, azul `#7ab0ff` y pizarra `#2f3b52`. Rojo y ámbar apagados (`#c96a78`, `#c9a26b`) solo avisan de errores. Los colores ANSI de la terminal están desaturados, para que `git` y `ls` sigan distinguiendo sus tipos. El fondo de pantalla es una foto de aurora recoloreada con esos mismos tonos.
+Negro profundo `#080b0d` y negro secundario `#101519` de base, bordes `#26343a`, gris claro `#d8e2e8` y gris secundario `#71818c` para el texto, y un único acento verde `#54e58a` para lo importante: ventana y escritorio activos, selección y botón principal. El cian `#55cde0` aparece solo como acento secundario. Tonos derivados: superficie `#151c21`, gris medio `#a7b4bc`, gris apagado `#45545c` y blanco de selección `#eef4f7`. El rojo `#d9625b` y el ámbar `#d9a54a` solo avisan de errores. La consola de texto (`vt.default_*`), el acceso y los 16 colores ANSI de Kitty usan la misma paleta, con los colores de `git` y `ls` apagados pero distinguibles.
+
+El fondo de pantalla es propio: una malla digital oscura con líneas geométricas y pequeños puntos verdes, generada de forma determinista con `scripts/generar-fondo.py` (Python y Pillow) y guardada en el repositorio. La compilación no descarga nada para él.
 
 ## Qué lleva
 
@@ -241,7 +245,7 @@ La red se gestiona desde la barra, con `nmtui`, y el Bluetooth con `blueman-mana
 Hace falta un Debian 13 (recomendado en una máquina virtual dedicada) con unos 30 GB libres y conexión a internet:
 
 ```bash
-sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools grub-pc-bin grub-efi-amd64-bin
+sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools grub-pc-bin grub-efi-amd64-bin python3 git openssl
 ```
 
 1. Clona el repositorio y entra en él. En adelante se trabaja desde esta carpeta.
@@ -273,13 +277,17 @@ sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools
    sudo lb build
    ```
 
+   `lb build` llama antes a `scripts/empaquetar-actualizacion.py` para generar el manifiesto de la versión (`usr/share/jaime0/version`) que la ISO instala como punto de partida de `jaime0-update`.
+
 6. Para verificarlo, copia los scripts junto a `chroot/` y ejecútalos. Instalan herramientas de prueba en `chroot/`, así que hay que hacerlo después de generar la ISO:
 
    ```bash
    cp scripts/verificar-*.sh scripts/coords-*.sh scripts/atajos-prueba.sh . && ./verificar-todo.sh
    ```
 
-   Las pruebas en vivo necesitan una VM con aceleración 3D.
+   Las pruebas en vivo necesitan una VM con aceleración 3D. `scripts/coords-barra.sh` guarda las posiciones de los módulos de la barra a 1280 px: si cambia la barra, hay que volver a medirlas.
+
+   Las pruebas del actualizador no necesitan la ISO: `python3 -m unittest discover -s pruebas -v`.
 
 Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambia a diario: si llega otra versión de Hyprland, revalida la configuración con `Hyprland --verify-config`.
 
@@ -293,7 +301,10 @@ Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambi
 | `config/archives/` | Preferencias de APT: bloqueo de escritorios y Xorg, fijado de Waybar |
 | `config/bootloaders/` | Menú y tema de GRUB del medio en vivo |
 | `config/includes.chroot_after_packages/` | Archivos del sistema: `/etc/skel`, instalador, scripts |
-| `scripts/` | Construcción de Waybar y traducciones, y verificaciones |
+| `scripts/` | Construcción de Waybar y traducciones, fondo, empaquetado de actualizaciones y verificaciones |
+| `publicaciones/` | Notas de cada versión publicada con `jaime0-update` |
+| `pruebas/` | Pruebas automáticas del actualizador |
+| `docs/` | [Arquitectura](docs/arquitectura.md) y [actualizaciones](docs/actualizaciones.md) |
 | `capturas/` | Capturas del sistema |
 
 ### Cambiar el nombre del sistema
@@ -308,6 +319,7 @@ Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca
 | Acceso | `greetd` con `tuigreet` | Mucho más ligero que SDDM con su compositor |
 | Agente de permisos | `lxpolkit` | El de KDE arrastra KDE Frameworks |
 | Waybar | `0.15.0-1+hypr1`, parcheado, fijado y retenido | El de Debian no cambia de escritorio con la configuración Lua |
+| Actualizaciones | `jaime0-update`: carga firmada (Ed25519) + `apt` | Actualiza los archivos propios sin ISO ni repositorio APT propio; los paquetes siguen con el gestor oficial. Detalles en [docs/arquitectura.md](docs/arquitectura.md) |
 | Red y Bluetooth | Se abren desde la barra | Sin applets residentes |
 | Qt | Solo el instalador; se retira al instalar | Ningún programa del sistema lo necesita |
 | Base | `debootstrap` con `minbase`, sin recomendados | Lleva solo lo necesario |

@@ -43,6 +43,5 @@ El trabajo original de este repositorio se publica bajo la licencia MIT (`LICENS
 | JetBrainsMono Nerd Font (se descarga al compilar, con SHA256) | JetBrains y Nerd Fonts, SIL OFL 1.1 | https://github.com/ryanoasis/nerd-fonts |
 | Papirus | Papirus Development Team, GPL-3.0 | https://github.com/PapirusDevelopmentTeam/papirus-icon-theme |
 | Adwaita (cursor) | Proyecto GNOME, LGPL-3.0 o CC-BY-SA-3.0 | https://gitlab.gnome.org/GNOME/adwaita-icon-theme |
-| Fondo `aurora.jpg`: «Aurora over the boreal forest», recoloreada en azul | NPS Photo / Tim Rains, Servicio de Parques Nacionales de EE. UU., dominio público | https://commons.wikimedia.org/wiki/File:Aurora_over_the_boreal_forest_(57be20e1-a3cf-453e-9632-2d38df39b643).jpg |
 
-El logotipo de Jaime0 es original. Jaime0 no está afiliado al proyecto Debian ni a ningún otro de los citados.
+El logotipo de Jaime0 y el fondo de escritorio `jaime0.png` (generado con `scripts/generar-fondo.py`) son originales y se publican bajo la licencia MIT. Jaime0 no está afiliado al proyecto Debian ni a ningún otro de los citados.

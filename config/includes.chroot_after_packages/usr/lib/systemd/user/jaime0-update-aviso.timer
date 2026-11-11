@@ -1,0 +1,11 @@
+[Unit]
+Description=Comprueba una vez al dia si hay una version nueva de Jaime0
+
+[Timer]
+OnStartupSec=10min
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

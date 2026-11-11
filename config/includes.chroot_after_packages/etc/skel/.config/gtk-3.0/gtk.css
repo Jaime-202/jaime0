@@ -1,24 +1,24 @@
-/* ~/.config/gtk-3.0/gtk.css: Adwaita-dark con la paleta jaime0. */
-@define-color theme_bg_color #171a26;
-@define-color theme_fg_color #e0e4f2;
-@define-color theme_base_color #171a26;
-@define-color theme_text_color #e0e4f2;
-@define-color theme_selected_bg_color #2f3b52;
-@define-color theme_selected_fg_color #f2f4fb;
-@define-color theme_unfocused_bg_color #171a26;
-@define-color theme_unfocused_fg_color #b6bcd4;
-@define-color theme_unfocused_base_color #171a26;
-@define-color theme_unfocused_text_color #b6bcd4;
-@define-color theme_unfocused_selected_bg_color #252939;
-@define-color theme_unfocused_selected_fg_color #b6bcd4;
-@define-color insensitive_bg_color #0b0d14;
-@define-color insensitive_fg_color #454a64;
-@define-color insensitive_base_color #0b0d14;
-@define-color borders #252939;
-@define-color unfocused_borders #171a26;
-@define-color warning_color #a6cbff;
-@define-color error_color #c96a78;
-@define-color success_color #a6cbff;
+/* ~/.config/gtk-3.0/gtk.css: Adwaita-dark con la paleta jaime0 (negro, gris y verde). */
+@define-color theme_bg_color #101519;
+@define-color theme_fg_color #d8e2e8;
+@define-color theme_base_color #101519;
+@define-color theme_text_color #d8e2e8;
+@define-color theme_selected_bg_color #26343a;
+@define-color theme_selected_fg_color #eef4f7;
+@define-color theme_unfocused_bg_color #101519;
+@define-color theme_unfocused_fg_color #a7b4bc;
+@define-color theme_unfocused_base_color #101519;
+@define-color theme_unfocused_text_color #a7b4bc;
+@define-color theme_unfocused_selected_bg_color #151c21;
+@define-color theme_unfocused_selected_fg_color #a7b4bc;
+@define-color insensitive_bg_color #080b0d;
+@define-color insensitive_fg_color #45545c;
+@define-color insensitive_base_color #080b0d;
+@define-color borders #26343a;
+@define-color unfocused_borders #101519;
+@define-color warning_color #d9a54a;
+@define-color error_color #d9625b;
+@define-color success_color #54e58a;
 
 /* Sin barras de titulo ni botones de ventana */
 window.csd > headerbar.default-decoration,
@@ -51,109 +51,109 @@ windowcontrols, .titlebutton {
 }
 
 window, .background, dialog, messagedialog {
-    background-color: #171a26;
-    color: #e0e4f2;
+    background-color: #101519;
+    color: #d8e2e8;
 }
 headerbar, .titlebar, toolbar, menubar, .toolbar {
-    background-color: #0b0d14;
+    background-color: #080b0d;
     background-image: none;
-    color: #e0e4f2;
-    border-color: #171a26;
+    color: #d8e2e8;
+    border-color: #101519;
     box-shadow: none;
 }
 .view, view, iconview, textview text, treeview.view, list, row, .content-view {
-    background-color: #171a26;
-    color: #e0e4f2;
+    background-color: #101519;
+    color: #d8e2e8;
 }
-treeview.view:hover, row:hover { background-color: #171a26; }
+treeview.view:hover, row:hover { background-color: #101519; }
 treeview.view header button {
-    background-color: #0b0d14;
+    background-color: #080b0d;
     background-image: none;
-    color: #b6bcd4;
-    border-color: #171a26;
+    color: #a7b4bc;
+    border-color: #101519;
     box-shadow: none;
 }
 .sidebar, placessidebar, placessidebar list, placessidebar row {
-    background-color: #0b0d14;
-    color: #e0e4f2;
+    background-color: #080b0d;
+    color: #d8e2e8;
 }
 *:selected, selection, .view:selected, row:selected, treeview.view:selected, iconview:selected {
-    background-color: #2f3b52;
-    color: #f2f4fb;
+    background-color: #26343a;
+    color: #eef4f7;
 }
 button {
-    background-color: #171a26;
+    background-color: #101519;
     background-image: none;
-    color: #e0e4f2;
-    border-color: #252939;
+    color: #d8e2e8;
+    border-color: #26343a;
     box-shadow: none;
     text-shadow: none;
     -gtk-icon-shadow: none;
 }
-button:hover { background-color: #252939; }
+button:hover { background-color: #151c21; }
 button:active, button:checked {
-    background-color: #2f3b52;
-    color: #f2f4fb;
+    background-color: #26343a;
+    color: #eef4f7;
 }
 button:disabled {
-    background-color: #0b0d14;
-    color: #454a64;
+    background-color: #080b0d;
+    color: #45545c;
 }
 button.flat { background-color: transparent; border-color: transparent; }
-button.flat:hover { background-color: #171a26; }
+button.flat:hover { background-color: #101519; }
 entry, spinbutton, combobox box button {
-    background-color: #0b0d14;
+    background-color: #080b0d;
     background-image: none;
-    color: #e0e4f2;
-    border-color: #252939;
+    color: #d8e2e8;
+    border-color: #26343a;
     box-shadow: none;
 }
-entry:focus, spinbutton:focus { border-color: #7ab0ff; }
+entry:focus, spinbutton:focus { border-color: #54e58a; }
 menu, .menu, .context-menu, popover, popover.background {
-    background-color: #0b0d14;
-    color: #e0e4f2;
-    border-color: #252939;
+    background-color: #080b0d;
+    color: #d8e2e8;
+    border-color: #26343a;
 }
-menuitem:hover, modelbutton:hover { background-color: #2f3b52; color: #f2f4fb; }
+menuitem:hover, modelbutton:hover { background-color: #26343a; color: #eef4f7; }
 tooltip, tooltip.background {
-    background-color: #0b0d14;
-    color: #e0e4f2;
-    border: 1px solid #7ab0ff;
+    background-color: #080b0d;
+    color: #d8e2e8;
+    border: 1px solid #26343a;
     text-shadow: none;
 }
 scrollbar { background-color: transparent; border: 0; }
-scrollbar slider { background-color: #2f3b52; border: 0; }
-scrollbar slider:hover { background-color: #7ab0ff; }
+scrollbar slider { background-color: #26343a; border: 0; }
+scrollbar slider:hover { background-color: #71818c; }
 notebook header, notebook stack {
-    background-color: #0b0d14;
-    border-color: #171a26;
+    background-color: #080b0d;
+    border-color: #101519;
 }
-notebook header tab { color: #9aa0bc; }
-notebook header tab:checked { color: #e0e4f2; box-shadow: inset 0 -3px #7ab0ff; }
+notebook header tab { color: #a7b4bc; }
+notebook header tab:checked { color: #d8e2e8; box-shadow: inset 0 -3px #54e58a; }
 progressbar progress, scale highlight, levelbar block.filled {
-    background-color: #7ab0ff;
+    background-color: #54e58a;
     background-image: none;
-    border-color: #7ab0ff;
+    border-color: #54e58a;
 }
 progressbar trough, scale trough, levelbar trough, switch {
-    background-color: #171a26;
+    background-color: #101519;
     background-image: none;
-    border-color: #252939;
+    border-color: #26343a;
 }
-switch:checked { background-color: #2f3b52; }
+switch:checked { background-color: #54e58a; }
 switch slider, scale slider {
-    background-color: #e0e4f2;
+    background-color: #d8e2e8;
     background-image: none;
-    border-color: #252939;
+    border-color: #26343a;
 }
 calendar {
-    background-color: #171a26;
-    color: #e0e4f2;
-    border-color: #252939;
+    background-color: #101519;
+    color: #d8e2e8;
+    border-color: #26343a;
 }
-calendar.header { background-color: #0b0d14; color: #7ab0ff; border-color: #171a26; }
-calendar.button { color: #7ab0ff; }
-calendar:selected { background-color: #2f3b52; color: #f2f4fb; }
-calendar:indeterminate { color: #454a64; }
+calendar.header { background-color: #080b0d; color: #54e58a; border-color: #101519; }
+calendar.button { color: #54e58a; }
+calendar:selected { background-color: #26343a; color: #eef4f7; }
+calendar:indeterminate { color: #45545c; }
 
 * { font-family: "JetBrainsMono Nerd Font", monospace; }

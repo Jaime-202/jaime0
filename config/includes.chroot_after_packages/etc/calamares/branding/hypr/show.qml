@@ -20,7 +20,7 @@ Presentation {
     Rectangle {
         anchors.fill: parent
         z: -1
-        color: "#12141d"
+        color: "#080b0d"
     }
 
     // Puntos de posicion
@@ -34,7 +34,7 @@ Presentation {
             model: 5
             Rectangle {
                 width: 7; height: 7; radius: 4
-                color: index === presentacion.currentSlide ? "#7ab0ff" : "#2f3b52"
+                color: index === presentacion.currentSlide ? "#54e58a" : "#26343a"
             }
         }
     }
@@ -42,7 +42,7 @@ Presentation {
     component Titulo: Text {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
-        color: "#f2f4fb"
+        color: "#eef4f7"
         font.family: presentacion.fuente
         font.pixelSize: 24
         font.bold: true
@@ -50,13 +50,13 @@ Presentation {
     component Parrafo: Text {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
-        color: "#b6bcd4"
+        color: "#a7b4bc"
         font.family: presentacion.fuente
         font.pixelSize: 14
         lineHeight: 1.25
     }
     component Etiqueta: Text {
-        color: "#7ab0ff"
+        color: "#54e58a"
         font.family: presentacion.fuente
         font.pixelSize: 13
         font.bold: true
@@ -64,7 +64,7 @@ Presentation {
     component Dato: Text {
         Layout.fillWidth: true
         wrapMode: Text.WordWrap
-        color: "#e0e4f2"
+        color: "#d8e2e8"
         font.family: presentacion.fuente
         font.pixelSize: 14
     }
@@ -73,12 +73,12 @@ Presentation {
         Layout.preferredHeight: 28
         Layout.preferredWidth: rotulo.implicitWidth + 20
         radius: 3
-        color: "#171a26"
-        border.color: "#2f3b52"
+        color: "#101519"
+        border.color: "#26343a"
         Text {
             id: rotulo
             anchors.centerIn: parent
-            color: "#f2f4fb"
+            color: "#eef4f7"
             font.family: presentacion.fuente
             font.pixelSize: 12
             font.bold: true
@@ -89,13 +89,13 @@ Presentation {
         Layout.fillWidth: true
         Layout.preferredHeight: 50
         radius: 3
-        color: "#171a26"
-        border.color: "#2f3b52"
+        color: "#101519"
+        border.color: "#26343a"
         Text {
             id: linea
             anchors.verticalCenter: parent.verticalCenter
             x: 16
-            color: "#f2f4fb"
+            color: "#eef4f7"
             font.family: presentacion.fuente
             font.pixelSize: 14
         }

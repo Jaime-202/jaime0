@@ -59,7 +59,7 @@ done
 grep -q '^atajosMultimedia = {}' "$LUA" && [ "$(grep -c '^multimedia("XF86' "$LUA")" -eq 10 ] && ok "10 teclas multimedia, agrupadas en atajosMultimedia" || fallo "atajosMultimedia"
 grep -q 'exec_cmd("inactividad")' "$LUA" && ok "inactividad en el autostart" || fallo "inactividad sin arrancar"
 grep -q '\[ -d /run/live/medium \] && exit 0' $BIN/inactividad && ok "inactividad no bloquea la sesion en vivo" || fallo "inactividad en vivo"
-grep -q 'ring-color=7ab0ffff' $SKEL/swaylock/config && grep -q 'image=/usr/share/backgrounds/jaime0/aurora.jpg' $SKEL/swaylock/config && ok "swaylock con tema y fondo de Jaime0" || fallo "tema de swaylock"
+grep -q 'ring-ver-color=54e58aff' $SKEL/swaylock/config && grep -q 'image=/usr/share/backgrounds/jaime0/jaime0.png' $SKEL/swaylock/config && ok "swaylock con tema y fondo de Jaime0" || fallo "tema de swaylock"
 chroot chroot python3 -m py_compile /usr/local/bin/atajos && ok "atajos: sintaxis Python" || fallo "atajos: sintaxis"
 grep -q '"XF86AudioRaiseVolume": "Tecla Subir volumen"' $BIN/atajos && ok "atajos muestra nombres legibles" || fallo "atajos sin nombres legibles"
 grep -q 'atajos añadir "SUPER+O"' $BIN/atajos && ok "la ayuda de atajos usa SUPER+O (SUPER+B es del sistema)" || fallo "ayuda de atajos"

@@ -31,14 +31,16 @@ o.fillchars = { eob = " ", vert = "│" }
 --------------------------------------------------------------------------------
 -- Colores
 --------------------------------------------------------------------------------
+-- Paleta jaime0: negro, grises y verde de acento; cian solo para cadenas y avisos
+-- informativos; rojo y ambar para errores y avisos.
 local p = {
-    rosewater = "#f2f4fb", flamingo = "#a6cbff", pink = "#7ab0ff", mauve = "#7ab0ff",
-    red = "#c96a78", maroon = "#d99aa3", peach = "#c9a26b", yellow = "#a6cbff",
-    green = "#a6cbff", teal = "#7ab0ff", sky = "#7ab0ff", sapphire = "#7ab0ff",
-    blue = "#7ab0ff", lavender = "#7ab0ff", text = "#e0e4f2", subtext1 = "#b6bcd4",
-    subtext0 = "#9aa0bc", overlay2 = "#7a819e", overlay1 = "#565c78", overlay0 = "#454a64",
-    surface2 = "#2f3b52", surface1 = "#252939", surface0 = "#171a26", base = "#12141d",
-    mantle = "#0b0d14", crust = "#0b0d14",
+    rosewater = "#eef4f7", flamingo = "#d8e2e8", pink = "#54e58a", mauve = "#54e58a",
+    red = "#d9625b", maroon = "#e8908a", peach = "#d9a54a", yellow = "#d9a54a",
+    green = "#54e58a", teal = "#55cde0", sky = "#55cde0", sapphire = "#55cde0",
+    blue = "#54e58a", lavender = "#26343a", text = "#d8e2e8", subtext1 = "#a7b4bc",
+    subtext0 = "#a7b4bc", overlay2 = "#71818c", overlay1 = "#71818c", overlay0 = "#45545c",
+    surface2 = "#26343a", surface1 = "#151c21", surface0 = "#101519", base = "#080b0d",
+    mantle = "#080b0d", crust = "#080b0d",
 }
 
 vim.cmd("highlight clear")
@@ -54,21 +56,21 @@ local grupos = {
     SignColumn = {},
     EndOfBuffer = {},
     LineNr = { fg = p.overlay0 },
-    CursorLineNr = { fg = p.sky, bold = true },
+    CursorLineNr = { fg = p.green, bold = true },
     CursorLine = { bg = p.surface0, blend = 0 },
     ColorColumn = { bg = p.surface0 },
-    Visual = { bg = "#2f3b52" },
+    Visual = { bg = p.surface2 },
     Search = { fg = p.base, bg = p.yellow },
     IncSearch = { fg = p.base, bg = p.peach },
     MatchParen = { fg = p.peach, bold = true },
     WinSeparator = { fg = p.surface2 },
     VertSplit = { fg = p.surface2 },
     Pmenu = { fg = p.text, bg = p.mantle },
-    PmenuSel = { fg = p.rosewater, bg = "#2f3b52" },
+    PmenuSel = { fg = p.rosewater, bg = p.surface2 },
     NonText = { fg = p.surface2 },
     Whitespace = { fg = p.surface1 },
-    Directory = { fg = p.sky },
-    Title = { fg = p.sky, bold = true },
+    Directory = { fg = p.green },
+    Title = { fg = p.green, bold = true },
     ErrorMsg = { fg = p.red },
     WarningMsg = { fg = p.yellow },
     MoreMsg = { fg = p.green },
@@ -85,12 +87,12 @@ local grupos = {
     Number = { fg = p.yellow },
     Boolean = { fg = p.yellow },
     Identifier = { fg = p.text },
-    Function = { fg = p.sky },
+    Function = { fg = p.flamingo, bold = true },
     Statement = { fg = p.mauve },
     Keyword = { fg = p.pink },
     Conditional = { fg = p.pink },
     Repeat = { fg = p.pink },
-    Operator = { fg = p.sky },
+    Operator = { fg = p.overlay2 },
     PreProc = { fg = p.pink },
     Include = { fg = p.mauve },
     Type = { fg = p.mauve },
@@ -123,11 +125,11 @@ local grupos = {
     CapsulaRama = { fg = p.mauve, bg = p.surface1, bold = true },
     CapsulaError = { fg = p.red, bg = p.surface1 },
     CapsulaAviso = { fg = p.yellow, bg = p.surface1 },
-    CapsulaPos = { fg = p.base, bg = p.teal, bold = true },
-    CapsulaPosBorde = { fg = p.teal },
-    CapsulaHora = { fg = p.base, bg = p.green, bold = true },
-    CapsulaHoraBorde = { fg = p.green },
-    PestanaActiva = { fg = p.sky, bold = true },
+    CapsulaPos = { fg = p.text, bg = p.surface1 },
+    CapsulaPosBorde = { fg = p.surface1 },
+    CapsulaHora = { fg = p.subtext1, bg = p.surface1 },
+    CapsulaHoraBorde = { fg = p.surface1 },
+    PestanaActiva = { fg = p.green, bold = true },
     PestanaInactiva = { fg = p.overlay1 },
     PestanaSeparador = { fg = p.surface2 },
 }
@@ -136,8 +138,8 @@ for nombre, valor in pairs(grupos) do
 end
 
 local colores_modo = {
-    n = { "NORMAL", p.blue }, i = { "INSERT", p.pink }, v = { "VISUAL", p.mauve },
-    V = { "V-LINE", p.mauve }, ["\22"] = { "V-BLOCK", p.mauve }, c = { "COMMAND", p.yellow },
+    n = { "NORMAL", p.subtext1 }, i = { "INSERT", p.green }, v = { "VISUAL", p.sky },
+    V = { "V-LINE", p.sky }, ["\22"] = { "V-BLOCK", p.sky }, c = { "COMMAND", p.yellow },
     R = { "REPLACE", p.red }, t = { "TERMINAL", p.green }, s = { "SELECT", p.peach },
     S = { "S-LINE", p.peach },
 }

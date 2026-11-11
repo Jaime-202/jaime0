@@ -8,7 +8,7 @@ import QtQuick.Layouts 1.3
 
 Rectangle {
     id: barra
-    color: "#0b0d14"
+    color: "#080b0d"
     anchors.fill: parent
 
     readonly property string fuente: "JetBrainsMono Nerd Font"
@@ -18,7 +18,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: 1
-        color: "#252939"
+        color: "#151c21"
     }
 
     ColumnLayout {
@@ -47,7 +47,7 @@ Rectangle {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             text: Branding.string(Branding.ProductName)
-            color: "#f2f4fb"
+            color: "#eef4f7"
             font.family: barra.fuente
             font.pixelSize: 15
             font.bold: true
@@ -57,7 +57,7 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 2
             text: "Instalación"
-            color: "#7a819e"
+            color: "#71818c"
             font.family: barra.fuente
             font.pixelSize: 12
         }
@@ -82,9 +82,9 @@ Rectangle {
                     anchors.topMargin: 3
                     anchors.bottomMargin: 3
                     radius: 4
-                    color: paso.actual ? "#171a26" : "transparent"
+                    color: paso.actual ? "#101519" : "transparent"
                     border.width: paso.actual ? 1 : 0
-                    border.color: "#2f3b52"
+                    border.color: "#26343a"
                 }
 
                 // Linea que une cada paso con el siguiente
@@ -94,7 +94,7 @@ Rectangle {
                     y: parent.height / 2 + 11
                     width: 2
                     height: parent.height - 22
-                    color: paso.hecho ? "#7ab0ff" : "#252939"
+                    color: paso.hecho ? "#54e58a" : "#26343a"
                 }
 
                 Rectangle {
@@ -104,14 +104,14 @@ Rectangle {
                     width: 22
                     height: 22
                     radius: 11
-                    color: paso.hecho ? "#7ab0ff" : (paso.actual ? "#252939" : "transparent")
+                    color: paso.hecho ? "#54e58a" : (paso.actual ? "#151c21" : "transparent")
                     border.width: 2
-                    border.color: paso.hecho || paso.actual ? "#7ab0ff" : "#2f3b52"
+                    border.color: paso.hecho || paso.actual ? "#54e58a" : "#26343a"
 
                     Text {
                         anchors.centerIn: parent
                         text: paso.hecho ? "✓" : (index + 1)
-                        color: paso.hecho || paso.actual ? "#f2f4fb" : "#565c78"
+                        color: paso.hecho ? "#080b0d" : (paso.actual ? "#eef4f7" : "#45545c")
                         font.family: barra.fuente
                         font.pixelSize: 11
                         font.bold: true
@@ -126,7 +126,7 @@ Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
                     text: display
-                    color: paso.actual ? "#f2f4fb" : (paso.hecho ? "#b6bcd4" : "#7a819e")
+                    color: paso.actual ? "#eef4f7" : (paso.hecho ? "#a7b4bc" : "#71818c")
                     font.family: barra.fuente
                     font.pixelSize: 13
                     font.bold: paso.actual
@@ -139,7 +139,7 @@ Rectangle {
         Text {
             Layout.alignment: Qt.AlignHCenter
             text: "Paso " + Math.min(ViewManager.currentStepIndex + 1, ViewManager.rowCount()) + " de " + ViewManager.rowCount()
-            color: "#565c78"
+            color: "#45545c"
             font.family: barra.fuente
             font.pixelSize: 12
         }

@@ -1,0 +1,27 @@
+#!/bin/sh
+# jaime0-update: permisos, version en os-release y aviso diario de versiones nuevas.
+set -e
+
+chown root:root /usr/local/bin/jaime0-update
+chmod 755 /usr/local/bin/jaime0-update
+chmod 644 /usr/share/jaime0/version /usr/share/jaime0/firma-actualizaciones.pem /etc/jaime0/update.conf
+chmod 644 /usr/lib/systemd/user/jaime0-update-aviso.service /usr/lib/systemd/user/jaime0-update-aviso.timer
+
+# El manifiesto de la version instalada lo genera auto/build antes de compilar. Sin el,
+# la primera actualizacion trataria todos los archivos como conflictos.
+test -s /usr/share/jaime0/manifiesto.json
+chmod 644 /usr/share/jaime0/manifiesto.json
+grep -q "\"version\": \"$(cat /usr/share/jaime0/version)\"" /usr/share/jaime0/manifiesto.json
+
+# Copias y estado del actualizador: solo root.
+install -d -m 700 /var/backups/jaime0 /var/cache/jaime0-update
+install -d -m 755 /var/lib/jaime0
+# Punto de partida de cada usuario: lo que trae /etc/skel en esta ISO.
+install -m 644 /usr/share/jaime0/manifiesto.json /var/lib/jaime0/manifiesto-instalacion.json
+
+# Version visible para cualquier programa (fastfetch, hostnamectl...).
+VERSION="$(cat /usr/share/jaime0/version)"
+sed -i '/^VERSION=/d; /^VERSION_ID=/d' /usr/lib/os-release
+printf 'VERSION="%s"\nVERSION_ID=%s\n' "${VERSION}" "${VERSION}" >> /usr/lib/os-release
+
+systemctl --global enable jaime0-update-aviso.timer
