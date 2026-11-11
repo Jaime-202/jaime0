@@ -16,7 +16,7 @@ Este repositorio contiene todo lo necesario para reconstruir la imagen: configur
 
 ## Características
 
-- **Ligero:** unos 700 MiB de RAM tras entrar en sesión (medido en una VM con 4 GiB), sin applets residentes ni XWayland activo.
+- **Ligero:** unos 530 MiB de RAM con el escritorio en reposo y arranque en unos 15 s (sistema instalado 0.2.0-beta.1, medido con `free -m` y `systemd-analyze` en una VM UEFI con 4 GiB), sin applets residentes ni XWayland activo.
 - **Hyprland con configuración Lua**, con mosaico `dwindle`, bordes finos, ventanas opacas, blur mínimo y animaciones cortas.
 - **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, hora en el centro y estado a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto y la campana solo cuando cambia.
 - **Actualizaciones sin reinstalar:** `jaime0-update` instala versiones firmadas desde GitHub Releases (canales stable, beta y experimental), respeta tus personalizaciones, guarda copias y puede revertir. Los paquetes de Debian siguen con `apt`. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
@@ -331,7 +331,7 @@ Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca
 - **Fallos aislados en VirtualBox:** en pruebas sobre Windows con VirtualBox funcionando encima de Hyper-V (Integridad de memoria activada), un arranque de cada 11 en una VM se quedó congelado por un fallo de `systemd`, con un trozo de `libc` leído como ceros en memoria, y otra VM reanudada tras muchas horas tuvo programas que fallaban al azar. Reiniciarla lo resolvió: ocho reinicios seguidos entraron bien y no se pudo reproducir. Todo apunta a la capa de virtualización y no a Jaime0, pero no se ha podido demostrar. Por si ocurre, Jaime0 reinicia solo si `systemd` falla al arrancar (`CrashAction=reboot`). No se ha visto en otras condiciones, y no se ha probado en hardware real.
 - **Textos en inglés:** `tuigreet` y `swaylock` no tienen traducción. Algunas entradas de GRUB y las de otros sistemas salen en inglés.
 - **Instalador:** el mapa, el teclado de muestra y la franja de particiones usan colores fijos de Calamares.
-- **`btop` en mosaicos muy pequeños:** necesita 80x24 y lo avisa si no cabe.
+- **`btop` en mosaicos muy pequeños:** necesita 80x24. Abierto con `CTRL + SHIFT + Escape` usa letra de 7 puntos y cabe en un cuarto de pantalla a 1280x800; más pequeño, lo avisa.
 - **Teclados virtuales:** algunos usan códigos de tecla que coinciden con las teclas multimedia y Hyprland ejecuta esos atajos. Con un teclado físico no pasa.
 
 ## Qué no se ha probado
