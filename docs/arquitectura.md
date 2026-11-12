@@ -13,6 +13,7 @@
 | Sonido, red | PipeWire + WirePlumber, NetworkManager (`nmtui` desde la barra), BlueZ + blueman |
 | Actualizaciones | `jaime0-update` (componentes propios, firmados) + `apt` (paquetes) |
 | Ajustes | `jaime0-ajustes`: predeterminados en `/usr/share/jaime0/ajustes.predeterminados`, cambios del usuario en `~/.config/jaime0/ajustes`. Hyprland los lee en `hyprland.lua`; Waybar y rofi, desde `~/.config/jaime0/generado/`. Ver [ajustes.md](ajustes.md) |
+| Aplicaciones ancladas | `jaime0-anclar`: ajuste `anclas`; `jaime0-anclar vigilar` escucha el socket de eventos de Hyprland y escribe el estado que lee Waybar (señal 9) |
 
 ## Flujo de construcción
 

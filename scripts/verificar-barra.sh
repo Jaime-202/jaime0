@@ -44,8 +44,13 @@ import json, re, sys
 t = re.sub(r'^\s*//.*$', '', open(sys.argv[1], encoding='utf-8').read(), flags=re.M)
 d = json.loads(t)
 assert d['modules-left'] == ['custom/logo', 'hyprland/workspaces']
-assert d['modules-center'] == ['clock']
-assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'battery', 'custom/notificaciones', 'group/bandeja', 'custom/power']
+assert d['modules-center'] == [f'custom/ancla-{n}' for n in range(1, 7)]
+assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'battery', 'custom/notificaciones', 'group/bandeja', 'clock', 'custom/power']
+# Ancladas: sin sondeo (interval once + senal 9) y clic a jaime0-anclar.
+for n in range(1, 7):
+    m = d[f'custom/ancla-{n}']
+    assert m['interval'] == 'once' and m['signal'] == 9 and m['return-type'] == 'json', n
+    assert m['on-click'] == f'jaime0-anclar abrir {n}' and f'anclas/{n}.json' in m['exec'], n
 assert 'hyprland/window' not in d and 'mpris' not in d
 # Altura y posicion salen de jaime0-ajustes (generado/waybar.json), no de aqui.
 assert 'height' not in d and 'position' not in d
@@ -74,7 +79,7 @@ PY
 then ok "config.jsonc valido con los modulos pedidos"; else fallo "config.jsonc invalido"; fi
 
 echo "== Valores de la especificacion =="
-for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@import url\(\"../jaime0/generado/waybar.css\"\)" "waybar/style.css|window#waybar.bottom" "rofi/jaime0.rasi|\?import \"~/.config/jaime0/generado/rofi.rasi\"" "rofi/jaime0.rasi|acento: +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 6" "dunst/dunstrc|frame_width = 1" "dunst/dunstrc|#080b0df0" "dunst/dunstrc|frame_color = \"#54e58a\"" "dunst/dunstrc|frame_color = \"#d9625b\"" "dunst/dunstrc|timeout = 5"; do
+for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@import url\(\"../jaime0/generado/waybar.css\"\)" "waybar/style.css|window#waybar.bottom" "waybar/style.css|\.ancla\.abierta" "rofi/jaime0.rasi|\?import \"~/.config/jaime0/generado/rofi.rasi\"" "rofi/jaime0.rasi|acento: +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 6" "dunst/dunstrc|frame_width = 1" "dunst/dunstrc|#080b0df0" "dunst/dunstrc|frame_color = \"#54e58a\"" "dunst/dunstrc|frame_color = \"#d9625b\"" "dunst/dunstrc|timeout = 5"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "chroot$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done

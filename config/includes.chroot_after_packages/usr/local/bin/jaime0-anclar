@@ -1,0 +1,534 @@
+#!/usr/bin/python3 -I
+# jaime0-anclar: aplicaciones ancladas en el centro de la barra (hasta 6).
+#
+# La lista es el ajuste "anclas" de jaime0-ajustes (~/.config/jaime0/ajustes), asi que
+# se guarda, valida y protege de las actualizaciones igual que el resto de ajustes.
+#
+# La barra no sondea nada. "jaime0-anclar vigilar" (un proceso por sesion) escucha los
+# eventos de Hyprland, escribe el estado de cada hueco en $XDG_RUNTIME_DIR/jaime0/anclas/
+# y avisa a Waybar con la senal RTMIN+9; cada modulo custom/ancla-N solo lee su archivo.
+# Si "vigilar" no esta en marcha, los iconos siguen abriendo y enfocando; solo el punto
+# de "abierta" deja de actualizarse.
+
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import select
+import shlex
+import shutil
+import socket
+import subprocess
+import sys
+import time
+
+PROGRAMA = "jaime0-anclar"
+HUECOS = 6
+SENAL = 9  # custom/ancla-N: "signal": 9
+
+
+def cargar_ajustes():
+    ruta = os.path.join(os.path.dirname(os.path.realpath(__file__)), "jaime0-ajustes")
+    cargador = importlib.machinery.SourceFileLoader("jaime0_ajustes", ruta)
+    spec = importlib.util.spec_from_loader(cargador.name, cargador)
+    modulo = importlib.util.module_from_spec(spec)
+    cargador.exec_module(modulo)
+    return modulo
+
+
+A = cargar_ajustes()
+Error = A.Error
+
+
+# ------------------------------------------------------------------------------------
+# Aplicaciones instaladas (.desktop)
+# ------------------------------------------------------------------------------------
+def carpetas_aplicaciones():
+    datos = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    carpetas = [os.path.join(datos, "applications")]
+    for d in (os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share").split(":"):
+        if d:
+            carpetas.append(os.path.join(A.RAIZ, d.lstrip("/"), "applications"))
+    return carpetas
+
+
+def leer_desktop(ruta):
+    entrada, seccion = {}, None
+    try:
+        with open(ruta, encoding="utf-8", errors="replace") as f:
+            for linea in f:
+                linea = linea.strip()
+                if linea.startswith("["):
+                    seccion = linea
+                elif seccion == "[Desktop Entry]" and "=" in linea and not linea.startswith("#"):
+                    clave, valor = linea.split("=", 1)
+                    entrada.setdefault(clave.strip(), valor.strip())
+    except OSError:
+        return None
+    return entrada
+
+
+def aplicaciones():
+    """id -> datos de cada aplicacion visible. La primera carpeta gana (la del usuario)."""
+    apps = {}
+    for carpeta in carpetas_aplicaciones():
+        try:
+            nombres = sorted(os.listdir(carpeta))
+        except OSError:
+            continue
+        for n in nombres:
+            if not n.endswith(".desktop"):
+                continue
+            ident = n[:-len(".desktop")]
+            if ident in apps:
+                continue
+            e = leer_desktop(os.path.join(carpeta, n))
+            if e is None:
+                continue
+            visible = (e.get("Type") == "Application" and e.get("Exec")
+                       and e.get("NoDisplay", "").lower() != "true" and e.get("Hidden", "").lower() != "true")
+            apps[ident] = {"id": ident, "visible": bool(visible), "entrada": e}
+    return {i: preparar(a) for i, a in apps.items() if a["visible"]}
+
+
+CODIGOS = re.compile(r"%[fFuUdDnNickvm]")
+
+
+def preparar(a):
+    e, ident = a["entrada"], a["id"]
+    nombre = e.get("Name[es]") or e.get("Name") or ident
+    try:
+        argv = shlex.split(CODIGOS.sub("", e["Exec"]).replace("%%", "%"))
+    except ValueError:
+        argv = e["Exec"].split()
+    terminal = e.get("Terminal", "").lower() == "true"
+    if terminal:
+        # Con su propia clase, para reconocer su ventana y no confundirla con kitty.
+        argv = ["kitty", "--class", ident, "-e"] + argv
+    clases = {ident.lower(), ident.split(".")[-1].lower()}
+    if e.get("StartupWMClass"):
+        clases.add(e["StartupWMClass"].lower())
+    if argv and not terminal:
+        clases.add(os.path.basename(argv[0]).lower())
+    return {"id": ident, "nombre": nombre, "orden": argv, "clases": sorted(clases),
+            "icono": icono(ident, e.get("Categories", "")),
+            "comentario": e.get("Comment[es]") or e.get("Comment") or ""}
+
+
+# Iconos de Nerd Font (Material Design), monocromos como el resto de la barra.
+ICONOS = (
+    (("firefox", "librewolf", "zen"), "\U000f0239"),
+    (("chromium", "chrome"), "\U000f02af"),
+    (("brave", "vivaldi", "epiphany", "web", "browser", "qutebrowser"), "\U000f059f"),
+    (("kitty", "alacritty", "foot", "terminal", "wezterm", "konsole"), "\U000f018d"),
+    (("thunar", "nautilus", "nemo", "pcmanfm", "files", "dolphin", "yazi"), "\U000f024b"),
+    (("code", "codium", "vscodium"), "\U000f0a1e"),
+    (("nvim", "vim", "emacs", "gedit", "mousepad", "geany", "kate"), "\U000f0219"),
+    (("spotify",), "\U000f04c7"),
+    (("discord", "vesktop"), "\U000f066f"),
+    (("steam",), "\U000f04d3"),
+    (("thunderbird", "evolution", "geary"), "\U000f01ee"),
+    (("vlc", "mpv", "celluloid", "totem"), "\U000f057c"),
+    (("pavucontrol", "pwvucontrol"), "\U000f057e"),
+    (("btop", "htop", "monitor"), "\U000f0128"),
+    (("gimp", "inkscape", "krita", "imv", "eog", "loupe"), "\U000f02e9"),
+    (("libreoffice", "office", "writer", "calc", "impress"), "\U000f0219"),
+)
+POR_CATEGORIA = (
+    ("WebBrowser", "\U000f059f"), ("TerminalEmulator", "\U000f018d"), ("FileManager", "\U000f024b"),
+    ("Development", "\U000f0a1e"), ("AudioVideo", "\U000f057c"), ("Graphics", "\U000f02e9"),
+    ("Office", "\U000f0219"), ("Game", "\U000f04d3"), ("Settings", "\U000f0493"),
+)
+ICONO_GENERICO = "\U000f0614"
+
+
+def icono(ident, categorias):
+    nombre = ident.lower()
+    for claves, glifo in ICONOS:
+        if any(c in nombre for c in claves):
+            return glifo
+    cats = categorias.split(";")
+    for cat, glifo in POR_CATEGORIA:
+        if cat in cats:
+            return glifo
+    return ICONO_GENERICO
+
+
+def resolver(nombre, apps):
+    """Identificador de la aplicacion que el usuario ha escrito (firefox -> firefox-esr)."""
+    if nombre.endswith(".desktop"):
+        nombre = nombre[:-len(".desktop")]
+    if nombre in apps:
+        return nombre
+    n = nombre.lower()
+    for criterio in (lambda i, a: i.lower() == n,
+                     lambda i, a: i.lower().split(".")[-1] == n,
+                     lambda i, a: a["nombre"].lower() == n,
+                     lambda i, a: i.lower().startswith(n + "-") or i.lower().split(".")[-1].startswith(n + "-")):
+        candidatos = sorted(i for i, a in apps.items() if criterio(i, a))
+        if len(candidatos) == 1:
+            return candidatos[0]
+        if len(candidatos) > 1:
+            raise Error(f"'{nombre}' puede ser: {', '.join(candidatos)}. Escribe el nombre exacto")
+    raise Error(f"No encuentro la aplicación '{nombre}'. Lista: {PROGRAMA} disponibles")
+
+
+# ------------------------------------------------------------------------------------
+# Lista de ancladas (ajuste "anclas")
+# ------------------------------------------------------------------------------------
+def ancladas():
+    valores, _, _, _ = A.efectivos()
+    return valores["anclas"].split()
+
+
+def guardar_ancladas(ids):
+    predet, temas = A.predeterminados()
+    valor = A.validar("anclas", " ".join(ids), temas)
+    A.guardar({"anclas": None if valor == predet["anclas"] else valor})
+    _, avisos = A.aplicar()  # si la lista cambia, aplicar llama a "jaime0-anclar refrescar"
+    for a in avisos:
+        print(f"AVISO: {a}", file=sys.stderr)
+
+
+# ------------------------------------------------------------------------------------
+# Hyprland
+# ------------------------------------------------------------------------------------
+def en_hyprland():
+    return bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")) and shutil.which("hyprctl") and not A.MODO_PRUEBA
+
+
+def hyprctl_json(*args):
+    r = subprocess.run(["hyprctl", "-j", *args], capture_output=True, text=True)
+    try:
+        return json.loads(r.stdout)
+    except ValueError:
+        return None
+
+
+def lua_texto(t):
+    return '"' + t.replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ") + '"'
+
+
+def despachar(lua):
+    subprocess.run(["hyprctl", "dispatch", lua], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def ventanas_de(app, clientes):
+    return [c for c in clientes if (c.get("class") or c.get("initialClass") or "").lower() in app["clases"]]
+
+
+def abrir(app):
+    """Si esta abierta, la enfoca (y si ya tiene el foco, pasa a su siguiente ventana);
+    si no, la inicia."""
+    if not en_hyprland():
+        raise Error("Hace falta una sesión de Hyprland")
+    clientes = hyprctl_json("clients") or []
+    propias = ventanas_de(app, clientes)
+    if not propias:
+        despachar("hl.dsp.exec_cmd(" + lua_texto(shlex.join(app["orden"])) + ")")
+        return
+    propias.sort(key=lambda c: c.get("focusHistoryID", 0))
+    activa = (hyprctl_json("activewindow") or {}).get("address")
+    destino = propias[0]
+    if activa == destino["address"] and len(propias) > 1:
+        # Ya tiene el foco: la siguiente, en orden estable de direccion.
+        orden = sorted(propias, key=lambda c: c["address"])
+        destino = orden[(orden.index(destino) + 1) % len(orden)]
+    despachar("hl.dsp.focus({ window = " + lua_texto("address:" + destino["address"]) + " })")
+
+
+# ------------------------------------------------------------------------------------
+# Estado para Waybar
+# ------------------------------------------------------------------------------------
+def carpeta_estado():
+    base = os.environ.get("XDG_RUNTIME_DIR") or os.path.join(A.carpeta_config(), "generado")
+    return os.path.join(base, "jaime0", "anclas")
+
+
+def estado(ids, apps, clases_abiertas, clase_activa):
+    """Texto JSON de cada hueco de la barra (1..HUECOS)."""
+    salida = []
+    for n in range(HUECOS):
+        app = apps.get(ids[n]) if n < len(ids) else None
+        if app is None:
+            salida.append({"text": "", "tooltip": "", "class": "ancla-vacia"})
+            continue
+        clases = ["ancla"]
+        abierta = any(c in clases_abiertas for c in app["clases"])
+        if abierta:
+            clases.append("abierta")
+        if clase_activa and clase_activa in app["clases"]:
+            clases.append("activa")
+        salida.append({"text": app["icono"], "tooltip": app["nombre"] + (" · abierta" if abierta else ""),
+                       "class": clases})
+    return [json.dumps(s, ensure_ascii=False) + "\n" for s in salida]
+
+
+def escribir_estado(textos):
+    carpeta = carpeta_estado()
+    cambio = False
+    for n, texto in enumerate(textos, 1):
+        cambio |= A.escribir_atomico(os.path.join(carpeta, f"{n}.json"), texto)
+    return cambio
+
+
+def waybar_lista():
+    """Pids de Waybar que llevan al menos 2 s en marcha: antes de eso puede que aun no
+    atienda la senal, y una senal RTMIN sin atender la cerraria."""
+    if A.MODO_PRUEBA or not shutil.which("pgrep"):
+        return False
+    r = subprocess.run(["pgrep", "-x", "-u", str(os.getuid()), "waybar"], capture_output=True, text=True)
+    pids = r.stdout.split()
+    if not pids:
+        return None  # no hay Waybar: nada que avisar
+    try:
+        with open("/proc/uptime") as f:
+            uptime = float(f.read().split()[0])
+        tick = os.sysconf("SC_CLK_TCK")
+        for pid in pids:
+            with open(f"/proc/{pid}/stat") as f:
+                inicio = int(f.read().rsplit(")", 1)[1].split()[19]) / tick
+            if uptime - inicio < 2:
+                return False
+    except (OSError, ValueError, IndexError):
+        return False
+    return True
+
+
+def avisar_waybar():
+    """True si se ha avisado o no hacia falta; False si hay que reintentarlo."""
+    lista = waybar_lista()
+    if lista is None:
+        return True
+    if not lista:
+        return False
+    subprocess.run(["pkill", f"-RTMIN+{SENAL}", "-x", "-u", str(os.getuid()), "waybar"])
+    return True
+
+
+def clases_sesion():
+    if not en_hyprland():
+        return set(), None
+    clientes = hyprctl_json("clients") or []
+    activa = hyprctl_json("activewindow") or {}
+    return ({(c.get("class") or "").lower() for c in clientes},
+            (activa.get("class") or "").lower() or None)
+
+
+def refrescar(senal=True):
+    abiertas, activa = clases_sesion()
+    cambio = escribir_estado(estado(ancladas(), aplicaciones(), abiertas, activa))
+    if cambio and senal:
+        avisar_waybar()
+
+
+def vigilar():
+    """Escucha los eventos de Hyprland y mantiene el estado. Un solo proceso por sesion."""
+    if not en_hyprland():
+        raise Error("Hace falta una sesión de Hyprland")
+    sig = os.environ["HYPRLAND_INSTANCE_SIGNATURE"]
+    base = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    ruta = os.path.join(base, "hypr", sig, ".socket2.sock")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(ruta)
+
+    # Estado propio a partir de los eventos: sin llamar a hyprctl en cada uno.
+    clientes = {c["address"].removeprefix("0x"): (c.get("class") or "").lower()
+                for c in (hyprctl_json("clients") or [])}
+    activa = ((hyprctl_json("activewindow") or {}).get("address") or "").removeprefix("0x")
+    apps, ids = aplicaciones(), ancladas()
+    archivo_anclas = os.path.join(A.carpeta_generado(), "anclas")
+    marca_anclas = None
+    pendiente_escribir, pendiente_aviso = True, False
+    desde = time.monotonic()
+    resto = b""
+    while True:
+        # Los eventos llegan a rafagas (abrir una ventana genera varios): se agrupan y el
+        # estado se escribe cuando hay 0,1 s de calma o, como mucho, 0,3 s despues.
+        listo, _, _ = select.select([s], [], [], 0.1 if pendiente_escribir else (1.0 if pendiente_aviso else 30))
+        if listo:
+            antes = pendiente_escribir
+            datos = s.recv(65536)
+            if not datos:
+                return 0  # Hyprland se ha cerrado
+            resto += datos
+            *lineas, resto = resto.split(b"\n")
+            for linea in lineas:
+                evento, _, arg = linea.decode("utf-8", "replace").partition(">>")
+                if evento == "openwindow":
+                    partes = arg.split(",", 3)
+                    if len(partes) >= 3:
+                        clientes[partes[0]] = partes[2].lower()
+                        pendiente_escribir = True
+                elif evento == "closewindow":
+                    clientes.pop(arg, None)
+                    pendiente_escribir = True
+                elif evento == "activewindowv2":
+                    activa = arg
+                    pendiente_escribir = True
+            if pendiente_escribir and not antes:
+                desde = time.monotonic()
+            if time.monotonic() - desde < 0.3:
+                continue
+        # Si la lista de ancladas cambia (jaime0-anclar, ajustes), se relee.
+        try:
+            marca = os.stat(archivo_anclas).st_mtime_ns
+        except OSError:
+            marca = None
+        if marca != marca_anclas:
+            marca_anclas = marca
+            apps, ids = aplicaciones(), ancladas()
+            pendiente_escribir = True
+        if pendiente_escribir:
+            pendiente_escribir = False
+            textos = estado(ids, apps, set(clientes.values()), clientes.get(activa))
+            if escribir_estado(textos):
+                pendiente_aviso = True
+        if pendiente_aviso:
+            pendiente_aviso = not avisar_waybar()
+
+
+# ------------------------------------------------------------------------------------
+# Ordenes
+# ------------------------------------------------------------------------------------
+def orden_anclar(args):
+    if len(args) != 1:
+        raise Error(f"Uso: {PROGRAMA} APLICACIÓN")
+    apps = aplicaciones()
+    ident = resolver(args[0], apps)
+    ids = ancladas()
+    if ident in ids:
+        print(f"{apps[ident]['nombre']} ya está anclada")
+        return 0
+    if len(ids) >= HUECOS:
+        raise Error(f"Ya hay {HUECOS} aplicaciones ancladas. Quita una con: {PROGRAMA} quitar APLICACIÓN")
+    guardar_ancladas(ids + [ident])
+    print(f"Anclada: {apps[ident]['nombre']} ({ident})")
+    return 0
+
+
+def orden_quitar(args):
+    if len(args) != 1:
+        raise Error(f"Uso: {PROGRAMA} quitar APLICACIÓN")
+    ids = ancladas()
+    nombre = args[0][:-len(".desktop")] if args[0].endswith(".desktop") else args[0]
+    if nombre not in ids:
+        # Tambien por nombre corto (firefox -> firefox-esr), si se puede resolver.
+        try:
+            nombre = resolver(nombre, aplicaciones())
+        except Error:
+            pass
+    if nombre not in ids:
+        raise Error(f"'{args[0]}' no está anclada. Ancladas: {' '.join(ids) or 'ninguna'}")
+    guardar_ancladas([i for i in ids if i != nombre])
+    print(f"Quitada: {nombre}")
+    return 0
+
+
+def orden_mover(args):
+    if len(args) != 2 or not args[1].isdigit():
+        raise Error(f"Uso: {PROGRAMA} mover APLICACIÓN POSICIÓN")
+    ids = ancladas()
+    nombre = args[0]
+    if nombre not in ids:
+        nombre = resolver(nombre, aplicaciones())
+    if nombre not in ids:
+        raise Error(f"'{args[0]}' no está anclada")
+    pos = max(1, min(int(args[1]), len(ids)))
+    ids.remove(nombre)
+    ids.insert(pos - 1, nombre)
+    guardar_ancladas(ids)
+    print("Ancladas: " + " ".join(ids))
+    return 0
+
+
+def orden_lista(args):
+    ids, apps = ancladas(), aplicaciones()
+    if args[:1] == ["--json"]:
+        print(json.dumps([dict(apps.get(i, {"id": i, "nombre": i, "icono": ICONO_GENERICO}), instalada=i in apps)
+                          for i in ids],
+                         ensure_ascii=False, indent=2))
+        return 0
+    if not ids:
+        print(f"No hay aplicaciones ancladas. Ancla una con: {PROGRAMA} APLICACIÓN")
+    for n, i in enumerate(ids, 1):
+        print(f"{n}. {i:<28} {apps[i]['nombre'] if i in apps else '(no instalada: no se muestra)'}")
+    return 0
+
+
+def orden_disponibles(args):
+    apps = aplicaciones()
+    ids = set(ancladas())
+    if args[:1] == ["--json"]:
+        print(json.dumps([dict(a, anclada=i in ids) for i, a in sorted(apps.items(), key=lambda x: x[1]["nombre"].lower())],
+                         ensure_ascii=False, indent=2))
+        return 0
+    for i, a in sorted(apps.items(), key=lambda x: x[1]["nombre"].lower()):
+        print(f"{'*' if i in ids else ' '} {i:<36} {a['nombre']}")
+    return 0
+
+
+def orden_abrir(args):
+    if len(args) != 1:
+        raise Error(f"Uso: {PROGRAMA} abrir N|APLICACIÓN")
+    ids, apps = ancladas(), aplicaciones()
+    if args[0].isdigit():
+        n = int(args[0])
+        if not 1 <= n <= len(ids) or ids[n - 1] not in apps:
+            return 0  # hueco vacio: nada que hacer
+        app = apps[ids[n - 1]]
+    else:
+        app = apps[resolver(args[0], apps)]
+    abrir(app)
+    return 0
+
+
+def orden_refrescar(args):
+    refrescar(senal="--sin-senal" not in args)
+    return 0
+
+
+def orden_vigilar(args):
+    return vigilar()
+
+
+AYUDA = f"""Uso: {PROGRAMA} [ORDEN]
+
+  APLICACIÓN                  la ancla en la barra (p. ej.: {PROGRAMA} firefox)
+  quitar APLICACIÓN           la quita de la barra
+  mover APLICACIÓN POSICIÓN   la cambia de sitio (1 = la primera)
+  lista [--json]              las ancladas, en orden
+  disponibles [--json]        las aplicaciones que se pueden anclar (* = anclada)
+  abrir N|APLICACIÓN          enfoca su ventana o la inicia (lo usa la barra)
+
+Hasta {HUECOS} aplicaciones. Se guardan en ~/.config/jaime0/ajustes (ajuste "anclas")."""
+
+ORDENES = {"quitar": orden_quitar, "mover": orden_mover, "lista": orden_lista,
+           "disponibles": orden_disponibles, "abrir": orden_abrir,
+           "refrescar": orden_refrescar, "vigilar": orden_vigilar}
+
+
+def main(argv):
+    if A.es_root():
+        print(f"{PROGRAMA}: las aplicaciones ancladas son de cada usuario; ejecútalo sin sudo.", file=sys.stderr)
+        return 1
+    if not argv:
+        return orden_lista([])
+    if argv[0] in ("-h", "--help", "ayuda"):
+        print(AYUDA)
+        return 0
+    try:
+        if argv[0] in ORDENES:
+            return ORDENES[argv[0]](argv[1:])
+        if argv[0].startswith("-"):
+            print(AYUDA, file=sys.stderr)
+            return 2
+        return orden_anclar(argv)
+    except Error as e:
+        print(f"{PROGRAMA}: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

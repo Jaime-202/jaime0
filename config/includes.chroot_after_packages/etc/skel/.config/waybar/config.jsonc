@@ -1,5 +1,6 @@
 // ~/.config/waybar/config.jsonc
-// Barra fina y continua: escritorios a la izquierda, hora en el centro y estado a la derecha.
+// Barra fina y continua: escritorios a la izquierda, aplicaciones ancladas en el centro y
+// estado y hora a la derecha.
 // Sin titulo de ventana ni reproductor: la barra solo muestra lo que se consulta de un vistazo.
 // Los intervalos son largos a proposito; lo que cambia por eventos (escritorios, volumen,
 // campana) no se sondea.
@@ -17,8 +18,8 @@
     "fixed-center": true,
 
     "modules-left": ["custom/logo", "hyprland/workspaces"],
-    "modules-center": ["clock"],
-    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "custom/notificaciones", "group/bandeja", "custom/power"],
+    "modules-center": ["custom/ancla-1", "custom/ancla-2", "custom/ancla-3", "custom/ancla-4", "custom/ancla-5", "custom/ancla-6"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "custom/notificaciones", "group/bandeja", "clock", "custom/power"],
 
     "custom/logo": {
         "format": "",
@@ -44,6 +45,52 @@
         "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'",
         "sort-by-number": true,
         "show-special": false
+    },
+
+    // Aplicaciones ancladas (jaime0-anclar): hasta 6. Clic: enfoca su ventana o la inicia.
+    // Un hueco sin aplicacion no se muestra. No se sondea: "jaime0-anclar vigilar" escucha
+    // los eventos de Hyprland, escribe cada estado y avisa con la senal 9.
+    "custom/ancla-1": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/jaime0/anclas/1.json\" 2>/dev/null",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "jaime0-anclar abrir 1"
+    },
+    "custom/ancla-2": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/jaime0/anclas/2.json\" 2>/dev/null",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "jaime0-anclar abrir 2"
+    },
+    "custom/ancla-3": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/jaime0/anclas/3.json\" 2>/dev/null",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "jaime0-anclar abrir 3"
+    },
+    "custom/ancla-4": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/jaime0/anclas/4.json\" 2>/dev/null",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "jaime0-anclar abrir 4"
+    },
+    "custom/ancla-5": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/jaime0/anclas/5.json\" 2>/dev/null",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "jaime0-anclar abrir 5"
+    },
+    "custom/ancla-6": {
+        "exec": "cat \"$XDG_RUNTIME_DIR/jaime0/anclas/6.json\" 2>/dev/null",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 9,
+        "on-click": "jaime0-anclar abrir 6"
     },
 
     "cpu": {

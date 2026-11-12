@@ -58,11 +58,38 @@ Al aplicar, se recarga Hyprland (`hyprctl reload`), Waybar relee su configuraci�
 | `animaciones` | `si` / `no` | `si` | Animaciones de Hyprland (en una máquina virtual, siempre apagadas) |
 | `barra_altura` | 20-48 | `26` | Altura de Waybar |
 | `barra_posicion` | `arriba` / `abajo` | `arriba` | Posición de Waybar |
+| `anclas` | Hasta 6 identificadores de aplicación (nombre del `.desktop`) | `kitty thunar` | Aplicaciones ancladas en el centro de la barra. Mejor con `jaime0-anclar` |
 
 Los fondos que ofrece la aplicación son los de `/usr/share/backgrounds/jaime0` y los que pongas en `~/.local/share/backgrounds`.
+
+## Aplicaciones ancladas
+
+```bash
+jaime0-anclar firefox
+```
+
+| Orden | Para qué |
+|---|---|
+| `jaime0-anclar APLICACIÓN` | La ancla al final. Acepta el nombre corto (`firefox` → `firefox-esr`, `pavucontrol` → `org.pulseaudio.pavucontrol`) |
+| `jaime0-anclar quitar APLICACIÓN` | La quita |
+| `jaime0-anclar mover APLICACIÓN POSICIÓN` | La cambia de sitio (1 = la primera) |
+| `jaime0-anclar` / `lista [--json]` | Las ancladas, en orden |
+| `jaime0-anclar disponibles [--json]` | Las que se pueden anclar (`*` = anclada) |
+| `jaime0-anclar abrir N` | Lo que hace la barra al pulsar: enfoca la ventana; si ya tiene el foco y hay varias, pasa a la siguiente; si no está abierta, la inicia |
+
+Cómo funciona, sin sondeo:
+
+- La lista es el ajuste `anclas`. Se guarda en `~/.config/jaime0/ajustes` y ninguna actualización la toca.
+- `jaime0-anclar vigilar` arranca con la sesión y escucha los eventos de Hyprland: abrir, cerrar y cambiar el foco de una ventana. Con ellos escribe el estado de los 6 huecos en `$XDG_RUNTIME_DIR/jaime0/anclas/` y avisa a Waybar con la señal 9. Cada hueco solo lee su archivo.
+- Si `vigilar` no está en marcha, los iconos siguen abriendo y enfocando; solo el punto deja de actualizarse.
+- Las aplicaciones de terminal, como `btop`, se abren en Kitty con su propia clase de ventana, para no confundirlas con Kitty.
+- Iconos monocromos de la fuente Nerd Font, como el resto de la barra. Se eligen por el nombre de la aplicación o, si no se conoce, por su categoría.
+- Consumo medido en la VM de pruebas: `vigilar` ocupa unos 15 MB (PSS) y no gasta CPU en reposo.
 
 ## Límites conocidos
 
 - El acento aún no cambia el día de hoy del calendario de la barra, dunst, swaylock, kitty, btop ni GTK: siguen en verde.
 - Si modificaste a mano `~/.config/hypr/hyprland.lua`, `~/.config/waybar/*` o `~/.config/rofi/jaime0.rasi` antes de la 0.2, `jaime0-update` conserva tu versión (conflicto) y los ajustes no tendrán efecto en ese programa hasta que aceptes la nueva (`jaime0-update resolver RUTA --usar-nueva`).
 - Una altura de barra distinta de 26 mueve los módulos: `scripts/coords-barra.sh` mide a 26 px.
+- Una aplicación anclada que se desinstala desaparece de la barra, pero sigue en la lista (`jaime0-anclar` la marca como no instalada) por si se vuelve a instalar.
+- La aplicación se reconoce por la clase de su ventana (`StartupWMClass`, el nombre del `.desktop` o el del programa). Si alguna usa una clase distinta, el punto no aparecerá.

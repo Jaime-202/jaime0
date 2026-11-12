@@ -19,6 +19,9 @@ animaciones = si
 # Barra (Waybar)
 barra_altura = 26
 barra_posicion = arriba
+# Aplicaciones ancladas en el centro de la barra (hasta 6), por su identificador: el
+# nombre de su .desktop sin extension. Se gestionan con jaime0-anclar.
+anclas = kitty thunar
 
 # Temas de acento: tema.NOMBRE = #rrggbb. "acento" acepta un nombre o un color #rrggbb.
 tema.verde = #54e58a

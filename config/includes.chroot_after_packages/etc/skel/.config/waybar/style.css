@@ -89,6 +89,30 @@ tooltip label {
 #tray               { padding: 0 4px; }
 #custom-power       { color: @gris; padding: 0 12px 0 8px; }
 
+/* Aplicaciones ancladas: icono gris; la activa en texto claro y, debajo de las abiertas,
+   un punto del color de acento. */
+.ancla {
+    color: @gris;
+    padding: 0 9px 3px 9px;
+    font-size: 14px;
+}
+
+.ancla.abierta {
+    background-image: radial-gradient(circle, @acento 1.5px, transparent 2px);
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+    background-position: center bottom;
+}
+
+.ancla.activa {
+    color: @texto;
+}
+
+.ancla:hover {
+    color: @texto;
+    background-color: @superficie;
+}
+
 /* Escritorios como circulos: activo en el acento, ocupados en gris claro, vacios en gris */
 #workspaces {
     padding: 0 4px;

@@ -18,7 +18,8 @@ Este repositorio contiene todo lo necesario para reconstruir la imagen: configur
 
 - **Ligero:** unos 530 MiB de RAM con el escritorio en reposo y arranque en unos 15 s (sistema instalado 0.2.0-beta.1, medido con `free -m` y `systemd-analyze` en una VM UEFI con 4 GiB), sin applets residentes ni XWayland activo.
 - **Hyprland con configuración Lua**, con mosaico `dwindle`, bordes finos, ventanas opacas, blur mínimo y animaciones cortas.
-- **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, hora en el centro y estado a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto y la campana solo cuando cambia.
+- **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, aplicaciones ancladas en el centro y estado y hora a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto, y la campana y las ancladas solo cuando cambian.
+- **Aplicaciones ancladas:** hasta 6 en el centro de la barra. Un punto marca las abiertas; al pulsar, se enfoca su ventana o se inicia. Se gestionan con `jaime0-anclar firefox`, `jaime0-anclar quitar firefox` o desde `jaime0-ajustes`.
 - **Actualizaciones sin reinstalar:** `jaime0-update` instala versiones firmadas desde GitHub Releases (canales stable, beta y experimental), respeta tus personalizaciones, guarda copias y puede revertir. Los paquetes de Debian siguen con `apt`. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
 - **Ajustes en un solo sitio:** `jaime0-ajustes` cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y altura y posición de la barra, y lo aplica al momento. Tus ajustes viven en `~/.config/jaime0/ajustes` y ninguna actualización los toca. Ver [docs/ajustes.md](docs/ajustes.md).
 - **Comando `atajos`:** lista todos los atajos reales y permite añadir los tuyos, comprobando antes que la configuración es válida.
@@ -168,6 +169,20 @@ jaime0-ajustes poner barra_posicion abajo
 ```
 
 Cada cambio se aplica al momento y se guarda en `~/.config/jaime0/ajustes`, que solo contiene lo que has cambiado. `jaime0-ajustes restablecer CLAVE` vuelve al valor de fábrica. Todos los ajustes y sus límites: [docs/ajustes.md](docs/ajustes.md).
+
+### Aplicaciones ancladas
+
+```bash
+jaime0-anclar firefox
+```
+```bash
+jaime0-anclar quitar thunar
+```
+```bash
+jaime0-anclar mover firefox 1
+```
+
+`jaime0-anclar` sin argumentos muestra las ancladas y `jaime0-anclar disponibles`, las que se pueden anclar. El nombre puede ser corto: `firefox` encuentra `firefox-esr`. Vienen ancladas Kitty y Thunar, y puedes quitarlas. Detalles en [docs/ajustes.md](docs/ajustes.md#aplicaciones-ancladas).
 
 ### El comando `atajos`
 

@@ -7,23 +7,37 @@ Item {
     property var ajuste: ({})
     property var temas: ({})
     property var fondos: []
+    property var anclas: []          // jaime0-anclar lista --json
+    property var disponibles: []     // jaime0-anclar disponibles --json
+    property bool ocupado: false
+    property bool abierto: false     // lista de aplicaciones para anclar desplegada
 
     signal poner(string clave, string valor)
     signal restablecer(string clave)
+    signal anclar(var argumentos)
+    signal pedirDisponibles()
 
     readonly property bool esFondo: ajuste.tipo === "fondo"
+    readonly property bool esAnclas: ajuste.tipo === "anclas"
+    readonly property bool llena: esAnclas && anclas.length >= (ajuste.max || 6)
     readonly property string detalle: {
         if (ajuste.tipo === "acento")
             return ajuste.valor === ajuste.color ? ajuste.color : ajuste.valor + "  " + ajuste.color;
         if (ajuste.tipo === "fondo")
             return ajuste.valor.substring(ajuste.valor.lastIndexOf("/") + 1);
+        if (ajuste.tipo === "anclas")
+            return anclas.length + " de " + (ajuste.max || 6);
         return "";
     }
 
     // Tras cada lectura (tambien si un cambio ha fallado) el control vuelve al valor real.
     onAjusteChanged: if (control.item && control.item.reponer) control.item.reponer()
 
-    implicitHeight: esFondo ? cabecera.height + listaFondos.height + 12 : cabecera.height
+    onLlenaChanged: if (llena) abierto = false
+
+    implicitHeight: esFondo ? cabecera.height + listaFondos.height + 12
+                  : esAnclas ? cabecera.height + listaAnclas.height + 12
+                  : cabecera.height
 
     Item {
         id: cabecera
@@ -75,6 +89,8 @@ Item {
                     return conSelector;
                 case "acento":
                     return conMuestras;
+                case "anclas":
+                    return conAnadir;
                 default:
                     return null;
                 }
@@ -124,6 +140,41 @@ Item {
         rutas: fila.esFondo ? fila.fondos : []
         valor: fila.esFondo ? fila.ajuste.valor : ""
         onElegido: ruta => fila.poner(fila.ajuste.clave, ruta)
+    }
+
+    Loader {
+        id: listaAnclas
+        active: fila.esAnclas
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: cabecera.bottom
+        anchors.leftMargin: 14
+        anchors.rightMargin: 14
+        height: item ? item.implicitHeight : 0
+
+        sourceComponent: Anclas {
+            lista: fila.anclas
+            disponibles: fila.disponibles
+            abierto: fila.abierto
+            ocupado: fila.ocupado
+            onOrden: argumentos => fila.anclar(argumentos)
+            onCerrar: fila.abierto = false
+        }
+    }
+
+    Component {
+        id: conAnadir
+
+        Boton {
+            glifo: fila.abierto ? "\u{f0143}" : "\u{f0415}"
+            texto: fila.abierto ? "Cerrar" : "Añadir"
+            activo: fila.abierto || (!fila.ocupado && !fila.llena)
+            onPulsado: {
+                fila.abierto = !fila.abierto;
+                if (fila.abierto)
+                    fila.pedirDisponibles();
+            }
+        }
     }
 
     Component {

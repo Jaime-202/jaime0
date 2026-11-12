@@ -185,8 +185,10 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("sh -c 'test -d /run/live/medium && sleep 4 && notify-send \"Sistema en vivo\" \"Pulsa SUPER + Espacio y busca: Instalar el sistema. SUPER + F1 muestra los atajos.\"'")
     hl.exec_cmd(polkitAgent)
     hl.exec_cmd("swaybg --image " .. fondo .. " --mode fill")
-    -- Los archivos que lee Waybar (altura, posicion, acento) se generan antes de abrirla.
-    hl.exec_cmd("sh -c 'jaime0-ajustes generar; exec waybar'")
+    -- Los archivos que lee Waybar (altura, posicion, acento, ancladas) se generan antes de
+    -- abrirla. Despues, jaime0-anclar vigila las ventanas para el punto de las ancladas.
+    hl.exec_cmd("sh -c 'jaime0-ajustes generar; jaime0-anclar refrescar --sin-senal; exec waybar'")
+    hl.exec_cmd("jaime0-anclar vigilar")
     hl.exec_cmd("dunst")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")

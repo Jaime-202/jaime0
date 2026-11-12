@@ -16,8 +16,14 @@ ShellRoot {
     property var datos: null
     property string error: ""
     property string leido: ""
-    property var pendientes: []
+    property var pendientes: []     // [{orden, clave}]
     property bool releer: false
+
+    // Aplicaciones ancladas (jaime0-anclar). Se releen cuando cambia el ajuste "anclas".
+    property var anclas: []
+    property var disponibles: []
+    property var ultimasAnclas: null
+    property bool releerAnclas: false
 
     // Estructura (grupos y claves) y valores van por separado: al releer solo cambian los
     // valores y los controles se actualizan sin rehacerse (no se pierde el desplazamiento).
@@ -41,6 +47,11 @@ ShellRoot {
         }
         mapa = nuevoMapa;
         datos = d;
+        const valorAnclas = nuevoMapa.anclas ? nuevoMapa.anclas.valor : null;
+        if (valorAnclas !== null && valorAnclas !== ultimasAnclas) {
+            ultimasAnclas = valorAnclas;
+            leerAnclas();
+        }
         const nuevaFirma = JSON.stringify(grupos);
         if (nuevaFirma !== firma) {
             firma = nuevaFirma;
@@ -56,20 +67,40 @@ ShellRoot {
             lector.lanzar(["jaime0-ajustes", "ver", "--json"]);
     }
 
+    function leerAnclas() {
+        if (lectorAnclas.running)
+            releerAnclas = true;
+        else
+            lectorAnclas.lanzar(["jaime0-anclar", "lista", "--json"]);
+    }
+
+    function leerDisponibles() {
+        if (!lectorDisponibles.running)
+            lectorDisponibles.lanzar(["jaime0-anclar", "disponibles", "--json"]);
+    }
+
     // Una orden cada vez. Si llegan varias mientras se aplica otra, de cada ajuste solo
-    // se guarda la ultima.
-    function ejecutar(argumentos) {
+    // se guarda la ultima (las de jaime0-anclar van todas, en orden).
+    function encolar(orden, clave) {
         error = "";
         if (escritor.running) {
-            pendientes = pendientes.filter(o => o[1] !== argumentos[1]).concat([argumentos]);
+            pendientes = pendientes.filter(p => clave === "" || p.clave !== clave).concat([{ orden: orden, clave: clave }]);
             return;
         }
-        escritor.lanzar(["jaime0-ajustes"].concat(argumentos));
+        escritor.lanzar(orden);
+    }
+
+    function ejecutar(argumentos) {
+        encolar(["jaime0-ajustes"].concat(argumentos), argumentos[1]);
+    }
+
+    function anclar(argumentos) {
+        encolar(["jaime0-anclar"].concat(argumentos), "");
     }
 
     function mensaje(errores, codigo) {
-        const texto = errores.trim().replace(/^jaime0-ajustes:\s*/, "");
-        return texto !== "" ? texto : "jaime0-ajustes terminó con el código " + codigo;
+        const texto = errores.trim().replace(/^jaime0-[a-z]+:\s*/, "");
+        return texto !== "" ? texto : "La orden terminó con el código " + codigo;
     }
 
     settings.watchFiles: false
@@ -110,11 +141,47 @@ ShellRoot {
             if (codigo !== 0)
                 raiz.error = raiz.mensaje(errores, codigo);
             raiz.leido = "";  // rehace los controles aunque nada cambie (p. ej. tras un error)
+            if (escritor.command[0] === "jaime0-anclar")
+                raiz.ultimasAnclas = null;  // y relee tambien la lista de ancladas
             raiz.leer();
             if (raiz.pendientes.length > 0) {
                 const siguiente = raiz.pendientes[0];
                 raiz.pendientes = raiz.pendientes.slice(1);
-                escritor.lanzar(["jaime0-ajustes"].concat(siguiente));
+                escritor.lanzar(siguiente.orden);
+            }
+        }
+    }
+
+    Orden {
+        id: lectorAnclas
+        onTerminado: (codigo, salida, errores) => {
+            if (codigo !== 0) {
+                raiz.error = raiz.mensaje(errores, codigo);
+            } else {
+                try {
+                    raiz.anclas = JSON.parse(salida);
+                } catch (e) {
+                    raiz.error = "No se entiende la respuesta de jaime0-anclar lista --json";
+                }
+            }
+            if (raiz.releerAnclas) {
+                raiz.releerAnclas = false;
+                raiz.leerAnclas();
+            }
+        }
+    }
+
+    Orden {
+        id: lectorDisponibles
+        onTerminado: (codigo, salida, errores) => {
+            if (codigo !== 0) {
+                raiz.error = raiz.mensaje(errores, codigo);
+                return;
+            }
+            try {
+                raiz.disponibles = JSON.parse(salida);
+            } catch (e) {
+                raiz.error = "No se entiende la respuesta de jaime0-anclar disponibles --json";
             }
         }
     }
@@ -363,6 +430,11 @@ ShellRoot {
                                                 ajuste: raiz.mapa[celda.modelData]
                                                 temas: raiz.datos.temas
                                                 fondos: raiz.datos.fondos
+                                                anclas: raiz.anclas
+                                                disponibles: raiz.disponibles
+                                                ocupado: raiz.ocupado
+                                                onAnclar: argumentos => raiz.anclar(argumentos)
+                                                onPedirDisponibles: raiz.leerDisponibles()
                                                 onPoner: (clave, valor) => raiz.ejecutar(["poner", clave, valor])
                                                 onRestablecer: clave => raiz.ejecutar(["restablecer", clave])
                                             }
