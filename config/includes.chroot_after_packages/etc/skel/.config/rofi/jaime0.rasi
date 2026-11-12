@@ -1,6 +1,6 @@
 /* ~/.config/rofi/jaime0.rasi
    Lanzador centrado: fondo negro casi opaco, borde fino gris, buscador sobrio y
-   seleccion discreta con el texto en verde. El blur (minimo) lo aplica Hyprland. */
+   seleccion discreta con el texto en el color de acento. El blur (minimo) lo aplica Hyprland. */
 
 * {
     fondo:        #080b0df0;
@@ -8,13 +8,16 @@
     borde:        #26343a;
     texto:        #d8e2e8;
     tenue:        #71818c;
-    verde:        #54e58a;
+    acento:       #54e58a;
     rojo:         #d9625b;
     transparente: #00000000;
 
     background-color: @transparente;
     text-color:       @texto;
 }
+
+/* Color de acento elegido con jaime0-ajustes (si falta el archivo, se queda el verde). */
+?import "~/.config/jaime0/generado/rofi.rasi"
 
 window {
     location:         center;
@@ -41,7 +44,7 @@ inputbar {
 }
 
 prompt {
-    text-color: @verde;
+    text-color: @acento;
 }
 
 entry {
@@ -92,13 +95,13 @@ element selected.normal,
 element selected.active,
 element selected.urgent {
     background-color: @superficie;
-    border-color:     @verde;
-    text-color:       @verde;
+    border-color:     @acento;
+    text-color:       @acento;
 }
 
 element normal.active,
 element alternate.active {
-    text-color: @verde;
+    text-color: @acento;
 }
 
 element normal.urgent,

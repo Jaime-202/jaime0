@@ -47,7 +47,9 @@ assert d['modules-left'] == ['custom/logo', 'hyprland/workspaces']
 assert d['modules-center'] == ['clock']
 assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'battery', 'custom/notificaciones', 'group/bandeja', 'custom/power']
 assert 'hyprland/window' not in d and 'mpris' not in d
-assert 22 <= d['height'] <= 28
+# Altura y posicion salen de jaime0-ajustes (generado/waybar.json), no de aqui.
+assert 'height' not in d and 'position' not in d
+assert d['include'] == ['~/.config/jaime0/generado/waybar.json']
 # Rendimiento: nada se sondea mas a menudo de lo necesario.
 assert d['clock']['interval'] >= 30 and '%S' not in d['clock']['format']
 assert d['cpu']['interval'] >= 5 and d['memory']['interval'] >= 10
@@ -72,7 +74,7 @@ PY
 then ok "config.jsonc valido con los modulos pedidos"; else fallo "config.jsonc invalido"; fi
 
 echo "== Valores de la especificacion =="
-for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@define-color verde +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 6" "dunst/dunstrc|frame_width = 1" "dunst/dunstrc|#080b0df0" "dunst/dunstrc|frame_color = \"#54e58a\"" "dunst/dunstrc|frame_color = \"#d9625b\"" "dunst/dunstrc|timeout = 5"; do
+for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@import url\(\"../jaime0/generado/waybar.css\"\)" "waybar/style.css|window#waybar.bottom" "rofi/jaime0.rasi|\?import \"~/.config/jaime0/generado/rofi.rasi\"" "rofi/jaime0.rasi|acento: +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 6" "dunst/dunstrc|frame_width = 1" "dunst/dunstrc|#080b0df0" "dunst/dunstrc|frame_color = \"#54e58a\"" "dunst/dunstrc|frame_color = \"#d9625b\"" "dunst/dunstrc|timeout = 5"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "chroot$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done
@@ -82,7 +84,8 @@ import re, sys
 t = re.sub(r'/\*.*?\*/', '', open(sys.argv[1], encoding='utf-8').read(), flags=re.S)
 assert t.count('{') == t.count('}')
 definidos = set(re.findall(r'@define-color\s+([\w-]+)', t))
-usados = set(re.findall(r'@([\w-]+)', t)) - {'define-color'}
+usados = set(re.findall(r'@([\w-]+)', t)) - {'define-color', 'import'}
+definidos.add('acento')  # lo define generado/waybar.css (jaime0-ajustes)
 assert usados <= definidos, usados - definidos
 PY
 grep -q "hl.dsp.exit()" chroot/usr/local/bin/menu-energia && ok "menu-energia usa hl.dsp.exit()" || fallo "dispatcher de salida"

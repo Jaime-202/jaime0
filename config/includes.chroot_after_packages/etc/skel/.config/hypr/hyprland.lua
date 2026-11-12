@@ -1,6 +1,7 @@
 -- ~/.config/hypr/hyprland.lua
 -- Configuracion de Hyprland de Jaime0, sobre Debian Forky (sintaxis Lua de Hyprland 0.56 y 0.57).
 -- Paleta jaime0: negro #080b0d, verde #54e58a (solo lo activo) y bordes #26343a.
+-- Separaciones, bordes, esquinas, efectos, acento y fondo salen de jaime0-ajustes.
 --
 -- Los atajos se declaran con atajo(): cada uno lleva su descripcion, que es lo que lista
 -- el comando "atajos". Los atajos propios del usuario van en atajos-usuario.lua, junto a
@@ -72,6 +73,75 @@ local function carpetaConfig()
 end
 
 --------------------------------------------------------------------------------
+-- Ajustes de Jaime0 (jaime0-ajustes): predeterminados del sistema y, encima, los del
+-- usuario en ~/.config/jaime0/ajustes. Un valor mal escrito se ignora y se usa el
+-- predeterminado, para que un error nunca deje la sesion sin abrir.
+--------------------------------------------------------------------------------
+local function leerClaves(ruta, destino)
+    local archivo = io.open(ruta, "r")
+    if not archivo then
+        return
+    end
+    for linea in archivo:lines() do
+        if not linea:match("^%s*#") then
+            local clave, valor = linea:match("^%s*([%w_.]+)%s*=%s*(.-)%s*$")
+            if clave then
+                destino[clave] = valor
+            end
+        end
+    end
+    archivo:close()
+end
+
+local ajustes = {}
+do
+    local predet, usuario = {}, {}
+    leerClaves("/usr/share/jaime0/ajustes.predeterminados", predet)
+    local xdg = os.getenv("XDG_CONFIG_HOME")
+    if not xdg or xdg == "" then
+        xdg = (os.getenv("HOME") or "") .. "/.config"
+    end
+    leerClaves(xdg .. "/jaime0/ajustes", usuario)
+    ajustes.predet, ajustes.usuario = predet, usuario
+end
+
+-- Valor de un ajuste ya comprobado: primero el del usuario, luego el predeterminado y,
+-- si ninguno sirve, el de reserva.
+local function ajuste(clave, comprobar, reserva)
+    for _, origen in ipairs({ ajustes.usuario, ajustes.predet }) do
+        local v = origen[clave]
+        if v ~= nil then
+            local ok = comprobar(v)
+            if ok ~= nil then
+                return ok
+            end
+        end
+    end
+    return reserva
+end
+
+local function entero(v) local n = tonumber(v); return n and math.floor(n) end
+local function decimal(v) return tonumber((v:gsub(",", "."))) end
+local function sino(v)
+    if v == "si" then return true end
+    if v == "no" then return false end
+    return nil
+end
+local function color(v)
+    local hex = ajustes.predet["tema." .. v] or v
+    local rgb = hex:match("^#(%x%x%x%x%x%x)$")
+    return rgb and rgb:lower()
+end
+local function imagen(v)
+    local f = io.open(v, "r")
+    if f then f:close(); return v end
+    return nil
+end
+
+local acento = ajuste("acento", color, "54e58a")
+fondo = ajuste("fondo", imagen, fondo)
+
+--------------------------------------------------------------------------------
 -- Monitores
 --------------------------------------------------------------------------------
 hl.monitor({
@@ -115,7 +185,8 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("sh -c 'test -d /run/live/medium && sleep 4 && notify-send \"Sistema en vivo\" \"Pulsa SUPER + Espacio y busca: Instalar el sistema. SUPER + F1 muestra los atajos.\"'")
     hl.exec_cmd(polkitAgent)
     hl.exec_cmd("swaybg --image " .. fondo .. " --mode fill")
-    hl.exec_cmd("waybar")
+    -- Los archivos que lee Waybar (altura, posicion, acento) se generan antes de abrirla.
+    hl.exec_cmd("sh -c 'jaime0-ajustes generar; exec waybar'")
     hl.exec_cmd("dunst")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
@@ -129,24 +200,26 @@ end)
 hl.config({
     general = {
         layout       = "dwindle",
-        gaps_in      = 4,
-        gaps_out     = 8,
-        border_size  = 2,
-        -- Borde fino: verde solido y algo apagado en la ventana activa, gris en las demas.
+        gaps_in      = ajuste("separacion_interior", entero, 4),
+        gaps_out     = ajuste("separacion_exterior", entero, 8),
+        border_size  = ajuste("borde", entero, 2),
+        -- Borde fino: el acento, algo apagado, en la ventana activa; gris en las demas.
         col = {
-            active_border   = "rgba(54e58acc)",
+            active_border   = "rgba(" .. acento .. "cc)",
             inactive_border = "rgba(26343aff)",
         },
-        resize_on_border = false,
+        -- Redimensionar arrastrando el borde (ademas de SUPER + clic derecho y SUPER + CTRL + flechas).
+        resize_on_border = true,
         allow_tearing    = false,
     },
 
     decoration = {
-        rounding           = 8,
+        rounding           = ajuste("esquinas", entero, 8),
         rounding_power     = 2,
-        -- Ventanas opacas: el texto se lee mejor y no hay que difuminar lo que hay detras.
+        -- Opacas por defecto: el texto se lee mejor y no hay que difuminar lo que hay detras.
+        -- Las inactivas pueden ser algo translucidas con jaime0-ajustes (opacidad_inactiva).
         active_opacity     = 1.0,
-        inactive_opacity   = 1.0,
+        inactive_opacity   = ajuste("opacidad_inactiva", decimal, 1.0),
         fullscreen_opacity = 1.0,
 
         -- Sin sombras: no aportan con bordes de color y cuestan una pasada por ventana.
@@ -157,7 +230,7 @@ hl.config({
         -- Blur minimo (una pasada) solo para lo translucido: kitty, rofi y dunst.
         -- En maquina virtual se apaga.
         blur = {
-            enabled           = not esVirtual,
+            enabled           = ajuste("desenfoque", sino, true) and not esVirtual,
             size              = 3,
             passes            = 1,
             noise             = 0.0,
@@ -170,7 +243,7 @@ hl.config({
     },
 
     animations = {
-        enabled = not esVirtual,
+        enabled = ajuste("animaciones", sino, true) and not esVirtual,
     },
 
     -- En VM el cursor por hardware va a saltos: se dibuja por software.
@@ -338,19 +411,8 @@ end
 -- Reglas de ventana (se evaluan en orden; la ultima coincidencia gana)
 --------------------------------------------------------------------------------
 
--- Kitty lleva su propia transparencia de fondo, muy ligera (kitty.conf), asi el texto queda nitido.
-hl.window_rule({
-    name    = "opacidad-terminal",
-    match   = { class = "^(kitty|btop|nmtui-flotante|atajos-flotante)$" },
-    opacity = "1.0 override 1.0 override",
-})
-
--- Thunar opaco, como el resto de ventanas (antes era translucido y obligaba a difuminar).
-hl.window_rule({
-    name    = "opacidad-archivos",
-    match   = { class = "^[Tt]hunar$" },
-    opacity = "1.0 override 1.0 override",
-})
+-- La opacidad de las ventanas sale de los ajustes (opacidad_inactiva). Kitty lleva ademas
+-- su propia transparencia de fondo, muy ligera (kitty.conf).
 
 -- Flotantes y centradas
 hl.window_rule({
@@ -380,6 +442,15 @@ hl.window_rule({
     float  = true,
     center = true,
     size   = { "monitor_w*0.62", "monitor_h*0.72" },
+})
+
+-- Aplicacion de ajustes (jaime0-ajustes, en Quickshell)
+hl.window_rule({
+    name   = "flotante-ajustes",
+    match  = { class = "^org\\.quickshell$", title = "^Ajustes de Jaime0$" },
+    float  = true,
+    center = true,
+    size   = { "560", "640" },
 })
 
 hl.window_rule({

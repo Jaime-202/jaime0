@@ -3,10 +3,11 @@
 // Sin titulo de ventana ni reproductor: la barra solo muestra lo que se consulta de un vistazo.
 // Los intervalos son largos a proposito; lo que cambia por eventos (escritorios, volumen,
 // campana) no se sondea.
+// La altura ("height") y la posicion ("position") salen de jaime0-ajustes, que las escribe
+// en ~/.config/jaime0/generado/waybar.json. Lo que pongas aqui tiene prioridad sobre ellas.
 {
+    "include": ["~/.config/jaime0/generado/waybar.json"],
     "layer": "top",
-    "position": "top",
-    "height": 26,
     "margin-top": 0,
     "margin-left": 0,
     "margin-right": 0,
@@ -72,11 +73,11 @@
         "on-click-right": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"
     },
 
-    // Cable: "cable"; Wi-Fi: nombre de la red; sin conexion: aviso en rojo (style.css).
+    // Cable: "ETH"; Wi-Fi: nombre de la red; sin conexion: aviso en rojo (style.css).
     "network": {
         "interval": 10,
         "format-wifi": " {essid}",
-        "format-ethernet": " cable",
+        "format-ethernet": " ETH",
         "format-linked": " sin IP",
         "format-disconnected": " sin red",
         "tooltip-format-wifi": "{essid} ({signalStrength}%)\n{ipaddr}/{cidr}",

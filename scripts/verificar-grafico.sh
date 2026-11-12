@@ -46,9 +46,15 @@ SALIDA=$($H /tmp/vs3/roto.lua 2>&1); RC=$?
 if [ $RC -ne 0 ] && echo "$SALIDA" | grep -q "unknown config key"; then ok "control negativo: detecta una opcion invalida"; else fallo "control negativo no detecto el error"; fi
 
 echo "== Valores de la especificacion en hyprland.lua =="
-for E in 'layout *= "dwindle"' 'border_size *= 2' 'rgba[(]54e58acc[)]' 'rgba[(]26343aff[)]' 'rounding *= 8' 'gaps_in *= 4' 'gaps_out *= 8' 'active_opacity *= 1.0' 'inactive_opacity *= 1.0' 'fullscreen_opacity *= 1.0' 'size *= 3' 'passes *= 1' 'new_optimizations *= true' 'xray *= false' 'enabled *= not esVirtual' 'no_hardware_cursors *= esVirtual' 'popin 85%' 'style = "slide"' 'kb_layout *= tecladoSistema[(]"XKBLAYOUT", "es"[)]' '1.0 override 1.0 override' 'opacidad-archivos' 'fullscreen_state_internal = 2' 'content = "video"' 'namespace = "\^rofi\$"' 'Return' 'space' '"Print"' '" [+] F1"' 'atajos-usuario.lua' 'o.description = descripcion' 'mouse:272' 'mouse:273' 'mode = "fullscreen"' 'mode = "maximized"' 'window.swap' 'for i = 1, 9' 'pavucontrol' 'blueman-manager' '/usr/bin/lxpolkit' 'jaime0.png' 'mpv' 'vlc'; do
+for E in 'layout *= "dwindle"' 'border_size *= ajuste[(]"borde", entero, 2[)]' 'rgba[(]" [.][.] acento [.][.] "cc[)]' 'rgba[(]26343aff[)]' 'rounding *= ajuste[(]"esquinas", entero, 8[)]' 'gaps_in *= ajuste[(]"separacion_interior", entero, 4[)]' 'gaps_out *= ajuste[(]"separacion_exterior", entero, 8[)]' 'active_opacity *= 1.0' 'inactive_opacity *= ajuste[(]"opacidad_inactiva", decimal, 1.0[)]' 'fullscreen_opacity *= 1.0' 'size *= 3' 'passes *= 1' 'new_optimizations *= true' 'xray *= false' 'ajuste[(]"desenfoque", sino, true[)] and not esVirtual' 'ajuste[(]"animaciones", sino, true[)] and not esVirtual' 'jaime0-ajustes generar; exec waybar' 'no_hardware_cursors *= esVirtual' 'popin 85%' 'style = "slide"' 'kb_layout *= tecladoSistema[(]"XKBLAYOUT", "es"[)]' '1.0 override 1.0 override' 'resize_on_border *= true' 'fullscreen_state_internal = 2' 'content = "video"' 'namespace = "\^rofi\$"' 'Return' 'space' '"Print"' '" [+] F1"' 'atajos-usuario.lua' 'o.description = descripcion' 'mouse:272' 'mouse:273' 'mode = "fullscreen"' 'mode = "maximized"' 'window.swap' 'for i = 1, 9' 'pavucontrol' 'blueman-manager' '/usr/bin/lxpolkit' 'jaime0.png' 'mpv' 'vlc'; do
     if grep -qE -- "$E" "chroot$LUA"; then ok "contiene: $E"; else fallo "falta: $E"; fi
 done
+# Los valores de la especificacion son los predeterminados de jaime0-ajustes.
+PRED=chroot/usr/share/jaime0/ajustes.predeterminados
+for E in '^acento = verde$' '^tema.verde = #54e58a$' '^tema.cian = #55cde0$' '^borde = 2$' '^esquinas = 8$' '^separacion_interior = 4$' '^separacion_exterior = 8$' '^opacidad_inactiva = 1.0$' '^desenfoque = si$' '^animaciones = si$' '^barra_altura = 26$' '^barra_posicion = arriba$' '^fondo = /usr/share/backgrounds/jaime0/jaime0.png$'; do
+    if grep -qE -- "$E" "$PRED"; then ok "predeterminado: $E"; else fallo "predeterminado, falta: $E"; fi
+done
+[ -x chroot/usr/local/bin/jaime0-ajustes ] && ok "jaime0-ajustes ejecutable" || fallo "jaime0-ajustes sin permiso"
 if grep -q windowrulev2 "chroot$LUA"; then fallo "usa windowrulev2"; else ok "sin windowrulev2"; fi
 # La barra es opaca: no debe quedar una regla de blur para ella.
 if grep -q 'namespace = "^waybar$"' "chroot$LUA"; then fallo "blur sobre la barra opaca"; else ok "sin blur detras de la barra"; fi
@@ -60,7 +66,7 @@ for F in 98-bloqueo-xorg.pref 99-bloqueo-escritorios.pref; do
 done
 
 echo "== Binarios de autostart y atajos =="
-for B in kitty thunar grim slurp wl-copy wl-paste cliphist notify-send xdg-user-dir swaybg nmtui blueman-manager gio dbus-update-activation-environment start-hyprland atajos menu-energia notificaciones-waybar dunstctl; do
+for B in kitty thunar grim slurp wl-copy wl-paste cliphist notify-send xdg-user-dir swaybg nmtui blueman-manager gio dbus-update-activation-environment start-hyprland atajos menu-energia notificaciones-waybar dunstctl jaime0-ajustes; do
     if chroot chroot sh -c "command -v $B" >/dev/null; then ok "$B"; else fallo "$B no existe"; fi
 done
 [ -x chroot/usr/bin/lxpolkit ] && ok "agente polkit lxpolkit" || fallo "agente polkit"

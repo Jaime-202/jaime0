@@ -1,0 +1,445 @@
+#!/usr/bin/python3 -I
+# jaime0-ajustes: ajustes centralizados de Jaime0.
+#
+#   /usr/share/jaime0/ajustes.predeterminados  valores de fabrica y temas (del sistema)
+#   ~/.config/jaime0/ajustes                   solo lo que cambia el usuario (suyo; ninguna
+#                                              actualizacion lo toca)
+#   ~/.config/jaime0/generado/                 archivos que leen Waybar y rofi; se rehacen
+#                                              siempre a partir de los dos anteriores
+#
+# Hyprland lee los dos primeros directamente (hyprland.lua). Este programa valida, guarda
+# y aplica los cambios en la sesion: recarga Hyprland, Waybar y el fondo.
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+PROGRAMA = "jaime0-ajustes"
+
+
+def es_root():
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+# Modo de prueba: JAIME0_RAIZ apunta a un sistema de mentira (solo sin privilegios).
+RAIZ = os.environ.get("JAIME0_RAIZ", "/") if not es_root() else "/"
+MODO_PRUEBA = RAIZ != "/"
+PREDETERMINADOS = os.path.join(RAIZ, "usr", "share", "jaime0", "ajustes.predeterminados")
+INTERFAZ = os.path.join(RAIZ, "usr", "share", "jaime0", "ajustes-gui", "shell.qml")
+CARPETAS_FONDOS = (os.path.join(RAIZ, "usr", "share", "backgrounds", "jaime0"),)
+EXTENSIONES_FONDO = (".png", ".jpg", ".jpeg")
+
+
+def carpeta_config():
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "jaime0")
+
+
+def archivo_usuario():
+    return os.path.join(carpeta_config(), "ajustes")
+
+
+def carpeta_generado():
+    return os.path.join(carpeta_config(), "generado")
+
+
+def carpetas_fondos():
+    datos = os.environ.get("XDG_DATA_HOME") or os.path.join(os.path.expanduser("~"), ".local", "share")
+    return CARPETAS_FONDOS + (os.path.join(datos, "backgrounds"),)
+
+
+# ------------------------------------------------------------------------------------
+# Esquema: tipo, limites y texto de cada ajuste. Es la unica lista de ajustes; la
+# interfaz grafica la recibe con "ver --json".
+# ------------------------------------------------------------------------------------
+ESQUEMA = {
+    "acento":              {"tipo": "acento", "grupo": "Colores", "etiqueta": "Color de acento"},
+    "fondo":               {"tipo": "fondo", "grupo": "Colores", "etiqueta": "Fondo de escritorio"},
+    "separacion_interior": {"tipo": "entero", "min": 0, "max": 40, "grupo": "Ventanas", "etiqueta": "Separación entre ventanas"},
+    "separacion_exterior": {"tipo": "entero", "min": 0, "max": 60, "grupo": "Ventanas", "etiqueta": "Margen con el borde de la pantalla"},
+    "borde":               {"tipo": "entero", "min": 0, "max": 6, "grupo": "Ventanas", "etiqueta": "Grosor del borde"},
+    "esquinas":            {"tipo": "entero", "min": 0, "max": 20, "grupo": "Ventanas", "etiqueta": "Redondeo de esquinas"},
+    "opacidad_inactiva":   {"tipo": "decimal", "min": 0.6, "max": 1.0, "grupo": "Ventanas", "etiqueta": "Opacidad de las ventanas inactivas"},
+    "desenfoque":          {"tipo": "sino", "grupo": "Efectos", "etiqueta": "Desenfoque (blur)"},
+    "animaciones":         {"tipo": "sino", "grupo": "Efectos", "etiqueta": "Animaciones"},
+    "barra_altura":        {"tipo": "entero", "min": 20, "max": 48, "grupo": "Barra", "etiqueta": "Altura de la barra"},
+    "barra_posicion":      {"tipo": "opcion", "opciones": ["arriba", "abajo"], "grupo": "Barra", "etiqueta": "Posición de la barra"},
+}
+
+# Solo para un sistema sin el archivo de predeterminados (no deberia pasar).
+RESERVA = {
+    "acento": "#54e58a", "fondo": "/usr/share/backgrounds/jaime0/jaime0.png",
+    "separacion_interior": "4", "separacion_exterior": "8", "borde": "2", "esquinas": "8",
+    "opacidad_inactiva": "1.0", "desenfoque": "si", "animaciones": "si",
+    "barra_altura": "26", "barra_posicion": "arriba",
+}
+
+LINEA = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*=\s*(.*?)\s*$")
+COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
+SI = ("si", "sí", "s", "yes", "true", "1", "on")
+NO = ("no", "n", "false", "0", "off")
+
+
+class Error(Exception):
+    pass
+
+
+def leer(ruta):
+    """clave -> valor de un archivo clave = valor. Ignora comentarios y lineas rotas."""
+    valores = {}
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            for linea in f:
+                if linea.lstrip().startswith("#"):
+                    continue
+                m = LINEA.match(linea)
+                if m:
+                    valores[m.group(1)] = m.group(2)
+    except FileNotFoundError:
+        pass
+    return valores
+
+
+def predeterminados():
+    crudos = leer(PREDETERMINADOS)
+    temas = {k[len("tema."):]: v.lower() for k, v in crudos.items()
+             if k.startswith("tema.") and COLOR.match(v)}
+    valores = dict(RESERVA)
+    for clave in ESQUEMA:
+        if clave in crudos:
+            try:
+                valores[clave] = validar(clave, crudos[clave], temas)
+            except Error:
+                pass
+    return valores, temas
+
+
+def validar(clave, texto, temas):
+    """Devuelve el valor normalizado o lanza Error con el motivo."""
+    if clave not in ESQUEMA:
+        raise Error(f"No existe el ajuste '{clave}'. Lista: {PROGRAMA} ver")
+    e = ESQUEMA[clave]
+    t = texto.strip()
+    if e["tipo"] == "entero":
+        try:
+            n = int(t)
+        except ValueError:
+            raise Error(f"{clave}: '{t}' no es un número entero")
+        if not e["min"] <= n <= e["max"]:
+            raise Error(f"{clave}: debe estar entre {e['min']} y {e['max']}")
+        return str(n)
+    if e["tipo"] == "decimal":
+        try:
+            x = float(t.replace(",", "."))
+        except ValueError:
+            raise Error(f"{clave}: '{t}' no es un número")
+        if not e["min"] <= x <= e["max"]:
+            raise Error(f"{clave}: debe estar entre {e['min']} y {e['max']}")
+        return f"{round(x, 2):g}"
+    if e["tipo"] == "sino":
+        if t.lower() in SI:
+            return "si"
+        if t.lower() in NO:
+            return "no"
+        raise Error(f"{clave}: usa si o no")
+    if e["tipo"] == "opcion":
+        if t.lower() in e["opciones"]:
+            return t.lower()
+        raise Error(f"{clave}: opciones válidas: {', '.join(e['opciones'])}")
+    if e["tipo"] == "acento":
+        if t.lower() in temas:
+            return t.lower()
+        if COLOR.match(t):
+            return t.lower()
+        raise Error(f"acento: usa un tema ({', '.join(temas)}) o un color #rrggbb")
+    if e["tipo"] == "fondo":
+        ruta = os.path.abspath(os.path.expanduser(t))
+        if not ruta.lower().endswith(EXTENSIONES_FONDO):
+            raise Error("fondo: debe ser una imagen PNG o JPEG")
+        if not os.path.isfile(ruta):
+            raise Error(f"fondo: no existe {ruta}")
+        return ruta
+    raise Error(f"{clave}: tipo desconocido")
+
+
+def efectivos():
+    """(valores, propios, temas, avisos): predeterminados + ajustes validos del usuario."""
+    valores, temas = predeterminados()
+    propios = set()
+    avisos = []
+    for clave, texto in leer(archivo_usuario()).items():
+        if clave not in ESQUEMA:
+            avisos.append(f"Se ignora '{clave}': no es un ajuste de Jaime0")
+            continue
+        try:
+            valores[clave] = validar(clave, texto, temas)
+            propios.add(clave)
+        except Error as e:
+            avisos.append(f"Se ignora {e} (se usa el valor predeterminado)")
+    return valores, propios, temas, avisos
+
+
+def color_acento(valor, temas):
+    return temas.get(valor, valor if COLOR.match(valor) else RESERVA["acento"])
+
+
+# ------------------------------------------------------------------------------------
+# Escritura
+# ------------------------------------------------------------------------------------
+CABECERA = """# ~/.config/jaime0/ajustes: tus ajustes de Jaime0.
+# Solo guarda lo que cambias; el resto sale de /usr/share/jaime0/ajustes.predeterminados.
+# Ninguna actualizacion toca este archivo. Cambialo con jaime0-ajustes o a mano
+# (clave = valor) y luego ejecuta: jaime0-ajustes aplicar
+"""
+
+
+def escribir_atomico(ruta, texto):
+    """Escribe solo si cambia. Devuelve True si ha cambiado."""
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            if f.read() == texto:
+                return False
+    except FileNotFoundError:
+        pass
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(ruta), prefix=".tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(texto)
+        os.replace(tmp, ruta)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+    return True
+
+
+def guardar(cambios):
+    """cambios: clave -> valor normalizado, o None para volver al predeterminado.
+    Conserva comentarios y el resto de lineas del archivo del usuario."""
+    ruta = archivo_usuario()
+    try:
+        with open(ruta, encoding="utf-8") as f:
+            lineas = f.read().splitlines()
+    except FileNotFoundError:
+        lineas = CABECERA.rstrip("\n").splitlines()
+    pendientes = dict(cambios)
+    resultado = []
+    vistos = set()
+    for linea in lineas:
+        m = None if linea.lstrip().startswith("#") else LINEA.match(linea)
+        if m and m.group(1) in cambios:
+            clave = m.group(1)
+            if clave in vistos or cambios[clave] is None:
+                continue  # duplicada o vuelve al predeterminado: fuera
+            vistos.add(clave)
+            resultado.append(f"{clave} = {cambios[clave]}")
+            pendientes.pop(clave, None)
+            continue
+        resultado.append(linea)
+    for clave, valor in pendientes.items():
+        if valor is not None:
+            resultado.append(f"{clave} = {valor}")
+    escribir_atomico(ruta, "\n".join(resultado) + "\n")
+
+
+def generar():
+    """Rehace ~/.config/jaime0/generado. Devuelve los nombres de lo que ha cambiado."""
+    valores, _, temas, avisos = efectivos()
+    acento = color_acento(valores["acento"], temas)
+    g = carpeta_generado()
+    archivos = {
+        "waybar.json": json.dumps({
+            "height": int(valores["barra_altura"]),
+            "position": "top" if valores["barra_posicion"] == "arriba" else "bottom",
+        }, indent=4) + "\n",
+        "waybar.css": f"/* Generado por {PROGRAMA}: no lo edites. */\n@define-color acento {acento};\n",
+        "rofi.rasi": f"/* Generado por {PROGRAMA}: no lo edites. */\n* {{\n    acento: {acento};\n}}\n",
+        "fondo": valores["fondo"] + "\n",
+    }
+    cambiados = {n for n, texto in archivos.items() if escribir_atomico(os.path.join(g, n), texto)}
+    return cambiados, avisos
+
+
+# ------------------------------------------------------------------------------------
+# Aplicar en la sesion
+# ------------------------------------------------------------------------------------
+def en_marcha(proceso):
+    return shutil.which("pgrep") is not None and subprocess.run(
+        ["pgrep", "-x", "-u", str(os.getuid()), proceso],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+
+
+def lanzar(orden):
+    subprocess.Popen(orden, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def aplicar():
+    cambiados, avisos = generar()
+    if MODO_PRUEBA:
+        return cambiados, avisos
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        subprocess.run(["hyprctl", "reload"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if cambiados & {"waybar.json", "waybar.css"} and en_marcha("waybar"):
+        subprocess.run(["pkill", "-USR2", "-x", "-u", str(os.getuid()), "waybar"])
+    if "fondo" in cambiados and en_marcha("swaybg"):
+        with open(os.path.join(carpeta_generado(), "fondo"), encoding="utf-8") as f:
+            fondo = f.read().strip()
+        if not os.path.isfile(fondo):
+            # Ni el elegido ni el predeterminado existen: mejor el fondo que ya hay que negro.
+            avisos.append(f"No existe el fondo {fondo}: se mantiene el actual")
+            return cambiados, avisos
+        subprocess.run(["pkill", "-x", "-u", str(os.getuid()), "swaybg"])
+        lanzar(["swaybg", "--image", fondo, "--mode", "fill"])
+    return cambiados, avisos
+
+
+# ------------------------------------------------------------------------------------
+# Ordenes
+# ------------------------------------------------------------------------------------
+def lista_fondos():
+    fondos = []
+    for carpeta in carpetas_fondos():
+        try:
+            nombres = sorted(os.listdir(carpeta))
+        except OSError:
+            continue
+        fondos += [os.path.join(carpeta, n) for n in nombres if n.lower().endswith(EXTENSIONES_FONDO)]
+    return fondos
+
+
+def mostrar_avisos(avisos):
+    for a in avisos:
+        print(f"AVISO: {a}", file=sys.stderr)
+
+
+def orden_ver(args):
+    valores, propios, temas, avisos = efectivos()
+    predet, _ = predeterminados()
+    if args[:1] == ["--json"]:
+        ajustes = []
+        for clave, e in ESQUEMA.items():
+            d = dict(e, clave=clave, valor=valores[clave], predeterminado=predet[clave],
+                     propio=clave in propios)
+            if e["tipo"] == "acento":
+                d["color"] = color_acento(valores[clave], temas)
+            ajustes.append(d)
+        print(json.dumps({"ajustes": ajustes, "temas": temas, "fondos": lista_fondos(),
+                          "avisos": avisos, "archivo": archivo_usuario()},
+                         ensure_ascii=False, indent=2))
+        return 0
+    if args:
+        raise Error(f"Uso: {PROGRAMA} ver [--json]")
+    grupo = None
+    for clave, e in ESQUEMA.items():
+        if e["grupo"] != grupo:
+            grupo = e["grupo"]
+            print(f"\n{grupo}")
+        marca = "*" if clave in propios else " "
+        print(f" {marca} {clave:<20} {valores[clave]:<12} {e['etiqueta']}")
+    print(f"\n * = cambiado por ti en {archivo_usuario()}")
+    print(f" Temas de acento: {', '.join(temas)}")
+    mostrar_avisos(avisos)
+    return 0
+
+
+def orden_poner(args):
+    if not args or len(args) % 2:
+        raise Error(f"Uso: {PROGRAMA} poner CLAVE VALOR [CLAVE VALOR ...]")
+    predet, temas = predeterminados()
+    cambios = {}
+    for clave, texto in zip(args[::2], args[1::2]):
+        cambios[clave] = validar(clave, texto, temas)  # todo o nada
+    # Igual que el predeterminado: no se guarda, asi sigue al predeterminado si cambia.
+    guardar({c: (None if v == predet[c] else v) for c, v in cambios.items()})
+    _, avisos = aplicar()
+    for clave, valor in cambios.items():
+        print(f"{clave} = {valor}")
+    mostrar_avisos(avisos)
+    return 0
+
+
+def orden_restablecer(args):
+    if args == ["--todo"]:
+        claves = list(ESQUEMA)
+    elif args and all(c in ESQUEMA for c in args):
+        claves = args
+    else:
+        desconocidas = [c for c in args if c not in ESQUEMA]
+        raise Error(f"No existe el ajuste '{desconocidas[0]}'" if desconocidas
+                    else f"Uso: {PROGRAMA} restablecer CLAVE [CLAVE ...] | --todo")
+    guardar({c: None for c in claves})
+    _, avisos = aplicar()
+    print("Valores predeterminados en: " + ", ".join(claves))
+    mostrar_avisos(avisos)
+    return 0
+
+
+def orden_aplicar(args):
+    _, avisos = aplicar()
+    mostrar_avisos(avisos)
+    return 0
+
+
+def orden_generar(args):
+    # Al iniciar la sesion, antes de Waybar: sin recargar nada.
+    _, avisos = generar()
+    mostrar_avisos(avisos)
+    return 0
+
+
+def orden_interfaz(args):
+    qs = shutil.which("quickshell") or shutil.which("qs")
+    if qs and os.path.isfile(INTERFAZ) and os.environ.get("WAYLAND_DISPLAY"):
+        os.execv(qs, [qs, "-p", INTERFAZ])
+    print("La aplicación gráfica de ajustes no está disponible (necesita Quickshell y una sesión gráfica).")
+    print(f"Puedes cambiar los ajustes desde la terminal: {PROGRAMA} poner CLAVE VALOR\n")
+    return orden_ver([])
+
+
+AYUDA = f"""Uso: {PROGRAMA} [ORDEN]
+
+  (sin orden)                 abre la aplicación de ajustes (o muestra la lista)
+  ver [--json]                ajustes actuales; * marca los que has cambiado
+  poner CLAVE VALOR [...]     cambia uno o varios ajustes y los aplica
+  restablecer CLAVE [...]     vuelve al valor predeterminado (--todo: todos)
+  aplicar                     aplica lo que hayas editado a mano en el archivo
+
+Ejemplos:
+  {PROGRAMA} poner acento cian
+  {PROGRAMA} poner esquinas 6 borde 1
+  {PROGRAMA} poner fondo ~/Imágenes/mi-fondo.png
+  {PROGRAMA} restablecer acento
+
+Tus ajustes: ~/.config/jaime0/ajustes (ninguna actualización los toca)."""
+
+ORDENES = {"ver": orden_ver, "poner": orden_poner, "restablecer": orden_restablecer,
+           "aplicar": orden_aplicar, "generar": orden_generar}
+
+
+def main(argv):
+    if es_root():
+        print(f"{PROGRAMA}: los ajustes son de cada usuario; ejecútalo sin sudo.", file=sys.stderr)
+        return 1
+    if not argv:
+        return orden_interfaz([])
+    if argv[0] in ("-h", "--help", "ayuda"):
+        print(AYUDA)
+        return 0
+    if argv[0] not in ORDENES:
+        print(AYUDA, file=sys.stderr)
+        return 2
+    try:
+        return ORDENES[argv[0]](argv[1:])
+    except Error as e:
+        print(f"{PROGRAMA}: {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -20,6 +20,7 @@ Este repositorio contiene todo lo necesario para reconstruir la imagen: configur
 - **Hyprland con configuración Lua**, con mosaico `dwindle`, bordes finos, ventanas opacas, blur mínimo y animaciones cortas.
 - **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, hora en el centro y estado a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto y la campana solo cuando cambia.
 - **Actualizaciones sin reinstalar:** `jaime0-update` instala versiones firmadas desde GitHub Releases (canales stable, beta y experimental), respeta tus personalizaciones, guarda copias y puede revertir. Los paquetes de Debian siguen con `apt`. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
+- **Ajustes en un solo sitio:** `jaime0-ajustes` cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y altura y posición de la barra, y lo aplica al momento. Tus ajustes viven en `~/.config/jaime0/ajustes` y ninguna actualización los toca. Ver [docs/ajustes.md](docs/ajustes.md).
 - **Comando `atajos`:** lista todos los atajos reales y permite añadir los tuyos, comprobando antes que la configuración es válida.
 - **Instalador gráfico** basado en Calamares: borrar el disco, instalar junto a otro sistema o particionar a mano, con cifrado LUKS opcional y sin necesidad de red.
 - **Arranque seguro (Secure Boot):** con shim y GRUB firmados por Debian, en el sistema en vivo y en el instalado.
@@ -139,6 +140,7 @@ Añade `nvidia-drm.modeset=1` a `GRUB_CMDLINE_LINUX_DEFAULT` en `/etc/default/gr
 | `SUPER + Retroceso` | Volver al escritorio anterior |
 | `SUPER + rueda del ratón` | Escritorio siguiente o anterior |
 | `SUPER + arrastrar` (clic izquierdo / derecho) | Mover / redimensionar con el ratón |
+| Arrastrar el borde de una ventana | Redimensionarla |
 
 **Capturas y teclas especiales**
 
@@ -152,6 +154,20 @@ Añade `nvidia-drm.modeset=1` a `GRUB_CMDLINE_LINUX_DEFAULT` en `/etc/default/gr
 | Teclas de reproducción | Reproducir o pausar, pista siguiente o anterior |
 
 Las capturas van a `Imágenes/Capturas` y al portapapeles. La pantalla se bloquea a los 10 minutos sin uso, se apaga al minuto siguiente y el equipo se suspende a los 30 minutos (en la sesión en vivo no).
+
+### Ajustes
+
+```bash
+jaime0-ajustes ver
+```
+```bash
+jaime0-ajustes poner acento cian
+```
+```bash
+jaime0-ajustes poner barra_posicion abajo
+```
+
+Cada cambio se aplica al momento y se guarda en `~/.config/jaime0/ajustes`, que solo contiene lo que has cambiado. `jaime0-ajustes restablecer CLAVE` vuelve al valor de fábrica. Todos los ajustes y sus límites: [docs/ajustes.md](docs/ajustes.md).
 
 ### El comando `atajos`
 
@@ -230,7 +246,7 @@ El fondo de pantalla es propio: una malla digital oscura con líneas geométrica
 
 | Área | Programas |
 |---|---|
-| Escritorio | Hyprland, Waybar, Rofi, Dunst, swaybg, `lxpolkit` |
+| Escritorio | Hyprland, Waybar, Rofi, Dunst, swaybg, `lxpolkit`, Quickshell (aplicación de ajustes) |
 | Acceso | `greetd` con `tuigreet`, en la consola |
 | Terminal | Kitty, Zsh, Starship, Fastfetch, btop, Neovim |
 | Archivos | Thunar, con `gvfs` para montar USB al pulsarlos |
@@ -287,7 +303,7 @@ sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools
 
    Las pruebas en vivo necesitan una VM con aceleración 3D. `scripts/coords-barra.sh` guarda las posiciones de los módulos de la barra a 1280 px: si cambia la barra, hay que volver a medirlas.
 
-   Las pruebas del actualizador no necesitan la ISO: `python3 -m unittest discover -s pruebas -v`.
+   Las pruebas del actualizador y de los ajustes no necesitan la ISO: `python3 -m unittest discover -s pruebas -v`.
 
 Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambia a diario: si llega otra versión de Hyprland, revalida la configuración con `Hyprland --verify-config`.
 
@@ -303,8 +319,8 @@ Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambi
 | `config/includes.chroot_after_packages/` | Archivos del sistema: `/etc/skel`, instalador, scripts |
 | `scripts/` | Construcción de Waybar y traducciones, fondo, empaquetado de actualizaciones y verificaciones |
 | `publicaciones/` | Notas de cada versión publicada con `jaime0-update` |
-| `pruebas/` | Pruebas automáticas del actualizador |
-| `docs/` | [Arquitectura](docs/arquitectura.md) y [actualizaciones](docs/actualizaciones.md) |
+| `pruebas/` | Pruebas automáticas del actualizador y de los ajustes |
+| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md) y [ajustes](docs/ajustes.md) |
 | `capturas/` | Capturas del sistema |
 
 ### Cambiar el nombre del sistema
@@ -321,7 +337,7 @@ Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca
 | Waybar | `0.15.0-1+hypr1`, parcheado, fijado y retenido | El de Debian no cambia de escritorio con la configuración Lua |
 | Actualizaciones | `jaime0-update`: carga firmada (Ed25519) + `apt` | Actualiza los archivos propios sin ISO ni repositorio APT propio; los paquetes siguen con el gestor oficial. Detalles en [docs/arquitectura.md](docs/arquitectura.md) |
 | Red y Bluetooth | Se abren desde la barra | Sin applets residentes |
-| Qt | Solo el instalador; se retira al instalar | Ningún programa del sistema lo necesita |
+| Qt | Lo necesitan Quickshell (aplicación de ajustes) y el instalador; Calamares se retira al instalar | Quickshell no es imprescindible: sin él, `jaime0-ajustes` funciona desde la terminal y el escritorio arranca igual |
 | Base | `debootstrap` con `minbase`, sin recomendados | Lleva solo lo necesario |
 
 ## Problemas conocidos

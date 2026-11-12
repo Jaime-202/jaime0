@@ -1,7 +1,10 @@
 /* ~/.config/waybar/style.css
    Barra continua, fina y opaca, con una linea inferior de borde. Sin pildoras: los
-   modulos son texto con iconos en gris; el verde solo marca lo activo (escritorio
-   actual, logo, dia de hoy) y el rojo o el ambar, los avisos. */
+   modulos son texto con iconos en gris; el acento solo marca lo activo (escritorio
+   actual, logo, dia de hoy) y el rojo o el ambar, los avisos.
+   El color de acento (@acento) lo genera jaime0-ajustes en ~/.config/jaime0/generado. */
+
+@import url("../jaime0/generado/waybar.css");
 
 @define-color fondo     #080b0d;
 @define-color superficie #151c21;
@@ -10,7 +13,6 @@
 @define-color medio     #a7b4bc;
 @define-color gris      #71818c;
 @define-color apagado   #45545c;
-@define-color verde     #54e58a;
 @define-color rojo      #d9625b;
 @define-color ambar     #d9a54a;
 
@@ -28,6 +30,12 @@ window#waybar {
     background: @fondo;
     border-bottom: 1px solid @borde;
     color: @texto;
+}
+
+/* Barra abajo (barra_posicion = abajo): la linea de borde pasa arriba */
+window#waybar.bottom {
+    border-bottom: none;
+    border-top: 1px solid @borde;
 }
 
 tooltip {
@@ -57,7 +65,7 @@ tooltip label {
     padding: 0 8px;
 }
 
-#custom-logo        { color: @verde; font-size: 13px; padding: 0 10px 0 12px; }
+#custom-logo        { color: @acento; font-size: 13px; padding: 0 10px 0 12px; }
 #cpu                { color: @gris; }
 #memory             { color: @gris; }
 #pulseaudio         { color: @medio; }
@@ -81,7 +89,7 @@ tooltip label {
 #tray               { padding: 0 4px; }
 #custom-power       { color: @gris; padding: 0 12px 0 8px; }
 
-/* Escritorios como circulos: activo en verde, ocupados en gris claro, vacios en gris */
+/* Escritorios como circulos: activo en el acento, ocupados en gris claro, vacios en gris */
 #workspaces {
     padding: 0 4px;
 }
@@ -98,7 +106,7 @@ tooltip label {
 }
 
 #workspaces button.active {
-    color: @verde;
+    color: @acento;
 }
 
 #workspaces button.urgent {

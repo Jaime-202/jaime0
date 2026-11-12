@@ -1,0 +1,29 @@
+# /usr/share/jaime0/ajustes.predeterminados
+# Valores predeterminados de los ajustes de Jaime0 y temas de acento. Es un archivo del
+# sistema: jaime0-update lo sustituye. Tus cambios van en ~/.config/jaime0/ajustes, que
+# solo guarda lo que cambias y ninguna actualizacion toca. Usa: jaime0-ajustes
+
+# Colores
+acento = verde
+fondo = /usr/share/backgrounds/jaime0/jaime0.png
+
+# Ventanas (Hyprland)
+separacion_interior = 4
+separacion_exterior = 8
+borde = 2
+esquinas = 8
+opacidad_inactiva = 1.0
+desenfoque = si
+animaciones = si
+
+# Barra (Waybar)
+barra_altura = 26
+barra_posicion = arriba
+
+# Temas de acento: tema.NOMBRE = #rrggbb. "acento" acepta un nombre o un color #rrggbb.
+tema.verde = #54e58a
+tema.cian = #55cde0
+tema.azul = #6aa6f0
+tema.violeta = #b48ef0
+tema.ambar = #e0b050
+tema.rosa = #e88ab4

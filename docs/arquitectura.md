@@ -12,6 +12,7 @@
 | Instalador | Calamares con marca propia; se retira al instalar (`hypr-limpiar-vivo`) |
 | Sonido, red | PipeWire + WirePlumber, NetworkManager (`nmtui` desde la barra), BlueZ + blueman |
 | Actualizaciones | `jaime0-update` (componentes propios, firmados) + `apt` (paquetes) |
+| Ajustes | `jaime0-ajustes`: predeterminados en `/usr/share/jaime0/ajustes.predeterminados`, cambios del usuario en `~/.config/jaime0/ajustes`. Hyprland los lee en `hyprland.lua`; Waybar y rofi, desde `~/.config/jaime0/generado/`. Ver [ajustes.md](ajustes.md) |
 
 ## Flujo de construcción
 
@@ -62,4 +63,6 @@ Detalles del actualizador: [actualizaciones.md](actualizaciones.md).
 | Python 3 sin dependencias externas | `python3` ya forma parte de la imagen; la fusión, los diarios y las pruebas son mucho más claros que en shell |
 | Paquetes solo con `apt` | Es el gestor oficial de Debian; un gestor paralelo duplicaría trabajo y riesgos |
 | Rollback solo de archivos propios | Sin Btrfs ni instantáneas, revertir paquetes de Debian no es fiable. Se documenta como límite en vez de prometerlo |
+| Ajustes del usuario fuera de `/etc/skel` | `~/.config/jaime0/ajustes` no lo trae ninguna versión, así que `jaime0-update` nunca lo toca. Los archivos de Hyprland, Waybar y rofi siguen siendo los oficiales sin cambios, de modo que las actualizaciones se aplican sin conflictos |
+| Esquema de ajustes solo en `jaime0-ajustes` | Valida con límites y lo expone con `ver --json` a la interfaz. Hyprland solo comprueba el tipo, para no repetir límites, y ante un valor roto usa el predeterminado |
 | Histórico de huellas en el manifiesto | Reconoce archivos sin tocar de cualquier versión anterior, también en instalaciones que no tenían manifiesto (0.1.x) |
