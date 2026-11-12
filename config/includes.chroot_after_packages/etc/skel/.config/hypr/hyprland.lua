@@ -151,6 +151,45 @@ hl.monitor({
     scale    = esVirtual and 1 or "auto",
 })
 
+-- Pantallas configuradas con nwg-displays (Pantallas, en el lanzador). Guarda lineas
+-- "monitor=NOMBRE,MODO,POSICION,ESCALA[,opcion,valor...]" en monitors.conf, el formato
+-- anterior a Lua, que aqui se traduce a hl.monitor. Sin ese archivo, todo automatico.
+do
+    local archivo = io.open(carpetaConfig() .. "/monitors.conf", "r")
+    if archivo then
+        local numericas = { transform = true, bitdepth = true, vrr = true }
+        for linea in archivo:lines() do
+            local valor = linea:match("^%s*monitor%s*=%s*(.-)%s*$")
+            if valor then
+                local campos = {}
+                for c in (valor .. ","):gmatch("([^,]*),") do
+                    table.insert(campos, (c:gsub("^%s+", ""):gsub("%s+$", "")))
+                end
+                local spec = { output = campos[1] or "" }
+                if campos[2] == "disable" then
+                    spec.disabled = true
+                elseif #campos >= 4 then
+                    spec.mode, spec.position = campos[2], campos[3]
+                    spec.scale = tonumber(campos[4]) or campos[4]
+                    for i = 5, #campos - 1, 2 do
+                        local clave, v = campos[i], campos[i + 1]
+                        if numericas[clave] then
+                            spec[clave] = tonumber(v)
+                        elseif clave == "mirror" then
+                            spec.mirror = v
+                        end
+                    end
+                end
+                -- Una linea que no se pueda aplicar se ignora: queda la pantalla en automatico.
+                if spec.disabled or spec.mode then
+                    pcall(hl.monitor, spec)
+                end
+            end
+        end
+        archivo:close()
+    end
+end
+
 --------------------------------------------------------------------------------
 -- Variables de entorno
 --------------------------------------------------------------------------------
@@ -167,6 +206,7 @@ hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
 hl.env("MOZ_ENABLE_WAYLAND", "1")
 -- Sin lector de pantalla instalado, GTK no busca el bus de accesibilidad.
 hl.env("NO_AT_BRIDGE", "1")
+hl.env("GTK_A11Y", "none")
 
 --------------------------------------------------------------------------------
 -- Inicio automatico: solo lo imprescindible, para que la sesion sea ligera.
@@ -180,7 +220,9 @@ hl.on("hyprland.start", function()
         hl.env("LIBGL_ALWAYS_SOFTWARE", "1")
         hl.env("GSK_RENDERER", "cairo")
     end
-    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE HYPRLAND_INSTANCE_SIGNATURE NO_AT_BRIDGE")
+    -- Tambien las de maquina virtual (si no existen se ignoran): lo que arranca D-Bus, como
+    -- swaync, debe dibujar igual que lo que arranca Hyprland.
+    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE HYPRLAND_INSTANCE_SIGNATURE NO_AT_BRIDGE GTK_A11Y LIBGL_ALWAYS_SOFTWARE GSK_RENDERER")
     hl.exec_cmd("xdg-user-dirs-update")
     hl.exec_cmd("sh -c 'test -d /run/live/medium && sleep 4 && notify-send \"Sistema en vivo\" \"Pulsa SUPER + Espacio y busca: Instalar el sistema. SUPER + F1 muestra los atajos.\"'")
     hl.exec_cmd(polkitAgent)
@@ -189,7 +231,8 @@ hl.on("hyprland.start", function()
     -- abrirla. Despues, jaime0-anclar vigila las ventanas para el punto de las ancladas.
     hl.exec_cmd("sh -c 'jaime0-ajustes generar; jaime0-anclar refrescar --sin-senal; exec waybar'")
     hl.exec_cmd("jaime0-anclar vigilar")
-    hl.exec_cmd("dunst")
+    -- Notificaciones: swaync (o dunst si swaync no esta instalado).
+    hl.exec_cmd("notificaciones iniciar")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
     -- Bloqueo a los 10 min, pantalla apagada a los 11 y suspension a los 30 (no en vivo).
@@ -229,7 +272,7 @@ hl.config({
             enabled = false,
         },
 
-        -- Blur minimo (una pasada) solo para lo translucido: kitty, rofi y dunst.
+        -- Blur minimo (una pasada) solo para lo translucido: kitty, rofi y notificaciones.
         -- En maquina virtual se apaga.
         blur = {
             enabled           = ajuste("desenfoque", sino, true) and not esVirtual,
@@ -274,6 +317,9 @@ hl.config({
         force_default_wallpaper  = 0,
         disable_hyprland_logo    = true,
         disable_splash_rendering = true,
+        -- Si la pantalla de bloqueo falla, otra puede tomar el relevo sin desbloquear
+        -- la sesion (lo usa "bloquear": hyprlock y, si falla, swaylock).
+        allow_session_lock_restore = true,
     },
 
     input = {
@@ -374,11 +420,13 @@ atajo(mainMod .. " + R",              "rofi -show run",    "Ejecutar una orden")
 atajo("CTRL + SHIFT + Escape",        monitorSis,          "Monitor del sistema (btop)")
 atajo(mainMod .. " + A",              "pavucontrol",       "Control de sonido")
 atajo(mainMod .. " + W",              "kitty --class nmtui-flotante -e nmtui", "Red y Wi-Fi")
-atajo(mainMod .. " + N",              "dunstctl history-pop", "Volver a mostrar la última notificación")
-atajo(mainMod .. " + SHIFT + N",      "dunstctl close-all",   "Cerrar todas las notificaciones")
+atajo(mainMod .. " + N",              "notificaciones panel",  "Centro de notificaciones")
+atajo(mainMod .. " + SHIFT + N",      "notificaciones cerrar", "Borrar todas las notificaciones")
 atajo(mainMod .. " + L",              "bloquear",          "Bloquear la pantalla")
 atajo(mainMod .. " + SHIFT + R",      "hyprctl reload",    "Recargar la configuración de Hyprland")
 atajo("SHIFT + Print",                "captura pantalla",  "Captura de la pantalla entera (archivo y portapapeles)")
+atajo(mainMod .. " + F2",             "modo-noche",        "Modo noche (tonos cálidos)")
+atajo(mainMod .. " + SHIFT + C",      "hyprpicker --autocopy --format=hex --lowercase-hex --notify", "Selector de color (copia el color)")
 atajo(mainMod .. " + Print",          "captura ventana",   "Captura de la ventana activa (archivo y portapapeles)")
 
 -- Teclas multimedia (funcionan también con la pantalla bloqueada). Sus atajos quedan en
@@ -388,12 +436,12 @@ atajosMultimedia = {}
 local function multimedia(teclas, orden, descripcion, opciones)
     table.insert(atajosMultimedia, atajo(teclas, orden, descripcion, opciones))
 end
-multimedia("XF86AudioRaiseVolume",  "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+", "Subir el volumen", { locked = true, repeating = true })
-multimedia("XF86AudioLowerVolume",  "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-",      "Bajar el volumen", { locked = true, repeating = true })
-multimedia("XF86AudioMute",         "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",      "Silenciar o activar el sonido", { locked = true })
-multimedia("XF86AudioMicMute",      "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",    "Silenciar o activar el micrófono", { locked = true })
-multimedia("XF86MonBrightnessUp",   "brightnessctl -q set 5%+", "Subir el brillo", { locked = true, repeating = true })
-multimedia("XF86MonBrightnessDown", "brightnessctl -q set 5%-", "Bajar el brillo", { locked = true, repeating = true })
+multimedia("XF86AudioRaiseVolume",  "jaime0-osd volumen subir",    "Subir el volumen", { locked = true, repeating = true })
+multimedia("XF86AudioLowerVolume",  "jaime0-osd volumen bajar",    "Bajar el volumen", { locked = true, repeating = true })
+multimedia("XF86AudioMute",         "jaime0-osd volumen silencio", "Silenciar o activar el sonido", { locked = true })
+multimedia("XF86AudioMicMute",      "jaime0-osd microfono",        "Silenciar o activar el micrófono", { locked = true })
+multimedia("XF86MonBrightnessUp",   "jaime0-osd brillo subir",     "Subir el brillo", { locked = true, repeating = true })
+multimedia("XF86MonBrightnessDown", "jaime0-osd brillo bajar",     "Bajar el brillo", { locked = true, repeating = true })
 multimedia("XF86AudioPlay",         "playerctl play-pause", "Reproducir o pausar", { locked = true })
 multimedia("XF86AudioPause",        "playerctl play-pause", "Reproducir o pausar", { locked = true })
 multimedia("XF86AudioNext",         "playerctl next",       "Pista siguiente", { locked = true })
@@ -444,6 +492,15 @@ hl.window_rule({
     float  = true,
     center = true,
     size   = { "monitor_w*0.62", "monitor_h*0.72" },
+})
+
+-- Configuracion de pantallas (nwg-displays)
+hl.window_rule({
+    name   = "flotante-pantallas",
+    match  = { class = "^nwg-displays$" },
+    float  = true,
+    center = true,
+    size   = { "monitor_w*0.7", "monitor_h*0.75" },
 })
 
 -- Aplicacion de ajustes (jaime0-ajustes, en Quickshell)
@@ -533,7 +590,7 @@ hl.layer_rule({
 
 hl.layer_rule({
     name         = "blur-notificaciones",
-    match        = { namespace = "^(dunst|notifications)$" },
+    match        = { namespace = "^(swaync-control-center|swaync-notification-window|dunst|notifications)$" },
     blur         = true,
     ignore_alpha = 0.3,
 })

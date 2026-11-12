@@ -120,7 +120,9 @@ Añade `nvidia-drm.modeset=1` a `GRUB_CMDLINE_LINUX_DEFAULT` en `/etc/default/gr
 | `SUPER + A` | Control de sonido |
 | `SUPER + W` | Red y Wi-Fi |
 | `SUPER + SHIFT + V` | Historial del portapapeles |
-| `SUPER + N` / `SUPER + SHIFT + N` | Volver a mostrar la última notificación / cerrar todas |
+| `SUPER + N` / `SUPER + SHIFT + N` | Centro de notificaciones / borrar todas |
+| `SUPER + F2` | Modo noche (tonos cálidos) |
+| `SUPER + SHIFT + C` | Selector de color (copia el color en hexadecimal) |
 | `SUPER + L` | Bloquear la pantalla |
 | `SUPER + Escape` | Menú de energía |
 | `SUPER + SHIFT + R` | Recargar la configuración de Hyprland |
@@ -150,7 +152,7 @@ Añade `nvidia-drm.modeset=1` a `GRUB_CMDLINE_LINUX_DEFAULT` en `/etc/default/gr
 | `Impr Pant` | Captura de un área |
 | `SHIFT + Impr Pant` | Captura de la pantalla entera |
 | `SUPER + Impr Pant` | Captura de la ventana activa |
-| Teclas de volumen, silencio y micrófono | Subir, bajar, silenciar |
+| Teclas de volumen, silencio y micrófono | Subir, bajar, silenciar (con indicador en pantalla) |
 | Teclas de brillo | Subir o bajar el brillo |
 | Teclas de reproducción | Reproducir o pausar, pista siguiente o anterior |
 
@@ -183,6 +185,13 @@ jaime0-anclar mover firefox 1
 ```
 
 `jaime0-anclar` sin argumentos muestra las ancladas y `jaime0-anclar disponibles`, las que se pueden anclar. El nombre puede ser corto: `firefox` encuentra `firefox-esr`. Vienen ancladas Kitty y Thunar, y puedes quitarlas. Detalles en [docs/ajustes.md](docs/ajustes.md#aplicaciones-ancladas).
+
+### Notificaciones, bloqueo y pantallas
+
+- **Notificaciones:** Sway Notification Center. La campana de la barra abre el centro (también `SUPER + N`), con no molestar, controles de música y volumen. El clic derecho en la campana activa o desactiva el modo no molestar.
+- **Bloqueo:** Hyprlock muestra la hora, la fecha, la canción que suena y la contraseña sobre el fondo de escritorio difuminado. Hypridle bloquea a los 10 minutos, apaga la pantalla a los 11, suspende a los 30 y bloquea siempre antes de suspender. Si Hyprlock fallara, la sesión sigue bloqueada con swaylock.
+- **Volumen y brillo:** las teclas muestran una barra fina (wob) del color de acento.
+- **Pantallas:** busca **Pantallas** (nwg-displays) en el lanzador. Lo que guardes ahí se aplica con la configuración Lua de Hyprland.
 
 ### El comando `atajos`
 
@@ -261,7 +270,9 @@ El fondo de pantalla es propio: una malla digital oscura con líneas geométrica
 
 | Área | Programas |
 |---|---|
-| Escritorio | Hyprland, Waybar, Rofi, Dunst, swaybg, `lxpolkit`, Quickshell (aplicación de ajustes) |
+| Escritorio | Hyprland, Waybar, Rofi, swaybg, `lxpolkit`, Quickshell (aplicación de ajustes) |
+| Notificaciones, bloqueo y OSD | Sway Notification Center, Hyprlock e Hypridle (swaylock de respaldo), wob |
+| Utilidades | Hyprsunset (modo noche), Hyprpicker (selector de color), nwg-displays (pantallas) |
 | Acceso | `greetd` con `tuigreet`, en la consola |
 | Terminal | Kitty, Zsh, Starship, Fastfetch, btop, Neovim |
 | Archivos | Thunar, con `gvfs` para montar USB al pulsarlos |
@@ -360,7 +371,7 @@ Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca
 - **Waybar y Debian:** Debian tiene marcado Waybar para salir de testing el 22-11-2026 por errores en dependencias lejanas. La versión instalada está parcheada, fijada y retenida (`apt-mark hold`), así que una actualización no la retira. Si en el futuro una biblioteca suya desaparece, `apt` retendrá esa actualización. Una compilación nueva de la ISO posterior a esa fecha podría no resolver sus dependencias de compilación.
 - **Rama de pruebas:** Forky es Debian testing y una actualización puede romper algo, en especial si cambia Hyprland. Durante el desarrollo pasó de 0.56 a 0.57 y hubo que retirar una opción.
 - **Fallos aislados en VirtualBox:** en pruebas sobre Windows con VirtualBox funcionando encima de Hyper-V (Integridad de memoria activada), un arranque de cada 11 en una VM se quedó congelado por un fallo de `systemd`, con un trozo de `libc` leído como ceros en memoria, y otra VM reanudada tras muchas horas tuvo programas que fallaban al azar. Reiniciarla lo resolvió: ocho reinicios seguidos entraron bien y no se pudo reproducir. Todo apunta a la capa de virtualización y no a Jaime0, pero no se ha podido demostrar. Por si ocurre, Jaime0 reinicia solo si `systemd` falla al arrancar (`CrashAction=reboot`). No se ha visto en otras condiciones, y no se ha probado en hardware real.
-- **Textos en inglés:** `tuigreet` y `swaylock` no tienen traducción. Algunas entradas de GRUB y las de otros sistemas salen en inglés.
+- **Textos en inglés:** `tuigreet` y `swaylock` (solo de respaldo) no tienen traducción. El centro de notificaciones muestra la hora relativa en inglés, así que se oculta. Algunas entradas de GRUB y las de otros sistemas salen en inglés.
 - **Instalador:** el mapa, el teclado de muestra y la franja de particiones usan colores fijos de Calamares.
 - **`btop` en mosaicos muy pequeños:** necesita 80x24. Abierto con `CTRL + SHIFT + Escape` usa letra de 7 puntos y cabe en un cuarto de pantalla a 1280x800; más pequeño, lo avisa.
 - **Teclados virtuales:** algunos usan códigos de tecla que coinciden con las teclas multimedia y Hyprland ejecuta esos atajos. Con un teclado físico no pasa.

@@ -51,7 +51,7 @@ grep -q 'xdg-user-dirs-update' "$SKEL/.config/hypr/hyprland.lua" && ok "xdg-user
 echo "xdg-user-dirs.service: $(chroot chroot systemctl --global is-enabled xdg-user-dirs.service 2>&1)"
 
 echo "== Auditoria de /etc/skel =="
-for F in .config/hypr/hyprland.lua .config/waybar/config.jsonc .config/waybar/style.css .config/kitty/kitty.conf .config/rofi/config.rasi .config/rofi/jaime0.rasi .config/dunst/dunstrc .config/btop/btop.conf .config/btop/themes/jaime0.theme .config/fastfetch/config.jsonc .config/gtk-3.0/settings.ini .config/gtk-3.0/gtk.css .config/gtk-4.0/settings.ini .config/gtk-4.0/gtk.css .config/qt6ct/qt6ct.conf .config/starship.toml .config/mimeapps.list .config/xfce4/xfconf/xfce-perchannel-xml/thunar.xml .config/nvim/init.lua .zshrc; do
+for F in .config/hypr/hyprland.lua .config/waybar/config.jsonc .config/waybar/style.css .config/kitty/kitty.conf .config/rofi/config.rasi .config/rofi/jaime0.rasi .config/swaync/config.json .config/hypr/hyprlock.conf .config/hypr/hypridle.conf .config/btop/btop.conf .config/btop/themes/jaime0.theme .config/fastfetch/config.jsonc .config/gtk-3.0/settings.ini .config/gtk-3.0/gtk.css .config/gtk-4.0/settings.ini .config/gtk-4.0/gtk.css .config/qt6ct/qt6ct.conf .config/starship.toml .config/mimeapps.list .config/xfce4/xfconf/xfce-perchannel-xml/thunar.xml .config/nvim/init.lua .zshrc; do
     [ -f "$SKEL/$F" ] && ok "$F" || fallo "$F no existe"
 done
 M=$(find "$SKEL" ! -user root -o ! -group root | wc -l); [ "$M" -eq 0 ] && ok "todo /etc/skel es de root" || fallo "$M entradas no son de root"

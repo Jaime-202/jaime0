@@ -1,5 +1,15 @@
 #!/bin/sh
-# Bloquea la pantalla con swaylock (tema en ~/.config/swaylock/config).
-# -f: queda en segundo plano en cuanto la pantalla esta bloqueada.
+# Bloquea la pantalla con hyprlock (~/.config/hypr/hyprlock.conf).
+# Si hyprlock no esta o falla (por ejemplo, por la grafica), la sesion sigue bloqueada
+# y swaylock toma el relevo: Hyprland lo permite con misc.allow_session_lock_restore.
+pgrep -x hyprlock >/dev/null 2>&1 && exit 0
 pgrep -x swaylock >/dev/null 2>&1 && exit 0
-exec swaylock -f
+
+if command -v hyprlock >/dev/null 2>&1; then
+    hyprlock
+    rc=$?
+    # 0: desbloqueada con la clave. Cualquier otra cosa: que no quede la pantalla roja.
+    [ "$rc" -eq 0 ] && exit 0
+    logger -t bloquear "hyprlock termino con el codigo $rc; se usa swaylock"
+fi
+exec swaylock

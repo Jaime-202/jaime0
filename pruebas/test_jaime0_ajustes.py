@@ -93,6 +93,20 @@ class PruebasAjustes(unittest.TestCase):
         self.assertTrue(ajustes["acento"]["propio"])
         self.assertFalse(ajustes["borde"]["propio"])
 
+    def test_acento_en_bloqueo_notificaciones_y_osd(self):
+        propio = self.e.casa / "fondo.png"
+        propio.write_bytes(b"png")
+        self.assertEqual(self.e.ejecutar("poner", "acento", "ambar", "fondo", str(propio))[0], 0)
+        hyprlock = self.e.generado("hyprlock.conf")
+        self.assertIn("$acento = rgb(e0b050)", hyprlock)
+        imagen = [l for l in hyprlock.splitlines() if l.startswith("$imagen = ")]
+        self.assertEqual(len(imagen), 1)
+        self.assertTrue(imagen[0].endswith("fondo.png"))
+        self.assertIn("@define-color acento #e0b050;", self.e.generado("swaync.css"))
+        wob = self.e.generado("wob.ini")
+        self.assertIn("bar_color = e0b050ff", wob)
+        self.assertNotIn("[", wob, "wob: las claves por defecto van sin cabecera de seccion")
+
     def test_valores_invalidos_no_cambian_nada(self):
         self.e.ejecutar("poner", "borde", "1")
         antes = self.e.archivo.read_text(encoding="utf-8")

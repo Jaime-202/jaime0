@@ -278,6 +278,16 @@ def generar():
         "rofi.rasi": f"/* Generado por {PROGRAMA}: no lo edites. */\n* {{\n    acento: {acento};\n}}\n",
         "fondo": valores["fondo"] + "\n",
         "anclas": valores["anclas"] + "\n",
+        "swaync.css": f"/* Generado por {PROGRAMA}: no lo edites. */\n@define-color acento {acento};\n",
+        # Indicador de volumen y brillo (wob, via jaime0-osd).
+        "wob.ini": (f"# Generado por {PROGRAMA}: no lo edites.\n"
+                    "timeout = 1200\nmax = 100\nwidth = 260\nheight = 26\nborder_offset = 0\n"
+                    "border_size = 1\nbar_padding = 5\nanchor = bottom center\nmargin = 96\n"
+                    "border_color = 26343aff\nbackground_color = 101519ff\n"
+                    f"bar_color = {acento.lstrip('#')}ff\noverflow_mode = nowrap\n"),
+        # Pantalla de bloqueo (hyprlock), que lo lee cada vez que se abre.
+        "hyprlock.conf": f"# Generado por {PROGRAMA}: no lo edites.\n"
+                         f"$acento = rgb({acento.lstrip('#')})\n$imagen = {valores['fondo']}\n",
     }
     cambiados = {n for n, texto in archivos.items() if escribir_atomico(os.path.join(g, n), texto)}
     return cambiados, avisos
@@ -305,6 +315,13 @@ def aplicar():
         subprocess.run(["hyprctl", "reload"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if cambiados & {"waybar.json", "waybar.css"} and en_marcha("waybar"):
         subprocess.run(["pkill", "-USR2", "-x", "-u", str(os.getuid()), "waybar"])
+    if "wob.ini" in cambiados and shutil.which("systemctl"):
+        # Solo si ya esta en marcha; si no, lo leera al arrancar con la primera tecla.
+        subprocess.run(["systemctl", "--user", "try-restart", "wob.service"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+    if "swaync.css" in cambiados and en_marcha("swaync"):
+        subprocess.run(["swaync-client", "--reload-css", "--skip-wait"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
     if "anclas" in cambiados and shutil.which("jaime0-anclar"):
         subprocess.run(["jaime0-anclar", "refrescar"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if "fondo" in cambiados and en_marcha("swaybg"):

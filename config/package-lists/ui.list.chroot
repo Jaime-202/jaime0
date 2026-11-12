@@ -1,6 +1,5 @@
 waybar
 rofi
-dunst
 papirus-icon-theme
 hicolor-icon-theme
 librsvg2-common
@@ -8,7 +7,13 @@ fontconfig
 xz-utils
 btop
 swaylock
-swayidle
 brightnessctl
 playerctl
 quickshell
+sway-notification-center
+hyprlock
+hypridle
+wob
+hyprsunset
+hyprpicker
+nwg-displays

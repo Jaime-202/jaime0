@@ -1,0 +1,45 @@
+#!/bin/sh
+# Volumen y brillo con indicador en pantalla (wob). Lo usan las teclas multimedia.
+#
+#   jaime0-osd volumen subir|bajar|silencio
+#   jaime0-osd microfono
+#   jaime0-osd brillo subir|bajar
+#   jaime0-osd servicio      lo arranca systemd (wob.service) al primer uso
+#
+# wob se activa por socket (wob.socket de Debian): no hay proceso hasta que se usa una
+# tecla. Su aspecto, con el color de acento, lo genera jaime0-ajustes.
+set -u
+
+FIFO="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/wob.sock"
+
+mostrar() {
+    # Sin wob (o sin su socket) el cambio se hace igual; solo no se ve la barra.
+    [ -p "$FIFO" ] && timeout 1 sh -c 'printf "%s\n" "$1" > "$2"' _ "$1" "$FIFO" 2>/dev/null
+    return 0
+}
+
+volumen_actual() {
+    # "Volume: 0.45" o "Volume: 0.45 [MUTED]" -> 45, o 0 si esta silenciado.
+    # LC_ALL=C: con la configuracion en espanol, awk espera coma decimal y leeria 0.
+    wpctl get-volume "$1" 2>/dev/null | LC_ALL=C awk '{ if ($3 == "[MUTED]") print 0; else printf "%d\n", $2 * 100 + 0.5 }'
+}
+
+case "${1:-}:${2:-}" in
+    volumen:subir)    wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+ ;;
+    volumen:bajar)    wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- ;;
+    volumen:silencio) wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle ;;
+    microfono:*)      wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle
+                      mostrar "$(volumen_actual @DEFAULT_AUDIO_SOURCE@)"; exit 0 ;;
+    brillo:subir)     brightnessctl -q set 5%+ ;;
+    brillo:bajar)     brightnessctl -q set 5%- ;;
+    servicio:*)
+        CONF="${XDG_CONFIG_HOME:-$HOME/.config}/jaime0/generado/wob.ini"
+        [ -f "$CONF" ] && exec wob -c "$CONF"
+        exec wob ;;
+    *) echo "Uso: jaime0-osd volumen subir|bajar|silencio | microfono | brillo subir|bajar" >&2; exit 2 ;;
+esac
+
+case "$1" in
+    volumen) mostrar "$(volumen_actual @DEFAULT_AUDIO_SINK@)" ;;
+    brillo)  mostrar "$(brightnessctl -m 2>/dev/null | cut -d, -f4 | tr -d %)" ;;
+esac

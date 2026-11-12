@@ -28,7 +28,11 @@ El trabajo original de este repositorio se publica bajo la licencia MIT (`LICENS
 | Waybar (parcheado, versión `0.15.0-1+hypr1`) | MIT | https://github.com/Alexays/Waybar |
 | Kitty | GPL-3.0-only | https://sw.kovidgoyal.net/kitty/ |
 | Rofi | MIT | https://github.com/davatorium/rofi |
-| Dunst | BSD-3-Clause | https://dunst-project.org/ |
+| Sway Notification Center (swaync) | GPL-3.0 | https://github.com/ErikReider/SwayNotificationCenter |
+| Hyprlock, Hypridle, Hyprsunset e Hyprpicker | BSD-3-Clause | https://github.com/hyprwm |
+| wob | ISC | https://github.com/francma/wob |
+| nwg-displays | MIT | https://github.com/nwg-piotr/nwg-displays |
+| Quickshell | LGPL-3.0-only | https://quickshell.org/ |
 | btop | Apache-2.0 | https://github.com/aristocratos/btop |
 | Thunar | GPL-2.0-or-later | https://docs.xfce.org/xfce/thunar/start |
 | greetd y tuigreet | GPL-3.0 | https://sr.ht/~kennylevinsen/greetd/ |

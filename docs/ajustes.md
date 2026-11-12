@@ -47,8 +47,8 @@ Al aplicar, se recarga Hyprland (`hyprctl reload`), Waybar relee su configuraci�
 
 | Clave | Valores | Predeterminado | Afecta a |
 |---|---|---|---|
-| `acento` | `verde`, `cian`, `azul`, `violeta`, `ambar`, `rosa` o `#rrggbb` | `verde` | Borde de la ventana activa, logo y escritorio activo de la barra, selección de rofi |
-| `fondo` | Ruta a una imagen PNG o JPEG | `/usr/share/backgrounds/jaime0/jaime0.png` | Fondo de escritorio |
+| `acento` | `verde`, `cian`, `azul`, `violeta`, `ambar`, `rosa` o `#rrggbb` | `verde` | Borde de la ventana activa, logo, escritorio activo y campana de la barra, selección de rofi, centro de notificaciones, campo de la pantalla de bloqueo e indicador de volumen y brillo |
+| `fondo` | Ruta a una imagen PNG o JPEG | `/usr/share/backgrounds/jaime0/jaime0.png` | Fondo de escritorio y, difuminado, de la pantalla de bloqueo |
 | `separacion_interior` | 0-40 | `4` | Hueco entre ventanas |
 | `separacion_exterior` | 0-60 | `8` | Margen con el borde de la pantalla |
 | `borde` | 0-6 | `2` | Grosor del borde de las ventanas |
@@ -88,7 +88,7 @@ Cómo funciona, sin sondeo:
 
 ## Límites conocidos
 
-- El acento aún no cambia el día de hoy del calendario de la barra, dunst, swaylock, kitty, btop ni GTK: siguen en verde.
+- El acento aún no cambia el día de hoy del calendario de la barra, swaylock (solo de respaldo), kitty, btop ni GTK: siguen en verde.
 - Si modificaste a mano `~/.config/hypr/hyprland.lua`, `~/.config/waybar/*` o `~/.config/rofi/jaime0.rasi` antes de la 0.2, `jaime0-update` conserva tu versión (conflicto) y los ajustes no tendrán efecto en ese programa hasta que aceptes la nueva (`jaime0-update resolver RUTA --usar-nueva`).
 - Una altura de barra distinta de 26 mueve los módulos: `scripts/coords-barra.sh` mide a 26 px.
 - Una aplicación anclada que se desinstala desaparece de la barra, pero sigue en la lista (`jaime0-anclar` la marca como no instalada) por si se vuelve a instalar.

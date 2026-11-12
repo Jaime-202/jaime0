@@ -56,6 +56,7 @@ PREFIJOS_PERMITIDOS = (
     "etc/systemd/",
     "usr/local/bin/",
     "usr/local/share/marca/",
+    "usr/local/share/dbus-1/services/",
     "usr/lib/systemd/user/",
     "usr/share/jaime0/",
     "usr/share/backgrounds/jaime0/",

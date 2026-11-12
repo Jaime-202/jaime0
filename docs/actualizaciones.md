@@ -79,7 +79,7 @@ jaime0-update resolver ~/.config/hypr/hyprland.lua --usar-nueva   # guarda copia
 jaime0-update resolver ~/.config/hypr/hyprland.lua --mantener     # borra el .jaime0-nuevo
 ```
 
-Nunca se tocan documentos, datos personales ni programas que hayas instalado: solo las rutas que lista el manifiesto, y solo dentro de `/etc/skel`, `/etc/jaime0`, `/etc/default/grub.d`, `/etc/fonts`, `/etc/systemd`, `/usr/local/bin`, `/usr/local/share/marca`, `/usr/lib/systemd/user`, `/usr/share/jaime0`, `/usr/share/backgrounds/jaime0`, `/usr/share/glib-2.0/schemas`, `/usr/share/grub/themes`, `/usr/share/qt6ct` y tu carpeta personal. Aunque un manifiesto firmado pidiera otra ruta, se rechaza.
+Nunca se tocan documentos, datos personales ni programas que hayas instalado: solo las rutas que lista el manifiesto, y solo dentro de `/etc/skel`, `/etc/jaime0`, `/etc/default/grub.d`, `/etc/fonts`, `/etc/systemd`, `/usr/local/bin`, `/usr/local/share/marca`, `/usr/local/share/dbus-1/services`, `/usr/lib/systemd/user`, `/usr/share/jaime0`, `/usr/share/backgrounds/jaime0`, `/usr/share/glib-2.0/schemas`, `/usr/share/grub/themes`, `/usr/share/qt6ct` y tu carpeta personal. Aunque un manifiesto firmado pidiera otra ruta, se rechaza.
 
 ## Seguridad
 

@@ -67,12 +67,12 @@ for F in 98-bloqueo-xorg.pref 99-bloqueo-escritorios.pref; do
 done
 
 echo "== Binarios de autostart y atajos =="
-for B in kitty thunar grim slurp wl-copy wl-paste cliphist notify-send xdg-user-dir swaybg nmtui blueman-manager gio dbus-update-activation-environment start-hyprland atajos menu-energia notificaciones-waybar dunstctl jaime0-ajustes jaime0-anclar; do
+for B in kitty thunar grim slurp wl-copy wl-paste cliphist notify-send xdg-user-dir swaybg nmtui blueman-manager gio dbus-update-activation-environment start-hyprland atajos menu-energia notificaciones swaync swaync-client hyprlock hypridle wob hyprsunset hyprpicker nwg-displays jaime0-ajustes jaime0-anclar jaime0-osd; do
     if chroot chroot sh -c "command -v $B" >/dev/null; then ok "$B"; else fallo "$B no existe"; fi
 done
 [ -x chroot/usr/bin/lxpolkit ] && ok "agente polkit lxpolkit" || fallo "agente polkit"
 instalado polkit-kde-agent-1 && fallo "polkit-kde-agent-1 sigue instalado" || ok "polkit-kde-agent-1 ausente"
-for B in waybar dunst; do
+for B in waybar; do
     if chroot chroot sh -c "command -v $B" >/dev/null; then ok "$B"; else pendiente "$B: pendiente de instalar"; fi
 done
 if chroot chroot sh -c "command -v rofi" >/dev/null; then ok "rofi"; else pendiente "rofi: pendiente de instalar"; fi

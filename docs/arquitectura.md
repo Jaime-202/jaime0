@@ -7,7 +7,8 @@
 | Distribución base | Debian Forky (testing), amd64 |
 | Construcción | live-build (`auto/config`): `debootstrap --variant=minbase`, sin paquetes recomendados, ISO híbrida BIOS + UEFI con Secure Boot (shim firmado por Debian) |
 | Paquetes | APT de Debian. Preferencias en `config/archives/`: sin Xorg ni otros escritorios, Waybar parcheado fijado |
-| Escritorio | Hyprland 0.56/0.57 con configuración **Lua** (`hyprland.lua`), Waybar, rofi, dunst, kitty, swaylock/swayidle |
+| Escritorio | Hyprland 0.56/0.57 con configuración **Lua** (`hyprland.lua`), Waybar, rofi, kitty, Quickshell (ajustes) |
+| Notificaciones, bloqueo, OSD | swaync (`notificaciones`), hyprlock + hypridle (`bloquear`, `inactividad`; swaylock de respaldo), wob activado por socket (`jaime0-osd`) |
 | Acceso | greetd + tuigreet en la consola (`iniciar-sesion` lanza Hyprland y explica el fallo si no abre) |
 | Instalador | Calamares con marca propia; se retira al instalar (`hypr-limpiar-vivo`) |
 | Sonido, red | PipeWire + WirePlumber, NetworkManager (`nmtui` desde la barra), BlueZ + blueman |
@@ -49,7 +50,7 @@ Componentes del manifiesto:
 | `escritorio` | `etc/skel/**`, que se copia a cada usuario |
 | `herramientas` | `usr/local/bin/**` |
 | `temas` | `usr/share/backgrounds/jaime0`, `usr/share/grub/themes`, `usr/share/qt6ct` |
-| `sistema` | `etc/default/grub.d`, `etc/fonts`, `etc/systemd`, `etc/jaime0`, `usr/lib/systemd/user`, `usr/share/jaime0`, `usr/share/glib-2.0/schemas`, `usr/local/share/marca` |
+| `sistema` | `etc/default/grub.d`, `etc/fonts`, `etc/systemd`, `etc/jaime0`, `usr/lib/systemd/user`, `usr/share/jaime0`, `usr/share/glib-2.0/schemas`, `usr/local/share/marca`, `usr/local/share/dbus-1/services` |
 
 Fuera de las actualizaciones quedan los archivos que solo existen en el medio vivo (Calamares, live-config, `instalar-sistema`, `setxkbmap`) y `etc/greetd/config.toml`, que el instalador modifica.
 

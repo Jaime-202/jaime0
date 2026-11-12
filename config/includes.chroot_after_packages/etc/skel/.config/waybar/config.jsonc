@@ -182,16 +182,25 @@
         }
     },
 
-    // Campana: clic para pausar o reanudar las notificaciones; clic derecho, la ultima otra vez.
-    // No se sondea: se lee al arrancar y se relee con la senal 8 (pkill -RTMIN+8 waybar), que
-    // envia quien cambia el estado de pausa (el clic de aqui).
+    // Campana del centro de notificaciones (swaync). Clic: abre el centro; clic derecho:
+    // modo no molestar. No se sondea: "notificaciones barra" escribe una linea en cada cambio.
     "custom/notificaciones": {
-        "exec": "notificaciones-waybar",
+        "exec": "notificaciones barra",
         "return-type": "json",
-        "interval": "once",
-        "signal": 8,
-        "on-click": "dunstctl set-paused toggle; pkill -RTMIN+8 waybar",
-        "on-click-right": "dunstctl history-pop"
+        "format": "{icon}",
+        "format-icons": {
+            "notification": "󰂚",
+            "none": "󰂜",
+            "dnd-notification": "󰂛",
+            "dnd-none": "󰂛",
+            "inhibited-notification": "󰂚",
+            "inhibited-none": "󰂜",
+            "dnd-inhibited-notification": "󰂛",
+            "dnd-inhibited-none": "󰂛"
+        },
+        "escape": true,
+        "on-click": "notificaciones panel",
+        "on-click-right": "notificaciones nomolestar"
     },
 
     // La bandeja queda recogida: se despliega al pasar el raton por la flecha.

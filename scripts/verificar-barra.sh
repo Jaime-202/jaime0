@@ -27,14 +27,15 @@ for P in xserver-xorg xserver-xorg-core gnome-shell plasma-desktop plasma-worksp
 done
 
 echo "== Archivos =="
-for F in "$SKEL/waybar/config.jsonc" "$SKEL/waybar/style.css" "$SKEL/rofi/config.rasi" "$SKEL/rofi/jaime0.rasi" "$SKEL/dunst/dunstrc" /usr/local/bin/menu-energia /usr/local/bin/notificaciones-waybar; do
+for F in "$SKEL/waybar/config.jsonc" "$SKEL/waybar/style.css" "$SKEL/rofi/config.rasi" "$SKEL/rofi/jaime0.rasi" "$SKEL/swaync/config.json" "$SKEL/swaync/style.css" /usr/local/bin/menu-energia /usr/local/bin/notificaciones; do
     [ -f "chroot$F" ] && ok "$F" || fallo "$F no existe"
     grep -q $'\r' "chroot$F" && fallo "$F tiene CRLF"
 done
 [ -x chroot/usr/local/bin/menu-energia ] && ok "menu-energia ejecutable" || fallo "menu-energia sin permiso"
-[ -x chroot/usr/local/bin/notificaciones-waybar ] && ok "notificaciones-waybar ejecutable" || fallo "notificaciones-waybar sin permiso"
-sh -n chroot/usr/local/bin/notificaciones-waybar && ok "notificaciones-waybar: sintaxis" || fallo "notificaciones-waybar: sintaxis"
-chroot chroot sh /usr/local/bin/notificaciones-waybar 2>/dev/null | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["class"] in ("activas","pausadas")' && ok "notificaciones-waybar devuelve JSON valido" || fallo "notificaciones-waybar sin JSON valido"
+[ -x chroot/usr/local/bin/notificaciones ] && sh -n chroot/usr/local/bin/notificaciones && ok "notificaciones: ejecutable y sintaxis" || fallo "notificaciones"
+[ -e chroot/usr/local/bin/notificaciones-waybar ] && fallo "queda notificaciones-waybar (sustituido)" || ok "sin notificaciones-waybar"
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "chroot$SKEL/swaync/config.json" && ok "swaync/config.json es JSON valido" || fallo "swaync/config.json invalido"
+grep -q '@import url("../jaime0/generado/swaync.css")' "chroot$SKEL/swaync/style.css" && ok "swaync usa el acento generado" || fallo "swaync sin acento generado"
 sh -n chroot/usr/local/bin/menu-energia && ok "menu-energia: sintaxis" || fallo "menu-energia: sintaxis"
 if grep -nE '(#|//) *(a[nñ]ade aqu|resto de)|^[[:space:]]*\.\.\.[[:space:]]*$' "chroot$SKEL/waybar/config.jsonc" "chroot$SKEL/waybar/style.css" "chroot$SKEL/rofi/config.rasi" "chroot$SKEL/rofi/jaime0.rasi" "chroot$SKEL/dunst/dunstrc"; then fallo "hay marcadores"; else ok "sin marcadores"; fi
 
@@ -59,11 +60,11 @@ assert d['include'] == ['~/.config/jaime0/generado/waybar.json']
 assert d['clock']['interval'] >= 30 and '%S' not in d['clock']['format']
 assert d['cpu']['interval'] >= 5 and d['memory']['interval'] >= 10
 assert d['network']['interval'] >= 10 and d['battery']['interval'] >= 60
-assert d['custom/notificaciones']['interval'] == 'once' and d['custom/notificaciones']['signal'] == 8
-assert 'pkill -RTMIN+8 waybar' in d['custom/notificaciones']['on-click']
+assert d['custom/notificaciones']['on-click-right'] == 'notificaciones nomolestar'
+assert d['custom/notificaciones']['on-click'] == 'notificaciones panel' and 'interval' not in d['custom/notificaciones']
 assert d['group/bandeja']['modules'] == ['custom/bandeja', 'tray']
 assert 'on-click' not in d['clock'] and '{calendar}' in d['clock']['tooltip-format']
-assert d['custom/notificaciones']['exec'] == 'notificaciones-waybar'
+assert d['custom/notificaciones']['exec'] == 'notificaciones barra'
 assert 'nmtui-flotante' in d['network']['on-click'] and 'nmtui' in d['network']['on-click']
 assert d['bluetooth']['on-click'] == 'blueman-manager'
 assert d['custom/power']['on-click'] == 'menu-energia'
@@ -79,11 +80,10 @@ PY
 then ok "config.jsonc valido con los modulos pedidos"; else fallo "config.jsonc invalido"; fi
 
 echo "== Valores de la especificacion =="
-for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@import url\(\"../jaime0/generado/waybar.css\"\)" "waybar/style.css|window#waybar.bottom" "waybar/style.css|\.ancla\.abierta" "rofi/jaime0.rasi|\?import \"~/.config/jaime0/generado/rofi.rasi\"" "rofi/jaime0.rasi|acento: +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "dunst/dunstrc|origin = top-right" "dunst/dunstrc|corner_radius = 6" "dunst/dunstrc|frame_width = 1" "dunst/dunstrc|#080b0df0" "dunst/dunstrc|frame_color = \"#54e58a\"" "dunst/dunstrc|frame_color = \"#d9625b\"" "dunst/dunstrc|timeout = 5"; do
+for PAR in "waybar/style.css|@define-color fondo +#080b0d" "waybar/style.css|border-bottom: 1px solid @borde" "waybar/style.css|@import url\(\"../jaime0/generado/waybar.css\"\)" "waybar/style.css|window#waybar.bottom" "waybar/style.css|\.ancla\.abierta" "rofi/jaime0.rasi|\?import \"~/.config/jaime0/generado/rofi.rasi\"" "rofi/jaime0.rasi|acento: +#54e58a" "waybar/style.css|#cpu +\{ color: @gris" "waybar/style.css|#workspaces button.active" "waybar/style.css|#clock +\{ color: @texto" "waybar/config.jsonc|#54e58a" "rofi/config.rasi|Papirus-Dark" "rofi/config.rasi|show-icons: true" "rofi/jaime0.rasi|location: *center" "rofi/jaime0.rasi|border: *1px" "rofi/jaime0.rasi|#080b0df0" "swaync/style.css|@acento"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "chroot$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done
-[ "$(grep -c '^ *timeout = 5$' "chroot$SKEL/dunst/dunstrc")" = "3" ] && ok "timeout 5 s en las tres urgencias" || fallo "timeout incompleto"
 python3 - "chroot$SKEL/waybar/style.css" <<'PY' && ok "style.css: llaves equilibradas y colores definidos" || fallo "style.css: llaves o colores sin definir"
 import re, sys
 t = re.sub(r'/\*.*?\*/', '', open(sys.argv[1], encoding='utf-8').read(), flags=re.S)
@@ -111,7 +111,7 @@ grep -qi '#54e58a\|rgba ( 84, 229, 138' /tmp/vs4tema && ok "rofi -dump-theme ana
 sed 's/location:         center;/location center;;;{/' "chroot$SKEL/rofi/jaime0.rasi" > chroot/tmp/roto.rasi
 chroot chroot env HOME=/tmp rofi -theme /tmp/roto.rasi -dump-theme >/tmp/vs4tema 2>&1
 grep -qiE 'error|fail|unexpected' /tmp/vs4tema && ok "control negativo: rofi detecta un tema roto" || fallo "control negativo de rofi sin efecto"
-chroot chroot ldd /usr/bin/dunst | grep -q libwayland-client && ok "dunst enlazado con Wayland" || fallo "dunst sin Wayland"
+instalado dunst && fallo "dunst sigue instalado (sustituido por swaync)" || ok "sin dunst: un solo sistema de notificaciones"
 chroot chroot sh -c "command -v nmtui" >/dev/null && ok "nmtui disponible para el clic de red" || fallo "falta nmtui"
 instalado network-manager-applet && fallo "network-manager-applet sigue instalado" || ok "sin network-manager-applet"
 
@@ -147,8 +147,6 @@ rm -rf chroot/tmp/vs4x; mkdir -p chroot/tmp/vs4x; chown "$(chroot chroot id -u p
 chroot --userspec=prueba:prueba chroot env HOME_PRUEBA=/home/prueba /tmp/vivo.sh 2>&1 | tee -a "$SALIDA"
 mkdir -p capturas-barra; cp chroot/tmp/vs4x/*.png capturas-barra/ 2>/dev/null; chmod -R a+rX capturas-barra
 
-echo "== dunst -print =="
-chroot chroot sh -c 'grep -c "\[urgency_" /home/prueba/.config/dunst/dunstrc'
 
 F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA")
 echo

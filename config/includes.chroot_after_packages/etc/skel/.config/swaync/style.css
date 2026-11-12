@@ -1,0 +1,526 @@
+@import url("../jaime0/generado/swaync.css");
+
+/* Sway Notification Center de Jaime0.
+   El color de acento (@acento) lo genera jaime0-ajustes en ~/.config/jaime0/generado.
+   Paleta Jaime0: fondo #080b0d, superficies #101519 / #151c21, borde #26343a,
+   texto #d8e2e8, secundario #71818c, criticas #d9625b. Sin sombras ni transparencias. */
+
+@define-color fondo #080b0d;
+@define-color superficie #101519;
+@define-color superficie2 #151c21;
+@define-color borde #26343a;
+@define-color texto #d8e2e8;
+@define-color cuerpo #a7b4bc;
+@define-color secundario #71818c;
+@define-color rojo #d9625b;
+
+:root {
+  --notification-icon-size: 40px;
+  --notification-app-icon-size: 16px;
+  --notification-group-icon-size: 24px;
+  --mpris-album-art-icon-size: 56px;
+  --widget-volume-row-icon-size: 18px;
+}
+
+* {
+  font-family: "JetBrainsMono Nerd Font";
+  font-size: 12px;
+  box-shadow: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
+}
+
+notificationwindow,
+blankwindow,
+.blank-window,
+.floating-notifications {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------- Notificaciones */
+
+.notification-row {
+  background: none;
+  outline: none;
+}
+
+.notification-row:focus {
+  background: none;
+}
+
+.notification-row .notification-background {
+  padding: 4px 8px;
+}
+
+.notification-row .notification-background .notification {
+  background: @superficie;
+  border: 1px solid @borde;
+  border-radius: 8px;
+  padding: 0;
+}
+
+/* Emergentes: borde de acento (como dunst); las de prioridad baja, borde neutro. */
+.floating-notifications .notification-row .notification-background .notification {
+  background: @fondo;
+  border-color: @acento;
+}
+
+.floating-notifications .notification-row .notification-background .notification.low {
+  border-color: @borde;
+}
+
+.notification-row .notification-background .notification.critical,
+.floating-notifications .notification-row .notification-background .notification.critical {
+  border-color: @rojo;
+}
+
+.notification-row .notification-background .notification .notification-default-action {
+  padding: 8px 10px;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: @texto;
+}
+
+.notification-row .notification-background .notification .notification-default-action:hover {
+  -gtk-icon-filter: none;
+  background: @superficie2;
+}
+
+.notification-row .notification-background .notification .notification-default-action:not(:only-child) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content {
+  background: transparent;
+  border-radius: 8px;
+  padding: 0;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .image {
+  -gtk-icon-filter: none;
+  -gtk-icon-size: var(--notification-icon-size);
+  border-radius: 6px;
+  margin: 2px 10px 2px 0;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .app-icon {
+  -gtk-icon-filter: none;
+  -gtk-icon-size: var(--notification-app-icon-size);
+  margin: 4px;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box label {
+  filter: none;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .summary {
+  font-weight: bold;
+  color: @texto;
+  background: transparent;
+}
+
+/* swaync no traduce la hora relativa ("Now", "5 minutes ago"): se oculta. El hueco a la
+   derecha queda para el boton de cerrar. */
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .time {
+  font-size: 1px;
+  color: transparent;
+  background: transparent;
+  min-width: 0;
+  margin: 0 28px 0 0;
+  padding: 0;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .text-box .body {
+  color: @cuerpo;
+  background: transparent;
+  margin-top: 2px;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content progressbar {
+  margin-top: 6px;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .body-image {
+  margin-top: 6px;
+  border-radius: 6px;
+  background-color: @superficie2;
+  -gtk-icon-filter: none;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .inline-reply {
+  margin-top: 6px;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .inline-reply .inline-reply-entry {
+  background: @fondo;
+  color: @texto;
+  caret-color: @acento;
+  border: 1px solid @borde;
+  border-radius: 6px;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .inline-reply .inline-reply-button {
+  margin-left: 4px;
+  background: @superficie2;
+  border: 1px solid @borde;
+  border-radius: 6px;
+  color: @texto;
+}
+
+.notification-row .notification-background .notification .notification-default-action .notification-content .inline-reply .inline-reply-button:disabled {
+  background: transparent;
+  color: @secundario;
+}
+
+.notification-row .notification-background .notification .notification-alt-actions {
+  background: none;
+  border-top: 1px solid @borde;
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  padding: 4px;
+}
+
+.notification-row .notification-background .notification .notification-action {
+  margin: 2px;
+  padding: 0;
+}
+
+.notification-row .notification-background .notification .notification-action > button {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: @texto;
+  padding: 4px 8px;
+}
+
+.notification-row .notification-background .notification .notification-action > button:hover {
+  background: @superficie2;
+  color: @acento;
+}
+
+/* Boton de cerrar de cada notificacion */
+.close-button {
+  background: @superficie2;
+  color: @secundario;
+  border: 1px solid @borde;
+  border-radius: 6px;
+  padding: 0;
+  margin-top: 8px;
+  margin-right: 8px;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+.close-button:hover {
+  background: @superficie2;
+  color: @rojo;
+  border-color: @rojo;
+}
+
+progressbar trough {
+  background: @borde;
+  border-radius: 2px;
+  min-height: 4px;
+}
+
+progressbar progress {
+  background: @acento;
+  border-radius: 2px;
+  min-height: 4px;
+}
+
+/* ---------------------------------------------------------------- Grupos */
+
+.notification-group {
+  transition: opacity 150ms ease-in-out;
+}
+
+.notification-group:focus {
+  background: none;
+}
+
+.notification-group .notification-group-close-button .close-button {
+  margin: 8px 12px;
+}
+
+.notification-group .notification-group-buttons,
+.notification-group .notification-group-headers {
+  margin: 0 10px;
+  color: @secundario;
+}
+
+.notification-group .notification-group-headers .notification-group-icon {
+  color: @secundario;
+  -gtk-icon-size: var(--notification-group-icon-size);
+}
+
+.notification-group .notification-group-headers .notification-group-header {
+  color: @secundario;
+  font-weight: bold;
+}
+
+.notification-group .notification-group-buttons button {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: @secundario;
+}
+
+.notification-group .notification-group-buttons button:hover {
+  background: @superficie2;
+  color: @texto;
+}
+
+.notification-group.collapsed.not-expanded {
+  opacity: 0.5;
+}
+
+.notification-group.collapsed .notification-row .notification {
+  background-color: @superficie;
+}
+
+.notification-group.collapsed .notification-row:not(:last-child) .notification-action,
+.notification-group.collapsed .notification-row:not(:last-child) .notification-default-action {
+  opacity: 0;
+}
+
+.notification-group.collapsed:hover .notification-row:not(:only-child) .notification {
+  background-color: @superficie2;
+}
+
+/* ---------------------------------------------------------------- Centro */
+
+.control-center {
+  background: @fondo;
+  color: @texto;
+  border: 1px solid @borde;
+  border-radius: 8px;
+}
+
+.control-center .control-center-list-placeholder {
+  color: @secundario;
+  opacity: 1;
+}
+
+.control-center .control-center-list-placeholder image {
+  -gtk-icon-size: 32px;
+  color: @borde;
+}
+
+.control-center .control-center-list,
+.control-center scrolledwindow,
+.control-center viewport,
+.control-center list,
+.control-center listview,
+.control-center row,
+.control-center .notification-group {
+  background: transparent;
+}
+
+.control-center .control-center-list .notification .notification-default-action:hover,
+.control-center .control-center-list .notification .notification-action:hover {
+  background-color: @superficie2;
+}
+
+/* ---------------------------------------------------------------- Widgets */
+
+.widget {
+  margin: 6px 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+/* Titulo: "Notificaciones" y "Borrar todo" */
+.widget-title {
+  margin-top: 10px;
+}
+
+.widget-title > label {
+  font-size: 14px;
+  font-weight: bold;
+  color: @texto;
+}
+
+.widget-title > button {
+  background: transparent;
+  color: @secundario;
+  border: 1px solid @borde;
+  border-radius: 6px;
+  padding: 2px 10px;
+}
+
+.widget-title > button:hover {
+  background: @superficie2;
+  color: @texto;
+}
+
+/* No molestar */
+.widget-dnd {
+  background: @superficie;
+  border: 1px solid @borde;
+}
+
+.widget-dnd label {
+  color: @texto;
+}
+
+.widget-dnd switch {
+  background: @superficie2;
+  border: 1px solid @borde;
+  border-radius: 6px;
+  min-height: 18px;
+}
+
+.widget-dnd switch:checked {
+  background: @acento;
+  border-color: @acento;
+}
+
+.widget-dnd switch slider {
+  background: @secundario;
+  border: none;
+  border-radius: 4px;
+  min-width: 14px;
+  min-height: 14px;
+  margin: 2px;
+}
+
+.widget-dnd switch:checked slider {
+  background: @fondo;
+}
+
+/* Musica (solo si hay reproductor) */
+.widget-mpris {
+  padding: 0;
+}
+
+.widget-mpris .widget-mpris-player {
+  margin: 6px 8px;
+  background: @superficie;
+  border: 1px solid @borde;
+  border-radius: 8px;
+}
+
+.widget-mpris .widget-mpris-player .mpris-background {
+  opacity: 0;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay {
+  padding: 10px;
+  background-color: @superficie;
+  border-radius: 8px;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay button {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: @texto;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay button:hover {
+  background: @superficie2;
+  color: @acento;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-album-art {
+  border-radius: 6px;
+  -gtk-icon-size: var(--mpris-album-art-icon-size);
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-title {
+  font-weight: bold;
+  color: @texto;
+}
+
+.widget-mpris .widget-mpris-player .mpris-overlay .widget-mpris-subtitle {
+  color: @secundario;
+}
+
+.widget-mpris .widget-mpris-player progressbar progress,
+.widget-mpris .widget-mpris-player scale highlight {
+  background: @acento;
+}
+
+.widget-mpris > box > button {
+  background: transparent;
+  border: none;
+  color: @secundario;
+}
+
+.widget-mpris > box > button:disabled {
+  color: @borde;
+}
+
+/* Volumen */
+.widget-volume {
+  background: @superficie;
+  border: 1px solid @borde;
+}
+
+.widget-volume label {
+  color: @texto;
+  font-size: 15px;
+  margin-right: 4px;
+}
+
+.widget-volume button {
+  background: transparent;
+  border: none;
+  color: @secundario;
+}
+
+.widget-volume row image {
+  -gtk-icon-size: var(--widget-volume-row-icon-size);
+}
+
+.per-app-volume {
+  background-color: @superficie2;
+  margin: 6px;
+  margin-bottom: 0;
+  border-radius: 6px;
+}
+
+/* Deslizadores (volumen) */
+scale trough {
+  background: @borde;
+  border: none;
+  border-radius: 2px;
+  min-height: 4px;
+}
+
+scale highlight {
+  background: @acento;
+  border: none;
+  border-radius: 2px;
+}
+
+scale slider {
+  background: @acento;
+  border: none;
+  border-radius: 3px;
+  min-width: 12px;
+  min-height: 12px;
+  margin: -4px 0;
+}
+
+scale slider:hover {
+  background: @texto;
+}
+
+/* Barras de desplazamiento */
+scrollbar,
+scrollbar trough {
+  background: transparent;
+  border: none;
+}
+
+scrollbar slider {
+  background: @borde;
+  border-radius: 2px;
+  min-width: 3px;
+  min-height: 24px;
+}

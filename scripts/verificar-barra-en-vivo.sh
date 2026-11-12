@@ -39,7 +39,7 @@ E=$(hyprctl configerrors | grep -v '^$' | grep -vi 'no errors' | head -3)
 hyprctl eval 'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })' >/dev/null
 sleep 2
 
-# Waybar se relanza solo para capturar su log; dunst lo arranca hyprland.lua.
+# Waybar se relanza solo para capturar su log; swaync lo arranca hyprland.lua.
 pkill -x waybar; sleep 1
 waybar > "$XDG_RUNTIME_DIR/waybar.log" 2>&1 &
 sleep 6
@@ -55,7 +55,8 @@ clic() {
 }
 
 capas | grep -qx waybar && ok "capa con nombre waybar" || fallo "falta la capa waybar"
-pgrep -x dunst >/dev/null && ok "dunst arrancado por hyprland.lua" || fallo "dunst no arranco"
+pgrep -x swaync >/dev/null && ok "swaync arrancado por hyprland.lua" || fallo "swaync no arranco"
+pgrep -x dunst >/dev/null && fallo "dunst en marcha junto a swaync" || ok "sin dunst"
 pgrep -x nm-applet >/dev/null && fallo "nm-applet residente (debe gestionarse desde la barra)" || ok "sin nm-applet residente"
 # El agente polkit necesita una sesion de logind, que el chroot no tiene: se prueba en las VMs.
 grep -q "/usr/bin/lxpolkit" "$HOME/.config/hypr/hyprland.lua" && ok "hyprland.lua lanza lxpolkit (se prueba con una accion real en VM)" || fallo "hyprland.lua no lanza el agente polkit"
@@ -69,10 +70,11 @@ if grep -q 'Disabling module "clock"' "$L"; then fallo "modulo clock desactivado
 if grep -q 'Disabling module "pulseaudio"' "$L"; then fallo "modulo pulseaudio desactivado"; else ok "modulo pulseaudio activo"; fi
 grep -E 'Disabling module|\[error\]' "$L" | cut -c1-150
 
-notify-send -u normal "Prueba" "Notificación de dunst"; sleep 2
-capas | grep -qx notifications && ok "dunst muestra en capa notifications" || fallo "dunst sin capa notifications"
-sleep 5
-capas | grep -qx notifications && fallo "la notificacion sigue a los 7 s" || ok "la notificacion se cierra en unos 5 s"
+notify-send -u normal "Prueba" "Notificación de prueba"; sleep 2
+capas | grep -qx swaync-notification-window && ok "swaync muestra la notificacion" || fallo "swaync sin ventana de notificacion"
+notificaciones panel; sleep 1
+capas | grep -qx swaync-control-center && ok "centro de notificaciones abierto" || fallo "el centro no se abre"
+notificaciones panel; sleep 1
 
 # Clic real en un boton de escritorio: es lo que el waybar original no podia hacer.
 hyprctl dispatch 'hl.dsp.focus({ workspace = 3 })' >/dev/null; sleep 1

@@ -1,11 +1,17 @@
 #!/bin/sh
-# Bloqueo y suspension por inactividad (swayidle). No actua en la sesion en vivo,
-# donde el usuario no conoce la clave.
+# Bloqueo, pantalla apagada y suspension por inactividad: hypridle con
+# ~/.config/hypr/hypridle.conf. No actua en la sesion en vivo, donde el usuario no conoce
+# la clave. Si hypridle no esta instalado (sistema actualizado a medias), se usa swayidle
+# con los mismos tiempos.
 [ -d /run/live/medium ] && exit 0
 
+if command -v hypridle >/dev/null 2>&1; then
+    exec hypridle
+fi
+
 exec swayidle -w \
-    timeout 600  'bloquear' \
+    timeout 600  'swaylock -f' \
     timeout 660  "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" \
          resume  "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'" \
     timeout 1800 'systemctl suspend' \
-    before-sleep 'bloquear'
+    before-sleep 'swaylock -f'

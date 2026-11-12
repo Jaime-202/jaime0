@@ -1,0 +1,13 @@
+#!/bin/sh
+# Modo noche: tonos calidos en la pantalla con hyprsunset (4500 K). Alterna encendido y
+# apagado; apagado no queda ningun proceso.
+TEMPERATURA=4500
+
+if pgrep -x -u "$(id -u)" hyprsunset >/dev/null 2>&1; then
+    pkill -x -u "$(id -u)" hyprsunset
+    notify-send -a "Modo noche" -t 2000 "Modo noche desactivado" 2>/dev/null
+else
+    command -v hyprsunset >/dev/null 2>&1 || { notify-send "Modo noche" "Falta hyprsunset: sudo apt install hyprsunset"; exit 1; }
+    setsid hyprsunset --temperature "$TEMPERATURA" >/dev/null 2>&1 &
+    notify-send -a "Modo noche" -t 2000 "Modo noche activado" "Pantalla en tonos cálidos (${TEMPERATURA} K)" 2>/dev/null
+fi
