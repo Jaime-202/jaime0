@@ -15,7 +15,7 @@ cambios = [
     "Aviso discreto en la barra y una notificación cuando hay una versión nueva de Jaime0 o actualizaciones de seguridad de Debian (debsecan). Nunca instala nada por su cuenta.",
     "jaime0-diagnostico: informe de hardware para adjuntar a incidencias, sin datos personales.",
     "Cortafuegos UFW (no entra nada que no hayas pedido) y zram (swap comprimido) en equipos con 8 GiB de RAM o menos. Flatpak/Flathub opcional con jaime0-flatpak activar.",
-    "Con Btrfs y snapper, jaime0-update crea instantáneas antes y después de cada actualización.",
+    "El instalador ofrece Btrfs como opción (ext4 sigue por defecto), con subvolúmenes para /home, registros y cachés y snapper configurado: apt y jaime0-update crean instantáneas antes y después de cada cambio.",
 ]
 
 problemas_conocidos = [
