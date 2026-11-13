@@ -6,7 +6,7 @@ Por dentro es **Debian** (la misma base que usan miles de servidores y otras dis
 
 ![Mosaico con btop, Neovim y Fastfetch](capturas/mosaico.png)
 
-> **Estado:** la versión publicada es la [0.1.2](https://github.com/Jaime-202/jaime0/releases), de prueba. La **0.2.0-beta.1** que describe este README está terminada y probada en máquinas virtuales, pero **su ISO aún no se ha publicado**. Nada se ha probado todavía en un equipo físico: revisa [Qué no se ha probado](#qué-no-se-ha-probado) y haz copia de seguridad antes de instalarlo en un equipo con datos importantes.
+> **Estado:** la versión más reciente es la [0.2.0-beta.1](https://github.com/Jaime-202/jaime0/releases/tag/v0.2.0-beta.1), una **beta** probada en máquinas virtuales (sesión en vivo e instalación en ext4 y en Btrfs con cifrado). Nada se ha probado todavía en un equipo físico: revisa [Qué no se ha probado](#qué-no-se-ha-probado) y haz copia de seguridad antes de instalarlo en un equipo con datos importantes.
 
 ## Qué es, explicado sin prisas
 
