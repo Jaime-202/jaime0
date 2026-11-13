@@ -48,8 +48,8 @@ t = re.sub(r'^\s*//.*$', '', open(sys.argv[1], encoding='utf-8').read(), flags=r
 d = json.loads(t)
 assert d['modules-left'] == ['custom/logo', 'hyprland/workspaces']
 assert d['modules-center'] == [f'custom/ancla-{n}' for n in range(1, 7)]
-assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'battery', 'custom/actualizaciones', 'custom/notificaciones', 'group/bandeja', 'clock', 'custom/power']
-assert d['custom/actualizaciones']['exec'] == 'jaime0-update barra' and d['custom/actualizaciones']['signal'] == 10 and 'install' not in d['custom/actualizaciones']['on-click']
+assert d['modules-right'] == ['cpu', 'memory', 'pulseaudio', 'network', 'bluetooth', 'power-profiles-daemon', 'battery', 'custom/actualizaciones', 'custom/notificaciones', 'group/bandeja', 'clock', 'custom/power']
+assert d['custom/actualizaciones']['exec'] == 'actualizaciones barra' and d['custom/actualizaciones']['signal'] == 10 and 'install' not in d['custom/actualizaciones']['on-click']
 # Ancladas: sin sondeo (interval once + senal 9) y clic a jaime0-anclar.
 for n in range(1, 7):
     m = d[f'custom/ancla-{n}']

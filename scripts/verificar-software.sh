@@ -18,7 +18,7 @@ echo "== Paquetes de software.list.chroot =="
 for P in $(cat config/package-lists/software.list.chroot); do
     if instalado "$P"; then ok "$P"; else fallo "$P no instalado"; fi
 done
-for P in nautilus dolphin xserver-xorg xserver-xorg-core gnome-shell plasma-desktop xfce4 cinnamon mate-desktop-environment lxde brave-browser chromium xfdesktop4 nemo pcmanfm firefox firefox-esr firefox-esr-l10n-es-es galculator gsimplecal imv zathura zathura-pdf-poppler file-roller thunar-archive-plugin zip build-essential gcc yelp tumbler; do
+for P in nautilus dolphin xserver-xorg xserver-xorg-core gnome-shell plasma-desktop xfce4 cinnamon mate-desktop-environment lxde chromium xfdesktop4 nemo pcmanfm firefox firefox-esr firefox-esr-l10n-es-es galculator gsimplecal thunar-archive-plugin zip build-essential yelp tumbler; do
     if instalado "$P"; then fallo "$P instalado"; else ok "$P ausente"; fi
 done
 
@@ -69,7 +69,9 @@ python3 - "$SKEL/.config/mimeapps.list" <<'PY' && ok "mimeapps.list valido" || f
 import configparser, sys
 c = configparser.ConfigParser(); c.optionxform = str; c.read(sys.argv[1], encoding="utf-8")
 assert c["Default Applications"]["inode/directory"] == "thunar.desktop"
-assert not any(x in "".join(c["Default Applications"].values()) for x in ("firefox", "imv", "zathura", "FileRoller"))
+d = c["Default Applications"]
+assert d["video/mp4"] == "mpv.desktop" and d["image/png"] == "imv.desktop" and d["text/html"] == "brave-browser.desktop"
+assert d["application/pdf"] == "org.pwmt.zathura-pdf-poppler.desktop" and d["application/zip"] == "org.gnome.FileRoller.desktop"
 PY
 for B in captura-area menu-energia; do
     [ "$(stat -c '%a %U' chroot/usr/local/bin/$B)" = "755 root" ] && ok "$B 755 root" || fallo "$B: $(stat -c '%a %U' chroot/usr/local/bin/$B)"

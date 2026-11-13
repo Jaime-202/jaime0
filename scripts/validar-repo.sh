@@ -127,11 +127,11 @@ for F in auto/config auto/build \
          "$I/etc/skel/.config/hypr/hyprland.lua" "$I/etc/skel/.config/hypr/hyprlock.conf" "$I/etc/skel/.config/hypr/hypridle.conf" \
          "$I/etc/skel/.config/waybar/config.jsonc" "$I/etc/skel/.config/waybar/style.css" \
          "$I/etc/skel/.config/swaync/config.json" "$I/etc/skel/.config/swaync/style.css" \
-         "$I/usr/share/jaime0/ajustes.predeterminados" "$I/usr/share/jaime0/version" "$I/usr/share/jaime0/firma-actualizaciones.pem" \
-         "$I/etc/jaime0/update.conf" "$I/usr/share/backgrounds/jaime0/jaime0.png"; do
+         "$I/usr/share/jaime0/ajustes.predeterminados" "$I/usr/share/jaime0/version" \
+         "$I/usr/share/backgrounds/jaime0/jaime0.png"; do
     [ -f "$F" ] || fallo "falta $F"
 done
-for P in jaime0-update jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-flatpak notificaciones bloquear inactividad atajos; do
+for P in actualizaciones jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
     [ -f "$I/usr/local/bin/$P" ] || fallo "falta el programa $P"
 done
 ok "archivos imprescindibles revisados"

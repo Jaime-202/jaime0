@@ -1,0 +1,217 @@
+#!/usr/bin/python3 -I
+# actualizaciones: aviso de actualizaciones de Debian para la barra de Jaime0.
+#
+#   actualizaciones                    muestra lo pendiente y ofrece instalarlo (sudo apt)
+#   actualizaciones comprobar          comprueba sin instalar (--notificar, --silencioso)
+#   actualizaciones barra              una linea JSON para Waybar, sin red
+#
+# Lee las listas locales de apt (las refresca apt-daily una vez al dia) y, con debsecan,
+# cuales de los paquetes pendientes corrigen vulnerabilidades conocidas. Nunca instala
+# nada por su cuenta: solo cuando lo pides y con sudo. Lo propio de Jaime0 (configuracion,
+# scripts, temas) cambia con una ISO nueva, no con este programa.
+
+import argparse
+import datetime
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+SENAL_BARRA = 10
+ICONO_BARRA = "\U000f06b0"
+
+
+def dir_estado():
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "jaime0")
+
+
+ARCHIVO_ESTADO = os.path.join(dir_estado(), "actualizaciones.json")
+COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+
+def _c(codigo, texto):
+    return f"\033[{codigo}m{texto}\033[0m" if COLOR else texto
+
+
+def verde(t):
+    return _c("38;2;84;229;138", t)
+
+
+def ambar(t):
+    return _c("38;2;217;165;74", t)
+
+
+def tenue(t):
+    return _c("38;2;113;129;140", t)
+
+
+def estado_debian():
+    """Paquetes por actualizar y cuales corrigen fallos de seguridad. None si no se sabe."""
+    if not shutil.which("apt"):
+        return None
+    entorno = dict(os.environ, LC_ALL="C")
+    try:
+        r = subprocess.run(["apt", "list", "--upgradable"], capture_output=True, text=True,
+                           timeout=120, env=entorno)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    pendientes = sorted({l.split("/", 1)[0] for l in r.stdout.splitlines() if "[upgradable from" in l})
+    seguridad = []
+    if pendientes and shutil.which("debsecan"):
+        suite = "forky"
+        try:
+            with open("/etc/os-release", encoding="utf-8") as f:
+                for linea in f:
+                    if linea.startswith("VERSION_CODENAME="):
+                        suite = linea.split("=", 1)[1].strip().strip('"') or suite
+            d = subprocess.run(["debsecan", "--suite", suite, "--only-fixed", "--format", "packages"],
+                               capture_output=True, text=True, timeout=120, env=entorno)
+            if d.returncode == 0:
+                seguridad = sorted(set(d.stdout.split()) & set(pendientes))
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return {"paquetes": len(pendientes), "seguridad": seguridad,
+            "comprobado": datetime.datetime.now().isoformat(timespec="minutes")}
+
+
+def leer_estado():
+    try:
+        with open(ARCHIVO_ESTADO, encoding="utf-8") as f:
+            datos = json.load(f)
+        return datos if isinstance(datos, dict) else {}
+    except (OSError, ValueError):
+        return {}  # sin estado o roto: la proxima comprobacion lo rehace
+
+
+def guardar_estado(estado):
+    os.makedirs(dir_estado(), exist_ok=True)
+    temporal = ARCHIVO_ESTADO + ".tmp"
+    with open(temporal, "w", encoding="utf-8") as f:
+        json.dump(estado, f, ensure_ascii=False)
+    os.replace(temporal, ARCHIVO_ESTADO)
+    avisar_barra()
+
+
+def avisar_barra():
+    """Pide a Waybar que relea el indicador. Solo si lleva unos segundos en marcha: al
+    arrancar aun no atiende la senal y una senal RTMIN sin atender la cerraria."""
+    if not shutil.which("pgrep"):
+        return
+    r = subprocess.run(["pgrep", "-x", "-u", str(os.getuid()), "waybar"], capture_output=True, text=True)
+    try:
+        with open("/proc/uptime", encoding="ascii") as f:
+            uptime = float(f.read().split()[0])
+        for pid in r.stdout.split():
+            with open(f"/proc/{pid}/stat", encoding="ascii") as f:
+                inicio = int(f.read().rsplit(")", 1)[1].split()[19]) / os.sysconf("SC_CLK_TCK")
+            if uptime - inicio < 3:
+                return
+    except (OSError, ValueError, IndexError):
+        return
+    if r.stdout.split():
+        subprocess.run(["pkill", f"-RTMIN+{SENAL_BARRA}", "-x", "-u", str(os.getuid()), "waybar"])
+
+
+def mostrar(debian):
+    n, seg = debian.get("paquetes", 0), debian.get("seguridad", [])
+    if not n:
+        print(verde("✓") + " Los paquetes de Debian están al día.")
+        return
+    texto = f"Debian: {n} paquete{'s' if n != 1 else ''} por actualizar"
+    if seg:
+        texto += f", {len(seg)} con correcciones de seguridad ({', '.join(seg[:6])}{'…' if len(seg) > 6 else ''})"
+        print(ambar(texto))
+    else:
+        print(texto)
+
+
+def notificar_seguridad(debian):
+    """Una notificacion cuando aparecen correcciones de seguridad nuevas. No instala nada."""
+    seg = debian.get("seguridad") or []
+    if not seg or not shutil.which("notify-send"):
+        return
+    avisado = os.path.join(dir_estado(), "avisado-seguridad")
+    huella = hashlib.sha256(" ".join(seg).encode()).hexdigest()
+    try:
+        with open(avisado, encoding="utf-8") as f:
+            if f.read().strip() == huella:
+                return
+    except FileNotFoundError:
+        pass
+    os.makedirs(dir_estado(), exist_ok=True)
+    with open(avisado, "w", encoding="utf-8") as f:
+        f.write(huella + "\n")
+    subprocess.run(["notify-send", "--app-name=Jaime0", "--icon=security-high",
+                    "Actualizaciones de seguridad de Debian",
+                    f"{len(seg)} paquete{'s' if len(seg) != 1 else ''} con correcciones de seguridad. "
+                    "Pulsa el icono de la barra o ejecuta: actualizaciones"],
+                   capture_output=True, timeout=30)
+
+
+def cmd_comprobar(op):
+    debian = estado_debian()
+    if debian is None:
+        if not op.silencioso:
+            print("No se pudo consultar apt.", file=sys.stderr)
+        return 1
+    guardar_estado(debian)
+    if op.notificar:
+        notificar_seguridad(debian)
+    if not op.silencioso:
+        mostrar(debian)
+    return 0
+
+
+def cmd_barra(_op):
+    debian = leer_estado()
+    seguridad = debian.get("seguridad") or []
+    if seguridad:
+        tooltip = (f"Debian: {len(seguridad)} {'actualizaciones' if len(seguridad) != 1 else 'actualización'} de seguridad "
+                   f"({debian.get('paquetes', 0)} paquetes por actualizar en total)\nClic: verlas e instalarlas")
+        salida = {"text": ICONO_BARRA, "class": "seguridad", "tooltip": tooltip}
+    else:
+        salida = {"text": "", "class": "al-dia", "tooltip": ""}
+    print(json.dumps(salida, ensure_ascii=False))
+    return 0
+
+
+def cmd_interactivo(_op):
+    debian = estado_debian()
+    if debian is None:
+        print("No se pudo consultar apt.", file=sys.stderr)
+        return 1
+    guardar_estado(debian)
+    mostrar(debian)
+    if not debian["paquetes"]:
+        return 0
+    try:
+        respuesta = input("\n¿Instalar ahora con sudo apt full-upgrade? [s/N] ").strip().lower()
+    except EOFError:
+        return 0
+    if respuesta not in ("s", "si", "sí"):
+        print(tenue("No se ha instalado nada."))
+        return 0
+    r = subprocess.run(["sudo", "sh", "-c", "apt-get update && apt-get full-upgrade"])
+    final = estado_debian()
+    if final is not None:
+        guardar_estado(final)
+    return r.returncode
+
+
+def main():
+    p = argparse.ArgumentParser(prog="actualizaciones", description="Actualizaciones de Debian en Jaime0.")
+    sub = p.add_subparsers(dest="orden")
+    c = sub.add_parser("comprobar", help="comprueba sin instalar")
+    c.add_argument("--notificar", action="store_true", help="avisa de correcciones de seguridad nuevas")
+    c.add_argument("--silencioso", action="store_true", help="sin salida")
+    sub.add_parser("barra", help="estado para Waybar (JSON)")
+    op = p.parse_args()
+    orden = {"comprobar": cmd_comprobar, "barra": cmd_barra}.get(op.orden, cmd_interactivo)
+    return orden(op)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,20 @@
+#!/bin/sh
+# NVIDIA en modo offload: el modulo debe quedar compilado para el nucleo de la ISO y la
+# clave con la que DKMS lo firmo al compilar no puede viajar dentro de la imagen (el
+# instalador crea otra, propia de cada instalacion: jaime0-nvidia recompilar).
+set -e
+
+for D in /lib/modules/*/; do
+    K=$(basename "${D}")
+    [ -d "/lib/modules/${K}/build" ] || continue
+    if ! dkms status -k "${K}" | grep -q ': installed'; then
+        echo "ERROR: el modulo de NVIDIA no se ha compilado para ${K}" >&2
+        dkms status >&2 || true
+        exit 1
+    fi
+done
+
+rm -f /var/lib/dkms/mok.key /var/lib/dkms/mok.pub
+
+chmod 755 /usr/local/bin/jaime0-nvidia /usr/local/bin/prime-run
+chmod 644 /etc/modprobe.d/jaime0-nvidia.conf /etc/udev/rules.d/80-jaime0-nvidia-pm.rules

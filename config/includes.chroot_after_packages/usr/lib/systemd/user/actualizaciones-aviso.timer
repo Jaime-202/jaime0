@@ -1,5 +1,5 @@
 [Unit]
-Description=Comprueba una vez al dia si hay una version nueva de Jaime0
+Description=Comprueba una vez al dia las actualizaciones de Debian
 
 [Timer]
 OnStartupSec=10min

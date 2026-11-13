@@ -236,7 +236,6 @@ class PruebasPrograma(unittest.TestCase):
         e = self.e
         e.archivo("usr/share/jaime0/version", "0.2.0-beta.1\n")
         e.archivo("run/live/medium/.disk", "")
-        e.archivo("etc/jaime0/update.conf", "# comentario\ncanal=beta\n")
         e.archivo("proc/sys/kernel/hostname", "portatil-de-maria\n")
         e.archivo("proc/sys/kernel/osrelease", "6.12.0-1-amd64\n")
         e.archivo("etc/os-release", 'PRETTY_NAME="Jaime0"\nVERSION_CODENAME=forky\n')
@@ -267,7 +266,7 @@ class PruebasPrograma(unittest.TestCase):
         rc, out, err = e.ejecutar("--pantalla")
         self.assertEqual(rc, 0, err)
         self.comprobar_secciones(out)
-        for esperado in ("Versión: 0.2.0-beta.1", "en vivo", "Canal de actualizaciones: beta",
+        for esperado in ("Versión: 0.2.0-beta.1", "en vivo",
                          "Kernel: 6.12.0-1-amd64", "Arranque: UEFI", "Secure Boot: activado",
                          "CPU: CPU de prueba", "Núcleos: 2 físicos, 2 hilos", "RAM total: 7.6 GiB",
                          "i915", "HDA Intel PCH", "wlp2s0: wifi", "estado up", "carga 80 %",

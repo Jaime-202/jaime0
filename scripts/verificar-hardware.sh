@@ -18,11 +18,33 @@ if [ -d binary/EFI ]; then
     [ -n "$B" ] && [ -n "$G" ] && ok "medio con shim y GRUB en EFI/boot" || fallo "faltan bootx64/grubx64 en EFI"
 fi
 
-echo "== Firmware y audio de portatil =="
-for P in firmware-iwlwifi firmware-realtek firmware-atheros firmware-brcm80211 firmware-amd-graphics firmware-misc-nonfree firmware-sof-signed bluez-firmware alsa-ucm-conf alsa-topology-conf libmtp-runtime; do
+echo "== Firmware, energia y audio del portatil (Acer Nitro AN515-55) =="
+for P in firmware-iwlwifi firmware-intel-graphics firmware-intel-sound firmware-intel-misc firmware-sof-signed firmware-nvidia-gsp intel-microcode intel-media-va-driver-non-free power-profiles-daemon thermald alsa-ucm-conf alsa-topology-conf libmtp-runtime; do
     instalado "$P" && ok "$P" || fallo "$P ausente"
 done
 for P in libgl1-mesa-dri mesa-vulkan-drivers libegl-mesa0; do instalado "$P" && ok "$P" || fallo "$P ausente"; done
+# Solo el firmware de este equipo: nada del resto de fabricantes.
+for P in firmware-brcm80211 firmware-amd-graphics firmware-atheros firmware-qcom-soc firmware-mediatek amd64-microcode; do
+    instalado "$P" && fallo "$P no deberia estar" || ok "$P ausente"
+done
+
+echo "== NVIDIA en modo offload =="
+for P in nvidia-kernel-dkms nvidia-driver-libs libnvidia-egl-wayland1 nvidia-vulkan-icd nvidia-smi mokutil linux-headers-amd64; do
+    instalado "$P" && ok "$P" || fallo "$P ausente"
+done
+instalado xserver-xorg-video-nvidia && fallo "xserver-xorg-video-nvidia (arrastra Xorg)" || ok "sin el controlador de Xorg de NVIDIA"
+for D in chroot/lib/modules/*/; do
+    K=$(basename "$D")
+    chroot chroot dkms status -k "$K" | grep -q ': installed' && ok "modulo de NVIDIA compilado para $K" || fallo "modulo de NVIDIA sin compilar para $K"
+done
+ls chroot/var/lib/dkms/mok.key chroot/var/lib/dkms/mok.pub >/dev/null 2>&1 && fallo "clave de DKMS dentro de la imagen" || ok "sin clave de firma en la imagen"
+! grep -rqs 'PRIVATE KEY' chroot/var/lib/dkms chroot/etc && ok "ninguna clave privada en /var/lib/dkms ni /etc" || fallo "clave privada en la imagen"
+grep -q 'options nvidia-current NVreg_DynamicPowerManagement=0x02' chroot/etc/modprobe.d/jaime0-nvidia.conf && ok "ahorro de energia de NVIDIA" || fallo "jaime0-nvidia.conf"
+[ -s chroot/etc/udev/rules.d/80-jaime0-nvidia-pm.rules ] && ok "reglas udev de energia" || fallo "reglas udev de energia"
+for S in jaime0-nvidia prime-run; do
+    [ -x "chroot/usr/local/bin/$S" ] && sh -n "chroot/usr/local/bin/$S" && ok "$S" || fallo "$S"
+done
+grep -q 'jaime0-nvidia recompilar' chroot/etc/calamares/modules/shellprocess_nvidia.conf && grep -q 'shellprocess@nvidia' chroot/etc/calamares/settings.conf && ok "el instalador firma el modulo" || fallo "paso shellprocess@nvidia"
 
 echo "== Respaldo si no hay GPU =="
 [ -x chroot/usr/local/bin/iniciar-sesion ] && ok "iniciar-sesion ejecutable" || fallo "iniciar-sesion"

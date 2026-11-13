@@ -20,7 +20,7 @@ for P in hyprlock hypridle swaylock wob hyprsunset hyprpicker brightnessctl play
 done
 # 0.2: hyprlock e hypridle son el bloqueo y la inactividad (ver arriba); lo que no debe
 # estar es swayidle, al que sustituye hypridle (inactividad solo lo usa si falta hypridle).
-for P in swayidle brave-browser firefox-esr firefox chromium bibata-cursor-theme; do
+for P in swayidle firefox-esr firefox chromium bibata-cursor-theme; do
     instalado "$P" && fallo "$P no deberia estar" || ok "$P ausente"
 done
 

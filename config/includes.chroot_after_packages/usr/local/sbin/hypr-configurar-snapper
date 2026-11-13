@@ -1,8 +1,7 @@
 #!/bin/sh
 # Corre dentro del sistema de destino, al final de la instalacion. Si / esta en Btrfs,
 # configura snapper para "/": con su gancho de apt (/etc/apt/apt.conf.d/80snapper) hay
-# una instantanea antes y otra despues de cada operacion de paquetes, y jaime0-update hace
-# lo mismo con cada actualizacion. Solo instantaneas numeradas (las 10 ultimas), sin las
+# una instantanea antes y otra despues de cada operacion de paquetes. Solo instantaneas numeradas (las 10 ultimas), sin las
 # horarias. /boot queda fuera (ext4): ver docs/recuperacion.md. En ext4 no hace nada.
 set -e
 

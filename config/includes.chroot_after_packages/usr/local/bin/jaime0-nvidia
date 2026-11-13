@@ -1,0 +1,119 @@
+#!/bin/sh
+# jaime0-nvidia: estado de la grafica NVIDIA y registro de su clave para Secure Boot.
+#
+#   jaime0-nvidia             estado: modulo, Secure Boot, clave y si la grafica duerme
+#   jaime0-nvidia registrar   registra la clave del modulo (una sola vez, con Secure Boot)
+#   jaime0-nvidia recompilar  (root) clave nueva y modulo compilado y firmado con ella; lo
+#                             ejecuta el instalador y sirve si falta o se pierde la clave
+#   jaime0-nvidia aviso       notificacion al entrar si falta registrar la clave
+#
+# El modulo de NVIDIA se compila en el equipo (DKMS) y se firma con una clave propia de
+# esta instalacion (/var/lib/dkms/mok.pub). Con Secure Boot activado, el firmware solo lo
+# carga si esa clave esta registrada: se hace una vez con "jaime0-nvidia registrar" y una
+# pantalla azul (MokManager) en el siguiente arranque.
+
+CLAVE=/var/lib/dkms/mok.pub
+
+grafica() {
+    for d in /sys/bus/pci/devices/*; do
+        [ "$(cat "$d/vendor" 2>/dev/null)" = 0x10de ] || continue
+        case "$(cat "$d/class" 2>/dev/null)" in 0x0300*|0x0302*) echo "$d"; return 0 ;; esac
+    done
+    return 1
+}
+
+secure_boot() { mokutil --sb-state 2>/dev/null | grep -q enabled; }
+registrada() { [ -r "$CLAVE" ] && mokutil --test-key "$CLAVE" 2>/dev/null | grep -q "already enrolled"; }
+pendiente() { [ -r "$CLAVE" ] && mokutil --list-new 2>/dev/null | grep -q .; }
+cargado() { [ -e /sys/module/nvidia ]; }
+
+estado() {
+    G=$(grafica) || { echo "No hay grafica NVIDIA en este equipo."; return 0; }
+    if cargado; then
+        echo "NVIDIA: lista (modulo $(cat /sys/module/nvidia/version 2>/dev/null) cargado)."
+        echo "Energia: $(cat "$G/power/runtime_status" 2>/dev/null) (suspended = apagada, sin gastar bateria)."
+        echo "Para usarla:  prime-run PROGRAMA    (por ejemplo: prime-run mpv video.mkv)"
+        return 0
+    fi
+    echo "NVIDIA: el modulo no esta cargado; el escritorio usa la Intel."
+    if [ -d /run/live/medium ]; then
+        echo "Es la sesion en vivo: la NVIDIA se prepara al instalar el sistema."
+    elif ! [ -r "$CLAVE" ]; then
+        echo "Falta la clave de firma del modulo. Crea otra y firmalo con: sudo jaime0-nvidia recompilar"
+    elif secure_boot && pendiente; then
+        echo "La clave esta pendiente de registrar: reinicia y en la pantalla azul elige"
+        echo "Enroll MOK > Continue > Yes, escribe la clave que pusiste y Reboot."
+    elif secure_boot && ! registrada; then
+        echo "Secure Boot esta activado y la clave del modulo no esta registrada."
+        echo "Para registrarla (una sola vez):  jaime0-nvidia registrar"
+    else
+        echo "Detalle:  journalctl -b -k | grep -i nvidia"
+    fi
+}
+
+registrar() {
+    grafica >/dev/null || { echo "No hay grafica NVIDIA en este equipo."; return 0; }
+    [ -r "$CLAVE" ] || { echo "No existe $CLAVE. Crea la clave y firma el modulo con: sudo jaime0-nvidia recompilar" >&2; return 1; }
+    if ! secure_boot; then echo "Secure Boot esta desactivado: no hace falta registrar nada."; return 0; fi
+    if registrada; then echo "La clave ya esta registrada."; return 0; fi
+    cat <<'FIN'
+Vas a registrar la clave que firma el modulo de NVIDIA.
+
+1. Ahora te pide la clave de sudo y despues una clave de un solo uso (dos veces).
+   Elige una sencilla: solo se usa en el paso 3 y el teclado alli es ingles (US).
+2. Reinicia el equipo.
+3. Aparece una pantalla azul (MokManager): elige "Enroll MOK", "Continue", "Yes",
+   escribe la clave de un solo uso y elige "Reboot".
+
+FIN
+    sudo mokutil --import "$CLAVE" || return 1
+    echo
+    echo "Hecho. Reinicia y sigue el paso 3. Despues, comprueba con: jaime0-nvidia"
+}
+
+# La ISO lleva el modulo compilado pero sin clave (se borra al compilarla). Aqui DKMS crea
+# una clave nueva, propia de esta instalacion (mok.key solo para root), y vuelve a compilar
+# y firmar el modulo con ella. "dkms autoinstall" no recompila lo ya instalado: se fuerza
+# cada modulo. Tras una clave nueva, con Secure Boot hay que volver a registrarla.
+recompilar() {
+    [ "$(id -u)" = 0 ] || { echo "Hace falta root: sudo jaime0-nvidia recompilar" >&2; return 1; }
+    dpkg-query -W -f='${Status}' nvidia-kernel-dkms 2>/dev/null | grep -q "install ok installed" || {
+        echo "El modulo de NVIDIA no esta instalado."; return 0; }
+    rm -f /var/lib/dkms/mok.key /var/lib/dkms/mok.pub
+    for D in /lib/modules/*/; do
+        K=$(basename "${D}")
+        [ -d "/lib/modules/${K}/build" ] || continue
+        for M in $(/usr/sbin/dkms status -k "${K}" | cut -d, -f1); do
+            /usr/sbin/dkms build --force "${M}" -k "${K}" || return 1
+            /usr/sbin/dkms install --force "${M}" -k "${K}" || return 1
+        done
+    done
+    [ -s "$CLAVE" ] || { echo "DKMS no ha creado la clave $CLAVE" >&2; return 1; }
+    chmod 600 /var/lib/dkms/mok.key
+    chmod 644 "$CLAVE"
+}
+
+aviso() {
+    [ -d /run/live/medium ] && return 0
+    grafica >/dev/null || return 0
+    cargado && return 0
+    secure_boot || return 0
+    registrada && return 0
+    marca="${XDG_RUNTIME_DIR:-/tmp}/jaime0-nvidia-avisado"
+    [ -e "$marca" ] && return 0
+    : > "$marca"
+    if pendiente; then
+        texto="Reinicia y en la pantalla azul elige Enroll MOK para terminar de registrar la clave."
+    else
+        texto="Para usarla, registra su clave una vez: abre una terminal y ejecuta jaime0-nvidia registrar"
+    fi
+    notify-send --app-name=Jaime0 --icon=video-display "La NVIDIA aun no esta lista" "$texto"
+}
+
+case "${1:-estado}" in
+    estado)    estado ;;
+    registrar)  registrar ;;
+    recompilar) recompilar ;;
+    aviso)      aviso ;;
+    *)          echo "Uso: jaime0-nvidia [estado|registrar|recompilar|aviso]" >&2; exit 2 ;;
+esac

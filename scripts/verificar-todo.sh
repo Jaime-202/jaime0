@@ -5,7 +5,7 @@
 cd "$(dirname "$(readlink -f "$0")")" || exit 1
 T=verificar-todo.log; : > "$T"
 FALLOS=0
-for n in repos software aspecto grafico barra instalador identidad atajos hardware actualizador; do
+for n in repos software aspecto grafico barra instalador identidad atajos hardware; do
     sudo ./verificar-$n.sh > verificar-$n.log 2>&1; R=$?
     [ "$R" -ne 0 ] && FALLOS=$((FALLOS+1))
     echo "$n rc=$R $(date +%T) $(grep RESULTADO verificar-$n.log)" | tee -a "$T"

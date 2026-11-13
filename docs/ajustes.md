@@ -4,7 +4,7 @@ Los ajustes visuales de Jaime0 están en un solo sitio. Se cambian con una orden
 
 | Archivo | De quién es | Qué contiene |
 |---|---|---|
-| `/usr/share/jaime0/ajustes.predeterminados` | Del sistema: `jaime0-update` lo sustituye | Valores de fábrica y temas de acento |
+| `/usr/share/jaime0/ajustes.predeterminados` | Del sistema: una ISO nueva lo sustituye | Valores de fábrica y temas de acento |
 | `~/.config/jaime0/ajustes` | Tuyo: ninguna actualización lo toca | Solo lo que has cambiado |
 | `~/.config/jaime0/generado/` | Se rehace siempre | Lo que leen Waybar (`waybar.json`, `waybar.css`) y rofi (`rofi.rasi`). No lo edites |
 
@@ -124,7 +124,6 @@ Consumo medido en la VM de pruebas (sesión en vivo, VirtualBox, dibujo por soft
 ## Límites conocidos
 
 - El acento aún no cambia el día de hoy del calendario de la barra, swaylock (solo de respaldo), kitty, btop ni GTK: siguen en verde.
-- Si modificaste a mano `~/.config/hypr/hyprland.lua`, `~/.config/waybar/*` o `~/.config/rofi/jaime0.rasi` antes de la 0.2, `jaime0-update` conserva tu versión (conflicto) y los ajustes no tendrán efecto en ese programa hasta que aceptes la nueva (`jaime0-update resolver RUTA --usar-nueva`).
 - Una altura de barra distinta de 26 mueve los módulos: `scripts/coords-barra.sh` mide a 26 px.
 - Los widgets se muestran en la pantalla principal; con varios monitores no se pueden repartir entre pantallas.
 - El reloj de 12 horas escribe AM/PM, sin traducir.

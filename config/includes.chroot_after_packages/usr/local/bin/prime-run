@@ -1,0 +1,17 @@
+#!/bin/sh
+# prime-run PROGRAMA [ARGUMENTOS]: abre un programa con la NVIDIA en lugar de la Intel.
+# Ejemplos:  prime-run mpv video.mkv    prime-run brave-browser
+# Si la NVIDIA no esta lista (clave sin registrar con Secure Boot), el programa se abre con
+# la Intel y se avisa: jaime0-nvidia explica el motivo.
+[ $# -gt 0 ] || { echo "Uso: prime-run PROGRAMA [ARGUMENTOS]" >&2; exit 2; }
+
+if [ ! -e /sys/module/nvidia_drm ]; then
+    echo "prime-run: la NVIDIA no esta disponible; se usa la Intel. Detalles: jaime0-nvidia" >&2
+    exec "$@"
+fi
+
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/10_nvidia.json
+exec "$@"

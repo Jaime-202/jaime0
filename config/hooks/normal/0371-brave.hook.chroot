@@ -1,0 +1,15 @@
+#!/bin/sh
+# Brave desde su repositorio oficial (brave.com/linux). La clave y el repositorio vienen en
+# el repositorio de Jaime0 (descargados de brave-browser-apt-release.s3.brave.com):
+#   /usr/share/keyrings/brave-browser-archive-keyring.gpg
+#     DBF1 A116 C220 B8C7 164F  9823 0686 B784 2003 8257  (2022, caduca en 2032)
+#     47D3 2A74 E9A9 E013 A4B4  926C 68D5 13D3 6A73 CD96  (2025, caduca en 2035)
+#   /etc/apt/sources.list.d/brave-browser-release.sources
+# Despues se actualiza con apt como cualquier otro paquete.
+set -e
+
+chmod 644 /usr/share/keyrings/brave-browser-archive-keyring.gpg /etc/apt/sources.list.d/brave-browser-release.sources
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends brave-browser
+apt-get clean
+command -v brave-browser

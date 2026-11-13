@@ -151,6 +151,15 @@ hl.monitor({
     scale    = esVirtual and 1 or "auto",
 })
 
+-- Pantalla del portatil (15,6" a 1920x1080): a escala 1.25 el texto queda del tamano que
+-- usaba Windows en este equipo (1536x864 de espacio util, escala exacta, sin borrosidad).
+hl.monitor({
+    output   = "eDP-1",
+    mode     = "preferred",
+    position = "auto",
+    scale    = 1.25,
+})
+
 -- Pantallas configuradas con nwg-displays (Pantallas, en el lanzador). Guarda lineas
 -- "monitor=NOMBRE,MODO,POSICION,ESCALA[,opcion,valor...]" en monitors.conf, el formato
 -- anterior a Lua, que aqui se traduce a hl.monitor. Sin ese archivo, todo automatico.
@@ -234,6 +243,8 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("jaime0-anclar vigilar")
     -- Notificaciones: swaync (o dunst si swaync no esta instalado).
     hl.exec_cmd("notificaciones iniciar")
+    -- Si la NVIDIA espera a que se registre su clave (Secure Boot), un aviso al entrar.
+    hl.exec_cmd("sh -c 'sleep 6; exec jaime0-nvidia aviso'")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
     -- Bloqueo a los 10 min, pantalla apagada a los 11 y suspension a los 30 (no en vivo).

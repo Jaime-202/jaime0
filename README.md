@@ -1,12 +1,33 @@
 # Jaime0
 
-**Jaime0 es un sistema operativo para ordenadores de escritorio y portátiles.** Se puede probar desde un USB sin tocar el disco y, si convence, instalarlo con un asistente gráfico. Está pensado para quien quiere un equipo rápido y ordenado, que se maneja sobre todo con el teclado sin renunciar al ratón, y que funciona nada más instalarlo.
+**Jaime0 es un sistema operativo personal, hecho a medida de un portátil concreto.** Es un Linux que se prueba desde un USB sin tocar el disco y se instala con un asistente gráfico. Está pensado para un equipo rápido y ordenado, que se maneja sobre todo con el teclado sin renunciar al ratón, y que funciona nada más instalarlo: el firmware, los controladores, el navegador y los visores ya vienen dentro.
 
-Por dentro es **Debian** (la misma base que usan miles de servidores y otras distribuciones) con un escritorio moderno montado pieza a pieza: **Hyprland** como gestor de ventanas, una barra fina, notificaciones, bloqueo de pantalla, widgets opcionales y herramientas propias para ajustarlo y actualizarlo. Todo comparte la misma estética: negro profundo y un verde discreto que solo marca lo que está activo.
+Por dentro es **Debian** (la misma base que usan miles de servidores y otras distribuciones) con un escritorio moderno montado pieza a pieza: **Hyprland** como gestor de ventanas, una barra fina, notificaciones, bloqueo de pantalla, widgets opcionales y herramientas propias para ajustarlo. Todo comparte la misma estética: negro profundo y un verde discreto que solo marca lo que está activo.
 
 ![Mosaico con btop, Neovim y Fastfetch](capturas/mosaico.png)
 
-> **Estado:** la versión más reciente es la [0.2.0-beta.2](https://github.com/Jaime-202/jaime0/releases/tag/v0.2.0-beta.2), una **beta** probada en máquinas virtuales (sesión en vivo e instalación en ext4 y en Btrfs con cifrado). Nada se ha probado todavía en un equipo físico: revisa [Qué no se ha probado](#qué-no-se-ha-probado) y haz copia de seguridad antes de instalarlo en un equipo con datos importantes.
+> **Estado:** en desarrollo (0.3.0-beta.1). Probado en máquinas virtuales; **todavía no en el portátil**. La ISO se instalará cuando esté terminada. Lo que falta por probar: [Qué no se ha probado](#qué-no-se-ha-probado).
+
+## El equipo
+
+Todo está elegido para este portátil:
+
+| Pieza | Modelo | Qué hace Jaime0 con ella |
+|---|---|---|
+| Equipo | Acer Nitro AN515-55 | |
+| Procesador | Intel Core i7-10750H (6 núcleos, 12 hilos) | Microcódigo de Intel; `thermald` para que no se caliente de más |
+| Gráfica integrada | Intel UHD (Comet Lake) | Dibuja todo el escritorio; vídeo por hardware (VA-API) |
+| Gráfica dedicada | NVIDIA GeForce GTX 1650 Ti | Apagada hasta que la pides con `prime-run`: juegos, renderizado, CUDA, HDMI. Ver [docs/nvidia.md](docs/nvidia.md) |
+| Pantalla | 15,6" a 1920x1080 | Escala 1.25, como la usaba Windows |
+| Memoria | 16 GiB | |
+| Disco | SSD NVMe WD SN530 de 512 GB | Cifrado LUKS y Btrfs con instantáneas, opcionales en el instalador |
+| Wi-Fi y Bluetooth | Intel AX201 (Wi-Fi 6) | Firmware incluido |
+| Sonido | Intel Smart Sound (SOF) con códec Realtek | Firmware SOF incluido |
+| Ethernet | Killer E2600 | Funciona sin firmware |
+| Batería | | Perfiles de energía en la barra (ahorro, equilibrado, rendimiento) |
+| Arranque | UEFI con Secure Boot activado | Arranca con Secure Boot; la NVIDIA pide registrar su clave una vez |
+
+En otro equipo también arranca, pero solo lleva el firmware de este: el Wi-Fi o la gráfica de otro modelo pueden no funcionar.
 
 ## Qué es, explicado sin prisas
 
@@ -18,13 +39,17 @@ Un sistema Linux se compone de muchas piezas hechas por proyectos distintos: el 
 
 Debian publica una versión estable cada dos años y, mientras tanto, prepara la siguiente en una rama llamada **testing**, que ahora se llama *Forky*. Jaime0 usa esa rama para tener programas recientes (Hyprland avanza muy deprisa). La contrapartida es que testing recibe cambios a diario y alguna actualización puede romper algo; por eso Jaime0 trae formas de volver atrás (ver más abajo).
 
-Los programas se instalan como en cualquier Debian, con `apt` y desde los repositorios oficiales. Jaime0 no tiene repositorio de paquetes propio.
+Los programas se instalan como en cualquier Debian, con `apt` y desde los repositorios oficiales (Brave, desde el suyo).
 
 ### Wayland y Hyprland: ventanas en mosaico
 
 En Linux, el programa que dibuja las ventanas en pantalla se llama **compositor**. Jaime0 usa **Wayland**, el sistema gráfico moderno que sustituye a X11, con **Hyprland** como compositor.
 
 Hyprland organiza las ventanas **en mosaico** (*tiling*): en lugar de amontonarlas y obligarte a moverlas y redimensionarlas a mano, las coloca solas una junto a otra aprovechando toda la pantalla. Abres una terminal y ocupa la pantalla; abres otra y se reparten el espacio. Todo tiene atajo (`SUPER + Intro` abre una terminal, `SUPER + Q` cierra, `SUPER + 1-9` cambia de escritorio), pero también se puede usar el ratón y dejar cualquier ventana flotante.
+
+### Dos gráficas, cada una a lo suyo
+
+El portátil tiene una gráfica Intel, que gasta poco, y una NVIDIA, potente pero glotona. Jaime0 usa la Intel para todo el escritorio y deja la NVIDIA **apagada** hasta que un programa la necesita: `prime-run programa` lo abre con ella. Así la batería dura más y el portátil va más fresco. Como el equipo tiene Secure Boot, el controlador de NVIDIA se firma con una clave propia de tu instalación, que se registra una sola vez. Todo el detalle: [docs/nvidia.md](docs/nvidia.md).
 
 ### Ligero de verdad
 
@@ -36,36 +61,27 @@ Con el escritorio en reposo usa unos **530 MiB de RAM** y arranca en unos **15 s
 |---|---|---|
 | Arranque | Menú de arranque, cifrado del disco, animación de inicio | GRUB, shim firmado (Secure Boot), LUKS, Plymouth |
 | Acceso | Pide usuario y contraseña en una pantalla de texto | `greetd` con `tuigreet` |
-| Escritorio | Dibuja y organiza las ventanas | Hyprland, con configuración en Lua |
-| Barra y widgets | Escritorios, aplicaciones ancladas, estado y hora; reloj, música, tiempo... | Waybar (parcheado), Quickshell |
+| Escritorio | Dibuja y organiza las ventanas, en la gráfica Intel | Hyprland, con configuración en Lua |
+| Barra y widgets | Escritorios, aplicaciones ancladas, energía, estado y hora; reloj, música, tiempo... | Waybar (parcheado), Quickshell |
 | Servicios de la sesión | Notificaciones, bloqueo, inactividad, indicador de volumen, modo noche | swaync, Hyprlock, Hypridle, wob, Hyprsunset |
-| Herramientas de Jaime0 | Ajustes, ancladas, atajos, actualizaciones, diagnóstico | `jaime0-ajustes`, `jaime0-anclar`, `atajos`, `jaime0-update`, `jaime0-diagnostico` |
-| Sistema | Paquetes, red, sonido, Bluetooth | Debian Forky: `apt`, NetworkManager, PipeWire, BlueZ |
+| Herramientas de Jaime0 | Ajustes, ancladas, atajos, NVIDIA, actualizaciones, diagnóstico | `jaime0-ajustes`, `jaime0-anclar`, `atajos`, `jaime0-nvidia`, `prime-run`, `actualizaciones`, `jaime0-diagnostico` |
+| Sistema | Paquetes, red, sonido, Bluetooth, energía | Debian Forky: `apt`, NetworkManager, PipeWire, BlueZ, power-profiles-daemon |
 
 Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 
 ### Seguro por defecto
 
 - **Cortafuegos activo** (UFW): el equipo sale a internet con normalidad, pero no acepta conexiones entrantes que no hayas abierto tú.
-- **Cifrado del disco opcional** (LUKS) desde el instalador: sin la clave, nadie puede leer tus datos aunque se lleve el disco.
-- **Secure Boot:** arranca con el cargador y el núcleo firmados por Debian, sin desactivar el arranque seguro.
-- **Avisos de seguridad:** la barra indica cuándo hay actualizaciones de Debian y cuáles corrigen fallos de seguridad.
-- **Memoria comprimida** (zram) en equipos con 8 GiB o menos: parte de la RAM se usa, comprimida, como espacio de intercambio, mucho más rápido que el disco.
+- **Cifrado del disco opcional** (LUKS) desde el instalador: sin la clave, nadie puede leer tus datos aunque se lleve el portátil.
+- **Secure Boot:** arranca con el cargador y el núcleo firmados por Debian, sin desactivar el arranque seguro. El módulo de NVIDIA, con tu propia clave.
+- **Avisos de seguridad:** la barra indica cuándo hay actualizaciones de Debian que corrigen fallos de seguridad.
 
-### Actualizar sin reinstalar y volver atrás
+### Actualizar y volver atrás
 
-Hay dos tipos de actualizaciones, cada una con su herramienta:
+- **Programas y sistema** (Debian, Brave, el controlador de NVIDIA): con `apt`. El comando `actualizaciones` (o el icono de la barra) muestra lo pendiente y lo instala cuando quieras.
+- **Lo propio de Jaime0** (configuración, scripts, temas): llega con una ISO nueva.
 
-- **Los programas de Debian** se actualizan con `apt`, como siempre.
-- **Lo propio de Jaime0** (configuración, scripts, temas) se actualiza con **`jaime0-update`**. Descarga versiones **firmadas** (Ed25519) desde GitHub Releases y comprueba la firma antes de tocar nada. Respeta los archivos que hayas personalizado: deja la versión nueva al lado para que elijas. Y guarda una copia de todo lo que cambia para poder **revertir**. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
-
-Si al instalar eliges el sistema de archivos **Btrfs**, además se guarda una **instantánea** del sistema antes y después de cada actualización (con *snapper*), y los cambios de paquetes se pueden deshacer con una orden. Con ext4, la opción por defecto, no hay instantáneas. Qué se puede recuperar y qué no: [docs/recuperacion.md](docs/recuperacion.md).
-
-### Para quién es, y para quién no
-
-**Te encaja** si te gusta trabajar con el teclado, quieres un sistema que arranque rápido y no gaste recursos sin motivo, o te pica la curiosidad por los escritorios en mosaico y quieres uno ya configurado y coherente.
-
-**Quizá no** si buscas un escritorio clásico con iconos y menú de inicio, necesitas una estabilidad a prueba de todo (para eso, Debian estable) o dependes de una gráfica NVIDIA reciente con su controlador propietario, que aquí no se ha probado.
+Si al instalar eliges el sistema de archivos **Btrfs**, se guarda una **instantánea** del sistema antes y después de cada actualización (con *snapper*), y los cambios de paquetes se pueden deshacer con una orden. Con ext4, la opción por defecto, no hay instantáneas. Ver [docs/actualizaciones.md](docs/actualizaciones.md) y [docs/recuperacion.md](docs/recuperacion.md).
 
 | Escritorio al entrar | Lista de atajos |
 |---|---|
@@ -78,34 +94,24 @@ Si al instalar eliges el sistema de archivos **Btrfs**, además se guarda una **
 - **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, aplicaciones ancladas en el centro y estado y hora a la derecha. El reloj se redibuja una vez por minuto, y la campana y las ancladas solo cuando cambian.
 - **Aplicaciones ancladas:** hasta 6 en el centro de la barra. Un punto marca las abiertas; al pulsar, se enfoca su ventana o se inicia. Se gestionan con `jaime0-anclar` o desde `jaime0-ajustes`.
 - **Widgets de escritorio** opcionales (Quickshell): reloj, música, tiempo, volumen y brillo, sistema y calendario, cada uno donde elijas. Ver [docs/ajustes.md](docs/ajustes.md#widgets-de-escritorio).
-- **Ajustes en un solo sitio:** `jaime0-ajustes`, en la terminal o con su ventana, cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y la barra, y lo aplica al momento. Tus ajustes viven en `~/.config/jaime0/ajustes` y ninguna actualización los toca.
-- **Notificaciones y bloqueo:** centro de notificaciones con no molestar y controles de música; pantalla de bloqueo con la hora y la canción que suena; bloqueo automático por inactividad.
+- **Ajustes en un solo sitio:** `jaime0-ajustes`, en la terminal o con su ventana, cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y la barra, y lo aplica al momento.
+- **Notificaciones y bloqueo:** centro de notificaciones con no molestar y controles de música; pantalla de bloqueo con la hora y la canción que suena; bloqueo automático por inactividad y al cerrar la tapa.
+- **Ya instalados:** Brave (navegador), mpv (vídeo y música), imv (imágenes), zathura (PDF) y file-roller (comprimidos), abiertos al pulsar un archivo en Thunar.
 - **Comando `atajos`:** lista todos los atajos reales y permite añadir los tuyos, comprobando antes que la configuración es válida.
 - **Instalador gráfico** (Calamares): borrar el disco, instalar junto a otro sistema o particionar a mano, con cifrado opcional, ext4 o Btrfs, y sin necesidad de red.
-- **BIOS y UEFI**, Secure Boot, arranque desde USB grabado en modo imagen y **modo seguro** para gráficas problemáticas.
-- **Flatpak/Flathub**, solo si lo activas (`jaime0-flatpak activar`).
-
-## Requisitos
-
-| | Mínimo |
-|---|---|
-| Procesador | x86-64 |
-| Memoria | 2 GiB |
-| Disco | 15 GiB |
-| Gráfica | Intel, AMD o NVIDIA con Nouveau, con aceleración compatible con Wayland (NVIDIA propietario: ver [Tarjetas NVIDIA](#tarjetas-nvidia)) |
-| USB | 4 GB o más para grabar la ISO |
+- **Modo seguro** en el menú de arranque, por si la gráfica da problemas.
 
 ## Instalación
 
-### 1. Descargar y comprobar la ISO
+### 1. Compilar y comprobar la ISO
 
-Descarga `jaime0-*-amd64.iso` y su `.sha256` desde [Releases](https://github.com/Jaime-202/jaime0/releases). Para comprobarla en Linux, desde la carpeta de la descarga:
+El repositorio es privado y la ISO no se publica: se compila con los pasos de [Reconstruir la ISO](#reconstruir-la-iso). Al terminar, guarda su suma para comprobar la copia del USB:
 
 ```bash
-sha256sum -c jaime0-*-amd64.iso.sha256
+sha256sum jaime0-amd64.hybrid.iso
 ```
 
-En Windows, compara la suma que muestra este comando con la del archivo `.sha256`:
+En Windows:
 
 ```powershell
 Get-FileHash .\jaime0-*-amd64.iso -Algorithm SHA256
@@ -113,19 +119,19 @@ Get-FileHash .\jaime0-*-amd64.iso -Algorithm SHA256
 
 ### 2. Grabar en un USB
 
-Grabar **borra todo el contenido del USB**.
+Grabar **borra todo el contenido del USB** (4 GB o más).
 
 **Windows, con [Rufus](https://rufus.ie):** elige la ISO, pulsa **Empezar** y selecciona **Escribir en modo Imagen DD**. El modo ISO de Rufus no se ha probado.
 
 **Linux**, sustituyendo `/dev/sdX` por tu USB (compruébalo antes con `lsblk`):
 
 ```bash
-sudo dd if=jaime0-AAAAMMDD-amd64.iso of=/dev/sdX bs=4M status=progress oflag=sync
+sudo dd if=jaime0-amd64.hybrid.iso of=/dev/sdX bs=4M status=progress oflag=sync
 ```
 
 ### 3. Arrancar e instalar
 
-Arranca el equipo desde el USB. El sistema entra solo en la sesión en vivo.
+Con el portátil apagado, enchufa el USB, enciéndelo pulsando **F12** (menú de arranque de Acer; si no aparece, actívalo en la BIOS con F2, pestaña **Main**, **F12 Boot Menu**) y elige el USB. Secure Boot puede quedarse activado. El sistema entra solo en la sesión en vivo.
 
 | Dato | Valor |
 |---|---|
@@ -134,28 +140,19 @@ Arranca el equipo desde el USB. El sistema entra solo en la sesión en vivo.
 | Instalar | `SUPER + Espacio` y busca **Instalar el sistema** |
 | Acceso tras instalar | Pantalla de texto: usuario, Intro, contraseña, Intro |
 
-El usuario que crees en el instalador hereda toda la configuración. El equipo se llama `jaime0` por defecto.
+El usuario que crees en el instalador hereda toda la configuración. El equipo se llama `jaime0` por defecto. Al final de la instalación se compila el módulo de NVIDIA con una clave nueva: tarda unos minutos.
 
 Con cifrado, `/boot` queda sin cifrar y la clave se pide una sola vez al arrancar. El registro del instalador queda en `~/instalador.log` de la sesión en vivo.
+
+### 4. Primer arranque: la NVIDIA
+
+Al entrar por primera vez aparece un aviso: la NVIDIA necesita que registres su clave **una vez** (por Secure Boot). Abre una terminal, ejecuta `jaime0-nvidia registrar`, reinicia y, en la pantalla azul, elige **Enroll MOK**. Los pasos, con detalle: [docs/nvidia.md](docs/nvidia.md#la-primera-vez-registrar-la-clave-secure-boot). Hasta entonces todo funciona con la Intel.
 
 ### Si la pantalla se queda en negro o no entra al escritorio
 
 En el menú de arranque del USB elige **Modo seguro**, que arranca con `nomodeset`. En un sistema ya instalado, elige en GRUB **Opciones avanzadas** y la entrada **(modo seguro)**.
 
 Si Hyprland no puede abrirse, Jaime0 muestra un mensaje con la causa más probable y una consola para reparar el sistema. Con `nomodeset` la gráfica queda desactivada, así que el escritorio no llegará a abrirse: ese modo sirve para entrar y arreglar el controlador.
-
-### Tarjetas NVIDIA
-
-Por defecto se usa el controlador libre Nouveau, que puede ir lento o fallar en tarjetas recientes. Estos pasos instalan el controlador propietario de Debian; **no se han probado**:
-
-```bash
-sudo apt update
-```
-```bash
-sudo apt install linux-headers-amd64 nvidia-driver firmware-misc-nonfree
-```
-
-Añade `nvidia-drm.modeset=1` a `GRUB_CMDLINE_LINUX_DEFAULT` en `/etc/default/grub.d/90-hypr.cfg`, ejecuta `sudo update-grub` y reinicia. Con arranque seguro, el módulo necesita además una clave MOK propia (`sudo dpkg-reconfigure nvidia-kernel-dkms` la propone); si no quieres gestionarla, desactiva el arranque seguro.
 
 ## Uso
 
@@ -282,28 +279,13 @@ sudo apt install nombre-del-programa
 
 Lo instalado desde la sesión en vivo se pierde al reiniciar.
 
-**Firefox:**
+Brave ya viene instalado desde su repositorio oficial y se actualiza con `apt`; ábrelo con `SUPER + B`. Para otro navegador, por ejemplo Firefox:
 
 ```bash
 sudo apt install firefox-esr firefox-esr-l10n-es-es
 ```
 
-**Brave**, desde su repositorio oficial ([brave.com/linux](https://brave.com/linux/)):
-
-```bash
-sudo curl -fsSLo /usr/share/keyrings/brave-browser-archive-keyring.gpg https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
-```
-```bash
-sudo curl -fsSLo /etc/apt/sources.list.d/brave-browser-release.sources https://brave-browser-apt-release.s3.brave.com/brave-browser.sources
-```
-```bash
-sudo apt update
-```
-```bash
-sudo apt install brave-browser
-```
-
-Después ábrelo con `SUPER + B`. Para abrir PDF, imágenes o comprimidos desde Thunar, instala también el programa que prefieras, como `zathura`, `imv` o `file-roller`. Solo están bloqueados los escritorios completos, `nautilus`, `dolphin` y Xorg.
+Solo están bloqueados los escritorios completos, `nautilus`, `dolphin` y Xorg.
 
 ### Programas X11
 
@@ -333,11 +315,13 @@ El fondo de pantalla es propio: una malla digital oscura con líneas geométrica
 | Acceso | `greetd` con `tuigreet`, en la consola |
 | Terminal | Kitty, Zsh, Starship, Fastfetch, btop, Neovim |
 | Archivos | Thunar, con `gvfs` para montar USB al pulsarlos |
-| Sistema | PipeWire con `pavucontrol`, NetworkManager (`nmtui`), Bluetooth con `blueman`, portapapeles, capturas, firmware |
+| Sistema | PipeWire con `pavucontrol`, NetworkManager (`nmtui`), Bluetooth con `blueman`, portapapeles, capturas, firmware del portátil |
+| Programas | Brave, mpv, imv, zathura, file-roller |
+| Gráficas y energía | VA-API de Intel, controlador propietario de NVIDIA (offload, `prime-run`), power-profiles-daemon, thermald |
 | Herramientas | `git`, `curl`, `wget`, `unzip`, `openssh-client`, `atajos` |
 | Arranque e instalación | Plymouth, GRUB, shim firmado, `cryptsetup` y Calamares; `os-prober` y `ntfs-3g` para convivir con otros sistemas |
 
-La red se gestiona desde la barra, con `nmtui`, y el Bluetooth con `blueman-manager`. La imagen no trae navegador.
+La red se gestiona desde la barra, con `nmtui`, y el Bluetooth con `blueman-manager`.
 
 ## Reconstruir la ISO
 
@@ -376,7 +360,7 @@ sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools
    sudo lb build
    ```
 
-   `lb build` llama antes a `scripts/empaquetar-actualizacion.py` para generar el manifiesto de la versión (`usr/share/jaime0/version`) que la ISO instala como punto de partida de `jaime0-update`.
+   La compilación descarga el repositorio de Brave y compila el módulo de NVIDIA para el núcleo de la ISO (unos minutos más).
 
 6. Para verificarlo, copia los scripts junto a `chroot/` y ejecútalos. Instalan herramientas de prueba en `chroot/`, así que hay que hacerlo después de generar la ISO:
 
@@ -400,11 +384,10 @@ Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambi
 | `config/archives/` | Preferencias de APT: bloqueo de escritorios y Xorg, fijado de Waybar |
 | `config/bootloaders/` | Menú y tema de GRUB del medio en vivo |
 | `config/includes.chroot_after_packages/` | Archivos del sistema: `/etc/skel`, instalador, scripts |
-| `scripts/` | Construcción de Waybar y traducciones, fondo, empaquetado de actualizaciones y verificaciones |
-| `publicaciones/` | Notas de cada versión publicada con `jaime0-update` |
-| `pruebas/` | Pruebas automáticas (actualizador, ajustes, ancladas, tiempo, diagnóstico) |
+| `scripts/` | Construcción de Waybar y traducciones, fondo y verificaciones |
+| `pruebas/` | Pruebas automáticas (ajustes, ancladas, tiempo, diagnóstico) |
 | `.github/workflows/` | Validación automática en GitHub Actions (no publica nada) |
-| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md), [ajustes](docs/ajustes.md), [recuperación y seguridad](docs/recuperacion.md) y [pruebas](docs/pruebas.md) |
+| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md), [ajustes](docs/ajustes.md), [NVIDIA](docs/nvidia.md), [recuperación y seguridad](docs/recuperacion.md) y [pruebas](docs/pruebas.md) |
 | `capturas/` | Capturas del sistema |
 
 ### Cambiar el nombre del sistema
@@ -419,7 +402,8 @@ Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca
 | Acceso | `greetd` con `tuigreet` | Mucho más ligero que SDDM con su compositor |
 | Agente de permisos | `lxpolkit` | El de KDE arrastra KDE Frameworks |
 | Waybar | `0.15.0-1+hypr1`, parcheado, fijado y retenido | El de Debian no cambia de escritorio con la configuración Lua |
-| Actualizaciones | `jaime0-update`: carga firmada (Ed25519) + `apt` | Actualiza los archivos propios sin ISO ni repositorio APT propio; los paquetes siguen con el gestor oficial. Detalles en [docs/arquitectura.md](docs/arquitectura.md) |
+| Actualizaciones | `apt` + ISO nueva | Para un solo equipo y con el repositorio privado, un actualizador propio no compensa. Ver [docs/actualizaciones.md](docs/actualizaciones.md) |
+| NVIDIA | Controlador propietario en modo offload, sin el metapaquete `nvidia-driver` | El metapaquete arrastra Xorg; con la Intel en el escritorio la NVIDIA se apaga sola. Ver [docs/nvidia.md](docs/nvidia.md) |
 | Red y Bluetooth | Se abren desde la barra | Sin applets residentes |
 | Qt | Lo necesitan Quickshell (aplicación de ajustes) y el instalador; Calamares se retira al instalar | Quickshell no es imprescindible: sin él, `jaime0-ajustes` funciona desde la terminal y el escritorio arranca igual |
 | Base | `debootstrap` con `minbase`, sin recomendados | Lleva solo lo necesario |
@@ -436,17 +420,17 @@ Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca
 
 ## Qué no se ha probado
 
-Todas las pruebas se han hecho en VirtualBox, en UEFI con arranque seguro y en BIOS. Sin un equipo físico **no se puede garantizar** nada de lo siguiente:
+Todo se ha probado en VirtualBox (UEFI con arranque seguro y BIOS), **todavía no en el portátil**. Allí falta comprobar:
 
-- Arranque en hardware real y desde un USB físico (se probó la imagen conectada como disco en la VM)
-- Gráficas reales: Intel, AMD, Nouveau y NVIDIA propietario
-- Wi-Fi y Bluetooth reales
-- Teclado, touchpad, cierre de tapa, batería, teclas de brillo y suspensión de un portátil
-- Sonido escuchado de verdad
-- Discos NVMe (VirtualBox los ofrece solo con su paquete de extensión)
-- Varios monitores y escalado en pantallas HiDPI
+- Arranque desde un USB físico con Secure Boot
+- La NVIDIA: registro de la clave (MokManager), `prime-run`, que se apague sola y el HDMI. En una VM no hay NVIDIA
+- La Intel con aceleración real (Hyprland, Quickshell, hyprlock, vídeo por VA-API) y la escala 1.25
+- Wi-Fi y Bluetooth AX201, sonido SOF (altavoces, auriculares, micrófono), Ethernet Killer
+- Teclado, touchpad, teclas de brillo y volumen, cierre de tapa, batería, perfiles de energía y suspensión
+- El SSD NVMe
+- Instalar sobre el disco con Windows (borrándolo o al lado)
 
-Si lo pruebas en un equipo físico, abre una [incidencia](https://github.com/Jaime-202/jaime0/issues) con lo que funcione y lo que no, y adjunta el informe de `jaime0-diagnostico --sudo` (se guarda en `~/jaime0-diagnostico-*.txt`). No recoge direcciones MAC ni IP, redes Wi-Fi, usuario, nombre del equipo ni números de serie, pero revísalo antes de publicarlo. La lista de pruebas pendientes está en [docs/pruebas.md](docs/pruebas.md#4-pruebas-en-hardware-real-pendientes).
+`jaime0-diagnostico --sudo` reúne la información del equipo (sin direcciones MAC ni IP, redes Wi-Fi, usuario, nombre del equipo ni números de serie) en `~/jaime0-diagnostico-*.txt`. La lista completa de pruebas pendientes está en [docs/pruebas.md](docs/pruebas.md#4-pruebas-en-hardware-real-pendientes).
 
 ## Licencia
 

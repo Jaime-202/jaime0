@@ -1,5 +1,5 @@
 #!/bin/sh
-# Abre el navegador instalado. Jaime0 no trae ninguno: si no hay, lo avisa.
+# Abre el navegador instalado (Jaime0 trae Brave). Si no hay ninguno, lo avisa.
 for N in brave-browser brave-browser-stable firefox-esr firefox chromium; do
     if command -v "$N" >/dev/null 2>&1; then
         exec "$N" "$@"

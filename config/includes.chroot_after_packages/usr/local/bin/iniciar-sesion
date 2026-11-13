@@ -1,6 +1,34 @@
 #!/bin/sh
 # Arranca Hyprland. Si no llega a abrirse (GPU sin soporte, arranque con nomodeset...),
 # explica lo ocurrido y abre una consola, en lugar de dejar la pantalla en negro.
+
+# Portatil con dos graficas (Intel + NVIDIA): el escritorio va siempre en la Intel, y la
+# NVIDIA duerme hasta que algo la pide con prime-run. Solo si al entrar hay un monitor en
+# una salida de la NVIDIA (el HDMI de este portatil), Hyprland la usa tambien para el.
+intel="" nvidia=""
+for c in /sys/class/drm/card[0-9]*; do
+    case "${c##*/}" in *-*) continue ;; esac
+    case "$(cat "${c}/device/vendor" 2>/dev/null)" in
+        0x8086) intel="/dev/dri/${c##*/}" ;;
+        0x10de) nvidia="/dev/dri/${c##*/}" ;;
+    esac
+done
+if [ -n "${intel}" ]; then
+    externa=""
+    if [ -n "${nvidia}" ]; then
+        for s in /sys/class/drm/"${nvidia##*/}"-*/status; do
+            [ "$(cat "${s}" 2>/dev/null)" = connected ] && externa=1
+        done
+    fi
+    if [ -n "${externa}" ]; then
+        export AQ_DRM_DEVICES="${intel}:${nvidia}"
+    else
+        export AQ_DRM_DEVICES="${intel}"
+        mesa=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+        [ -e "${mesa}" ] && export __EGL_VENDOR_LIBRARY_FILENAMES="${mesa}"
+    fi
+fi
+
 inicio=$(date +%s)
 start-hyprland
 estado=$?
@@ -20,7 +48,7 @@ ${PRODUCTO}: no se ha podido abrir el escritorio (codigo ${estado}).
 
 Lo mas probable es que este equipo no tenga una aceleracion grafica compatible:
   - Has arrancado en modo seguro (nomodeset), que desactiva la grafica.
-  - Tarjeta NVIDIA: instala su controlador, tienes los pasos en el README del proyecto.
+  - Grafica NVIDIA: el escritorio usa la Intel; el estado de la NVIDIA: jaime0-nvidia
   - Maquina virtual: activa la aceleracion 3D.
 
 El detalle esta en:  journalctl -b -p err

@@ -43,7 +43,7 @@ sin_sesion() {
     R=$(xdg-mime query filetype "$P/carpeta")
     [ "$R" = "inode/directory" ] && ok "tipo de carpeta = $R (sin libfile-mimeinfo-perl)" || fallo "tipo de carpeta = '$R'"
     xfconf-query -c thunar -p /hidden-bookmarks 2>/dev/null | grep -q 'trash:///' && ok "Thunar: Papelera oculta en xfconf" || fallo "Thunar: hidden-bookmarks: $(xfconf-query -c thunar -p /hidden-bookmarks 2>&1 | tr '\n' ' ')"
-    for B in firefox-esr galculator imv zathura file-roller gsimplecal; do
+    for B in firefox-esr galculator gsimplecal; do
         command -v "$B" >/dev/null && fallo "$B sigue instalado" || ok "$B no esta"
     done
     echo "-- Montaje: componentes --"

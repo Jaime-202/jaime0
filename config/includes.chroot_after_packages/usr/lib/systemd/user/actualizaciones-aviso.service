@@ -1,0 +1,12 @@
+[Unit]
+Description=Aviso de actualizaciones de seguridad de Debian
+# Solo en el sistema instalado.
+ConditionPathExists=!/run/live/medium
+
+[Service]
+Type=oneshot
+# Solo consulta y avisa. Nunca instala nada.
+ExecStart=/usr/local/bin/actualizaciones comprobar --notificar --silencioso
+SuccessExitStatus=1
+Nice=10
+IOSchedulingClass=idle

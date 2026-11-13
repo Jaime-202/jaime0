@@ -1,0 +1,14 @@
+#!/bin/sh
+# Version de Jaime0 visible para cualquier programa (fastfetch, hostnamectl...) y aviso
+# diario de actualizaciones de seguridad de Debian.
+set -e
+
+chmod 644 /usr/share/jaime0/version
+chmod 755 /usr/local/bin/actualizaciones
+chmod 644 /usr/lib/systemd/user/actualizaciones-aviso.service /usr/lib/systemd/user/actualizaciones-aviso.timer
+
+VERSION="$(cat /usr/share/jaime0/version)"
+sed -i '/^VERSION=/d; /^VERSION_ID=/d' /usr/lib/os-release
+printf 'VERSION="%s"\nVERSION_ID=%s\n' "${VERSION}" "${VERSION}" >> /usr/lib/os-release
+
+systemctl --global enable actualizaciones-aviso.timer

@@ -26,11 +26,9 @@ Pruebas de `pruebas/` (`python3 -m unittest discover -s pruebas -v`):
 
 | Archivo | Cubre |
 |---|---|
-| `test_jaime0_update.py` | Actualizador: firmas, canales, fusión a tres bandas, conflictos, copias, reversión y recuperación |
 | `test_jaime0_ajustes.py` | Ajustes: validación, archivo del usuario, generados para Waybar/rofi/swaync/hyprlock/wob/widgets |
 | `test_jaime0_anclar.py` | Ancladas: nombres, máximo, orden, estado de los huecos, aplicaciones desinstaladas |
 | `test_jaime0_tiempo.py` | Tiempo: Open-Meteo de mentira, homónimos, caché, sin red |
-| `test_jaime0_flatpak.py` | Flatpak opcional: preguntas, cancelaciones y órdenes, con programas de mentira |
 | `test_jaime0_diagnostico.py` | Diagnóstico: que no salgan datos personales y que no falle sin comandos |
 
 ## 2. Sesión en marcha
@@ -44,6 +42,24 @@ Desde una terminal de la sesión (VM o equipo real). Comprueba Hyprland, los pro
 **Resultado (13-11-2026, VM `jaime0-pruebas`, sesión en vivo 0.1 con los archivos 0.2 encima, tras entrar de nuevo con tuigreet):** 21 correctos, 0 fallos.
 
 ## 3. Pruebas en máquina virtual
+
+### 0.3.0-beta.1 (13-11-2026): ISO para el Acer Nitro AN515-55
+
+ISO SHA-256 `e7e91e9e…46d2`, 1,77 GB (la 0.2 ocupaba 2,06 GB). En una VM no hay NVIDIA: lo que depende de la gráfica real queda para el portátil.
+
+| Prueba | Estado | Notas |
+|---|---|---|
+| Compilar la ISO | Probado | El módulo de NVIDIA 550 compila para el núcleo 7.2.15; Brave se instala desde su repositorio |
+| `verificar-todo.sh` (9 scripts) | Probado | 0 fallos. Pendientes solo las pruebas gráficas que la VM de compilación no puede hacer (sin 3D) |
+| Sin clave privada en la imagen | Probado | Ni `mok.key` ni `mok.pub` en `/var/lib/dkms`; ninguna `PRIVATE KEY` en `/etc` |
+| Solo el firmware del portátil | Probado | Sin firmware de Broadcom, AMD, Atheros, Qualcomm ni MediaTek, ni microcódigo de AMD |
+| Arranque en vivo UEFI | Probado | `verificar-sesion.sh` 21/21; indicador de energía en la barra; `prime-run` sin NVIDIA avisa y usa la gráfica normal; asociaciones de vídeo, imagen, PDF, comprimidos y web |
+| `jaime0-nvidia recompilar` | Probado | Clave nueva en cada ejecución y módulo firmado con ella (`modinfo -F sig_key` = número de serie de `mok.pub`); `mok.key` 600 y `mok.pub` 644. 1 min 56 s en la VM |
+| Instalación UEFI en ext4 con el instalador gráfico | Probado | El paso `shellprocess@nvidia` tarda 2 min 5 s; el sistema instalado arranca hasta tuigreet, sesión 21/21, sin servicios fallidos, módulo firmado con la clave propia de la instalación. Arranque en 19,7 s y 815 MiB usados con la sesión abierta (VM, 4 GiB) |
+| Registro de la clave con MokManager, `prime-run` con NVIDIA, ahorro de energía y HDMI | **Pendiente del portátil** | Ver [nvidia.md](nvidia.md) |
+| Escala 1.25 en `eDP-1`, perfiles de energía y thermald reales | **Pendiente del portátil** | En la VM la pantalla es `Virtual-1` (escala 1) y thermald no arranca (CPU virtual) |
+
+### 0.2
 
 VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las pruebas de sesión de la 0.2 se hicieron primero sobre la ISO 0.1.x en vivo con los archivos 0.2 encima; después se compiló la ISO 0.2.0-beta.1 (13-11-2026, SHA-256 `ae831ddc…0607`) y se repitieron arranque, instalación y `verificar-sesion.sh` con ella. La compilación final (SHA-256 `bd206dd5…1774`) solo añade el límite de 5 s de `notificaciones` y los scripts de prueba al día; con ella se repitió el arranque en vivo UEFI (`verificar-sesion.sh` 21/21) y no la instalación, cuyo contenido no cambia. La 0.2.0-beta.2 (SHA-256 `4cb56434…bf67`) solo cambia la versión y la clave de firma: arranque en vivo UEFI 21/21, firma del paquete publicado comprobada con la clave de la ISO y `jaime0-update comprobar` contra GitHub correcto.
 
@@ -65,12 +81,10 @@ VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las prue
 | Suspender y reanudar | **Parcial** | Bloquea antes y reanuda bloqueada. VirtualBox no despierta con la alarma del reloj, a veces tampoco con el teclado, y si queda congelada más de 3 min el vigilante de systemd reinicia logind y la red no vuelve sola. Es un efecto de la VM: **pendiente de hardware real** |
 | Cortafuegos UFW: salida, DNS, `apt update`, DHCP, SLAAC; puerto entrante cerrado | Probado | Puerto cerrado comprobado desde otro espacio de red (veth) |
 | zram: se activa con 4 GiB (zstd, prioridad 100); no se activa por encima del límite | Probado | Límite probado de verdad con 2 GiB y simulado con varias cantidades de RAM |
-| `jaime0-flatpak` activar y desactivar | Probado | Sin instalar ninguna aplicación |
-| Instantáneas de snapper en `jaime0-update` | Probado (pruebas automáticas, orden en un Btrfs real y gancho de `apt` en un sistema instalado en Btrfs) | **Pendiente:** una actualización real de `jaime0-update` y `undochange` en el sistema instalado |
+| Instantáneas de snapper con `apt` | Probado (orden en un Btrfs real y gancho de `apt` en un sistema instalado en Btrfs) | **Pendiente:** `undochange` en el sistema instalado |
 | Avisos de seguridad (apt + debsecan) | Probado | 49 paquetes pendientes, 0 con correcciones de seguridad en ese momento |
 | Primer arranque con UFW y zram desde la ISO | Probado | ISO 0.2 en vivo |
 | `apt full-upgrade` | Pendiente | Con la ISO 0.2 |
-| Migración 0.1.x → 0.2 con `jaime0-update` | **Simulado** (13-11-2026) | Partiendo de la ISO 0.1 en vivo sin nada de 0.2: instalación manual de `jaime0-update` según `docs/actualizaciones.md` (firma y carga verificadas), publicación 0.2 servida por HTTPS local con una clave de prueba, `/run/live` oculto para que la sesión pase por instalada. Resultado: 8 paquetes nuevos instalados, sistema y configuración en 0.2 en 42 s, personalización de `kitty.conf` conservada con su `.jaime0-nuevo`, dunst y `notificaciones-waybar` retirados, indicador de la barra que aparece y desaparece, y `verificar-sesion.sh` correcto tras volver a entrar. **Pendiente:** un sistema instalado de verdad, con reinicio, y la publicación firmada con la clave oficial |
 | NVMe, varios monitores | Pendiente | VirtualBox: NVMe solo con el paquete de extensión; varios monitores, configurable |
 
 ## 4. Pruebas en hardware real (pendientes)

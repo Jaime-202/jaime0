@@ -303,16 +303,6 @@ def sec_jaime0(opciones):
     l.append(f"Versión: {version or 'desconocida (falta /usr/share/jaime0/version)'}")
     vivo = existe(ruta("run", "live", "medium"))
     l.append(f"Modo: {'en vivo (USB/DVD)' if vivo else 'instalado'}")
-    conf = leer(ruta("etc", "jaime0", "update.conf"))
-    if conf is None:
-        l.append("Canal de actualizaciones: no hay /etc/jaime0/update.conf (se usa stable)")
-    else:
-        canal = "stable"
-        for linea in conf.splitlines():
-            linea = linea.strip()
-            if linea.startswith("canal") and "=" in linea:
-                canal = linea.split("=", 1)[1].strip()
-        l.append(f"Canal de actualizaciones: {canal}")
     return l
 
 

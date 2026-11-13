@@ -17,9 +17,6 @@ config/source
 config/packages.chroot/
 capturas-*/
 __pycache__/
-# Publicaciones de jaime0-update y manifiesto generado al compilar
-dist/
-config/includes.chroot_after_packages/usr/share/jaime0/manifiesto.json
 # Claves privadas: nunca en el repositorio
 *.key
 *privad*.pem

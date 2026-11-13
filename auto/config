@@ -13,7 +13,7 @@ lb config noauto \
   --apt-source-archives false \
   --debootstrap-options "--variant=minbase" \
   --apt-recommends false \
-  --firmware-chroot true \
+  --firmware-chroot false \
   --binary-images iso-hybrid \
   --bootloaders "grub-pc,grub-efi" \
   --chroot-squashfs-compression-type zstd \

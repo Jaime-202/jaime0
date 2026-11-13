@@ -21,7 +21,7 @@ grep -q -- '--iso-volume "Jaime0"' auto/config && ok "volumen de la ISO: Jaime0"
 grep -q 'J0' chroot/etc/calamares/branding/hypr/logo.svg && ! grep -qi 'debian' chroot/etc/calamares/branding/hypr/logo.svg && ok "logo propio J0, sin el de Debian" || fallo "logo"
 
 echo "== Ligereza: lo que ya no esta =="
-for P in sddm weston xvfb polkit-kde-agent-1 network-manager-applet nm-connection-editor udiskie qt5ct libqt5svg5 qtwayland5 libqt5core5t64 libavcodec63; do
+for P in sddm weston xvfb polkit-kde-agent-1 network-manager-applet nm-connection-editor udiskie qt5ct libqt5svg5 qtwayland5 libqt5core5t64; do
     instalado "$P" && fallo "$P sigue instalado" || ok "$P ausente"
 done
 # KDE Frameworks solo puede estar como dependencia del instalador: al quitarlo debe irse entero.

@@ -1,0 +1,42 @@
+# Jaime0 para el Acer Nitro AN515-55: Intel i7-10750H con UHD Graphics (Comet Lake),
+# NVIDIA GTX 1650 Ti (Turing), Wi-Fi y Bluetooth Intel AX201, sonido Intel SOF con codec
+# Realtek, Ethernet Killer E2600 (driver alx, sin firmware) y SSD NVMe.
+
+# Firmware: solo el de este equipo (auto/config ya no instala todo el de Debian).
+firmware-iwlwifi
+firmware-intel-graphics
+firmware-intel-sound
+firmware-intel-misc
+firmware-sof-signed
+firmware-nvidia-gsp
+intel-microcode
+
+# Grafica Intel: video por hardware (VA-API, driver iHD).
+intel-media-va-driver-non-free
+
+# NVIDIA en modo "offload": la Intel dibuja el escritorio y la NVIDIA se despierta solo
+# para lo que se abre con prime-run. Sin el metapaquete nvidia-driver, que arrastraria Xorg.
+# El modulo se compila con DKMS y se firma para Secure Boot (ver jaime0-nvidia).
+linux-headers-amd64
+dkms
+nvidia-kernel-dkms
+nvidia-driver-libs
+libnvidia-egl-wayland1
+nvidia-vulkan-icd
+nvidia-smi
+libcuda1
+libnvcuvid1
+libnvidia-encode1
+mokutil
+
+# Energia del portatil: perfiles (ahorro, equilibrado, rendimiento) e indicador en la barra;
+# thermald evita que el procesador se caliente de mas.
+power-profiles-daemon
+thermald
+
+# Visores: video, imagenes, PDF y comprimidos.
+mpv
+imv
+zathura
+zathura-pdf-poppler
+file-roller
