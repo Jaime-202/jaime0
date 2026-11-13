@@ -1,0 +1,925 @@
+#!/usr/bin/python3 -I
+# jaime0-diagnostico: informe de hardware y compatibilidad para adjuntar a una incidencia.
+#
+#   jaime0-diagnostico              guarda ~/jaime0-diagnostico-AAAAMMDD-HHMM.txt
+#   jaime0-diagnostico --pantalla   lo muestra en vez de guardarlo
+#   jaime0-diagnostico --sudo       usa "sudo -n" (sin pedir contrasena) para lo que
+#                                   necesita root, como el registro del kernel
+#
+# Funciona en el sistema en vivo y en el instalado, sin root. Cada seccion es
+# independiente: si un comando falta, falla o tarda demasiado, se indica y se sigue.
+#
+# Privacidad: el informe completo pasa por limpiar() antes de guardarse o mostrarse.
+# Se eliminan direcciones MAC e IP, nombre de usuario y de equipo, carpeta personal,
+# UUID, numeros de serie, SSID y correos. De la carpeta personal solo se usa
+# ~/.config/hypr/hyprland.lua, y unicamente para verificarlo con Hyprland (su
+# contenido no se copia).
+
+import datetime
+import glob
+import ipaddress
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+PROGRAMA = "jaime0-diagnostico"
+TIEMPO_MAXIMO = 8  # segundos por comando
+
+
+def es_root():
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+# Modo de prueba: JAIME0_RAIZ apunta a un sistema de mentira (solo sin privilegios).
+RAIZ = os.environ.get("JAIME0_RAIZ", "/") if not es_root() else "/"
+MODO_PRUEBA = RAIZ != "/"
+
+AVISO_PRIVACIDAD = (
+    "Privacidad: este informe NO recoge direcciones MAC ni IP, nombres de redes Wi-Fi\n"
+    "(SSID) ni de conexiones, nombre de usuario ni de equipo, carpeta personal, UUID,\n"
+    "numeros de serie, correos ni el contenido de tus archivos. Revisalo antes de publicarlo."
+)
+
+# Nombres que no identifican a nadie: los predeterminados del sistema en vivo y del
+# producto. Sustituirlos como palabra suelta romperia el informe ("jaime0" es tambien el
+# nombre del sistema, "user" aparece en rutas como /run/user y "debian" en os-release),
+# asi que con ellos solo se sustituyen los contextos inequivocos (usuario@equipo,
+# /home/usuario, hostname=...).
+NOMBRES_GENERICOS = {"jaime0", "user", "live", "root", "debian", "localhost", "admin",
+                     "usuario", "linux", "ubuntu", "test"}
+
+
+def ruta(*partes):
+    return os.path.join(RAIZ, *partes)
+
+
+# ---------------------------------------------------------------------------
+# Privacidad
+# ---------------------------------------------------------------------------
+
+OCULTO = "<oculto>"
+RE_MAC = re.compile(r"(?<![0-9A-Fa-f:-])(?:[0-9A-Fa-f]{2}([:-]))(?:[0-9A-Fa-f]{2}\1){4}[0-9A-Fa-f]{2}"
+                    r"(?![0-9A-Fa-f:-])")
+RE_MAC_PUNTOS = re.compile(r"\b[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{4}\b")
+RE_INTERFAZ_MAC = re.compile(r"\b(en|wl|ww)x[0-9A-Fa-f]{12}\b")
+RE_UUID = re.compile(r"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b")
+RE_IPV6 = re.compile(r"(?<![\w:.])(?=[0-9A-Fa-f:]*[0-9A-Fa-f])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}"
+                     r"(?:(?<=:)(?:\d{1,3}\.){3}\d{1,3})?(?:%[\w.-]+)?(?![\w:]|\.\d)")
+RE_IPV4 = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w]|\.\d)")
+RE_EMAIL = re.compile(r"[\w.+-]+@(?=[\w-]*[A-Za-z])[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}\b")
+RE_SERIE = re.compile(r"(?im)\b(serial[ _-]?(?:number|no\.?|num)?|serialnumber|id_serial(?:_short)?"
+                      r"|serial_number)(\s*[\"']?\s*[:=]\s*)[^\n]*")
+RE_ISERIAL = re.compile(r"(?m)\b(iSerial\s+\d+)[ \t]+\S[^\n]*")
+RE_SSID = re.compile(r"(?im)\b(b?ssid|essid)(\s*[\"']?\s*[:=]\s*)[^\n]*")
+RE_CONTEXTO_EQUIPO = re.compile(r"(?i)\b(hostname|nodename|username|user)=([^\s,;]+)")
+
+
+def _es_ip(texto, version):
+    try:
+        base = texto.split("%")[0]
+        return ipaddress.ip_address(base).version == version
+    except ValueError:
+        return False
+
+
+def _sustituir_ipv6(m):
+    t = m.group(0)
+    return "<IPv6>" if t.count(":") >= 2 and _es_ip(t, 6) else t
+
+
+def _sustituir_ipv4(m):
+    t = m.group(0)
+    return "<IPv4>" if _es_ip(t, 4) else t
+
+
+def datos_locales():
+    """Usuario, carpeta personal y nombre del equipo de quien ejecuta el programa."""
+    usuario = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
+    if not usuario and hasattr(os, "getuid"):
+        try:
+            import pwd
+            usuario = pwd.getpwuid(os.getuid()).pw_name
+        except Exception:
+            usuario = ""
+    casa = os.path.expanduser("~")
+    equipo = leer(ruta("proc", "sys", "kernel", "hostname")) or leer(ruta("etc", "hostname")) or ""
+    if not equipo and not MODO_PRUEBA:
+        try:
+            import socket
+            equipo = socket.gethostname()
+        except Exception:
+            equipo = ""
+    return usuario.strip(), casa, equipo.strip().split(".")[0]
+
+
+def limpiar(texto, usuario=None, casa=None, equipo=None):
+    """Elimina datos personales del texto. Se aplica al informe completo al final."""
+    if usuario is None or casa is None or equipo is None:
+        u, c, e = datos_locales()
+        usuario = u if usuario is None else usuario
+        casa = c if casa is None else casa
+        equipo = e if equipo is None else equipo
+    t = texto
+    # Lineas con numeros de serie o SSID: se oculta todo el valor.
+    t = RE_ISERIAL.sub(lambda m: f"{m.group(1)} {OCULTO}", t)
+    t = RE_SERIE.sub(lambda m: f"{m.group(1)}{m.group(2)}{OCULTO}", t)
+    t = RE_SSID.sub(lambda m: f"{m.group(1)}{m.group(2)}{OCULTO}", t)
+    t = RE_EMAIL.sub("<correo>", t)
+    t = RE_UUID.sub("<UUID>", t)
+    t = RE_INTERFAZ_MAC.sub(lambda m: f"{m.group(1)}x<MAC>", t)
+    t = RE_MAC.sub("<MAC>", t)
+    t = RE_MAC_PUNTOS.sub("<MAC>", t)
+    t = RE_IPV6.sub(_sustituir_ipv6, t)
+    t = RE_IPV4.sub(_sustituir_ipv4, t)
+
+    # Carpeta personal (antes que el usuario, que suele formar parte de ella).
+    casas = {c for c in (casa, os.environ.get("HOME", "")) if c and c not in ("/", "/root")}
+    if usuario and usuario != "root":
+        casas.add(f"/home/{usuario}")
+    for c in sorted(casas, key=len, reverse=True):
+        variantes = {c, c.replace("\\", "/")}
+        for v in variantes:
+            t = re.sub(re.escape(v) + r"(?![\w.-])", "~", t)
+
+    # Contextos inequivocos: usuario@equipo, hostname=..., username=...
+    def contexto(m):
+        valor = m.group(2)
+        if valor.lower() in NOMBRES_GENERICOS:
+            return m.group(0)
+        return f"{m.group(1)}={'<equipo>' if m.group(1).lower() in ('hostname', 'nodename') else '<usuario>'}"
+    t = RE_CONTEXTO_EQUIPO.sub(contexto, t)
+    if usuario:
+        t = re.sub(r"(?<![\w.-])" + re.escape(usuario) + r"@", "<usuario>@", t)
+    if equipo:
+        t = re.sub(r"@" + re.escape(equipo) + r"(?![\w-])", "@<equipo>", t, flags=re.I)
+
+    # Como palabra suelta, solo si el nombre es propio (no generico) y no demasiado corto.
+    if equipo and equipo.lower() not in NOMBRES_GENERICOS and len(equipo) >= 3:
+        t = re.sub(r"(?<![\w-])" + re.escape(equipo) + r"(?![\w-])", "<equipo>", t, flags=re.I)
+    if usuario and usuario.lower() not in NOMBRES_GENERICOS and len(usuario) >= 3:
+        t = re.sub(r"(?<![\w-])" + re.escape(usuario) + r"(?![\w-])", "<usuario>", t)
+    return t
+
+
+# ---------------------------------------------------------------------------
+# Utilidades robustas
+# ---------------------------------------------------------------------------
+
+def leer(camino, limite=65536):
+    try:
+        with open(camino, encoding="utf-8", errors="replace") as f:
+            return f.read(limite).strip()
+    except Exception:
+        return None
+
+
+def leer_bytes(camino, limite=64):
+    try:
+        with open(camino, "rb") as f:
+            return f.read(limite)
+    except Exception:
+        return None
+
+
+def existe(camino):
+    try:
+        return os.path.exists(camino)
+    except Exception:
+        return False
+
+
+def listar(camino):
+    try:
+        return sorted(os.listdir(camino))
+    except Exception:
+        return []
+
+
+def base_enlace(camino):
+    try:
+        return os.path.basename(os.readlink(camino))
+    except Exception:
+        return None
+
+
+class Resultado:
+    def __init__(self, ok, salida="", error="", motivo="", codigo=None):
+        self.ok, self.salida, self.error, self.motivo = ok, salida, error, motivo
+        self.codigo = codigo
+
+    def explicar(self):
+        if self.motivo:
+            return self.motivo
+        err = (self.error or self.salida or "").strip().splitlines()
+        return "falló" + (f": {err[-1][:160]}" if err else "")
+
+
+def ejecutar(args, env_extra=None, tiempo=TIEMPO_MAXIMO, sudo=False):
+    """Ejecuta un comando sin shell; nunca lanza excepciones."""
+    if sudo:
+        if not shutil.which("sudo"):
+            return Resultado(False, motivo="no disponible (falta sudo)")
+        args = ["sudo", "-n", *args]
+    programa = shutil.which(args[0])
+    if not programa:
+        return Resultado(False, motivo=f"no disponible (falta {args[0]})")
+    env = dict(os.environ, LC_ALL="C.UTF-8", LANG="C.UTF-8", SYSTEMD_COLORS="0",
+               SYSTEMD_PAGER="", PAGER="cat", NO_COLOR="1")
+    for k, v in (env_extra or {}).items():
+        if v is None:
+            env.pop(k, None)
+        else:
+            env[k] = v
+    try:
+        r = subprocess.run([programa, *args[1:]], env=env, stdin=subprocess.DEVNULL,
+                           capture_output=True, timeout=tiempo)
+    except subprocess.TimeoutExpired:
+        return Resultado(False, motivo=f"no respondió en {tiempo} s")
+    except Exception as e:
+        return Resultado(False, motivo=f"no se pudo ejecutar ({type(e).__name__})")
+    salida = r.stdout.decode("utf-8", "replace")
+    error = r.stderr.decode("utf-8", "replace")
+    if sudo and r.returncode != 0 and ("password" in error.lower() or "contraseña" in error.lower()):
+        return Resultado(False, salida, error, "sudo necesita contraseña (no se pide desde el programa)")
+    return Resultado(r.returncode == 0, salida, error, codigo=r.returncode)
+
+
+def procesos_en_marcha():
+    nombres = set()
+    for pid in listar(ruta("proc")):
+        if pid.isdigit():
+            n = leer(ruta("proc", pid, "comm"))
+            if n:
+                nombres.add(n)
+    return nombres
+
+
+def servicio(nombre, usuario=False):
+    args = ["systemctl", *(["--user"] if usuario else []), "is-active", nombre]
+    r = ejecutar(args, tiempo=4)
+    if r.motivo:
+        return r.motivo
+    lineas = (r.salida.strip() or r.error.strip()).splitlines()
+    return lineas[0][:80] if lineas else "desconocido"
+
+
+def entorno_hyprland():
+    """Variables para hablar con Hyprland aunque se ejecute desde una TTY o por SSH."""
+    env = {}
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime and hasattr(os, "getuid") and not MODO_PRUEBA:
+        runtime = f"/run/user/{os.getuid()}"
+        env["XDG_RUNTIME_DIR"] = runtime
+    firma = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+    if not firma and runtime and not MODO_PRUEBA:
+        candidatas = glob.glob(os.path.join(runtime, "hypr", "*", ".socket.sock"))
+        if candidatas:
+            candidatas.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            firma = os.path.basename(os.path.dirname(candidatas[0]))
+    if firma:
+        env["HYPRLAND_INSTANCE_SIGNATURE"] = firma
+    return env if firma else None
+
+
+RE_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def sangrar(texto, prefijo="    "):
+    return "\n".join(prefijo + l for l in texto.splitlines())
+
+
+# ---------------------------------------------------------------------------
+# Secciones: cada una devuelve una lista de lineas
+# ---------------------------------------------------------------------------
+
+def sec_jaime0(opciones):
+    l = []
+    version = leer(ruta("usr", "share", "jaime0", "version"))
+    l.append(f"Versión: {version or 'desconocida (falta /usr/share/jaime0/version)'}")
+    vivo = existe(ruta("run", "live", "medium"))
+    l.append(f"Modo: {'en vivo (USB/DVD)' if vivo else 'instalado'}")
+    conf = leer(ruta("etc", "jaime0", "update.conf"))
+    if conf is None:
+        l.append("Canal de actualizaciones: no hay /etc/jaime0/update.conf (se usa stable)")
+    else:
+        canal = "stable"
+        for linea in conf.splitlines():
+            linea = linea.strip()
+            if linea.startswith("canal") and "=" in linea:
+                canal = linea.split("=", 1)[1].strip()
+        l.append(f"Canal de actualizaciones: {canal}")
+    return l
+
+
+def secure_boot():
+    for f in glob.glob(ruta("sys", "firmware", "efi", "efivars", "SecureBoot-*")):
+        datos = leer_bytes(f)
+        if datos and len(datos) >= 5:
+            return "activado" if datos[4] == 1 else "desactivado"
+    r = ejecutar(["mokutil", "--sb-state"], tiempo=4)
+    texto = (r.salida + r.error).strip()
+    if "enabled" in texto.lower():
+        return "activado (mokutil)"
+    if "disabled" in texto.lower():
+        return "desactivado (mokutil)"
+    if r.motivo:
+        return f"desconocido; mokutil {r.motivo}"
+    return "desconocido" + (f" ({texto.splitlines()[0][:80]})" if texto else "")
+
+
+def sec_sistema(opciones):
+    l = []
+    kernel = leer(ruta("proc", "sys", "kernel", "osrelease"))
+    arq = leer(ruta("proc", "sys", "kernel", "arch"))
+    l.append(f"Kernel: {kernel or 'desconocido'}" + (f" ({arq})" if arq else ""))
+    osr = leer(ruta("etc", "os-release")) or leer(ruta("usr", "lib", "os-release"))
+    if osr:
+        campos = {}
+        for linea in osr.splitlines():
+            if "=" in linea:
+                k, v = linea.split("=", 1)
+                campos[k] = v.strip().strip('"')
+        l.append(f"Sistema base: {campos.get('PRETTY_NAME', '?')}"
+                 + (f" [{campos['VERSION_CODENAME']}]" if campos.get("VERSION_CODENAME") else ""))
+    else:
+        l.append("Sistema base: desconocido (falta os-release)")
+    dv = leer(ruta("etc", "debian_version"))
+    if dv:
+        l.append(f"debian_version: {dv}")
+    uefi = existe(ruta("sys", "firmware", "efi"))
+    l.append(f"Arranque: {'UEFI' if uefi else 'BIOS (legacy)'}")
+    l.append(f"Secure Boot: {secure_boot() if uefi else 'no aplica (BIOS)'}")
+    r = ejecutar(["systemd-detect-virt"], tiempo=4)
+    if r.motivo:
+        l.append(f"Virtualización: {r.motivo}")
+    else:
+        l.append(f"Virtualización: {r.salida.strip() or 'ninguna'}"
+                 .replace("Virtualización: none", "Virtualización: ninguna (equipo real)"))
+    r = ejecutar(["systemd-analyze", "time"], tiempo=6)
+    if r.ok and r.salida.strip():
+        l.append("Tiempo de arranque: " + " ".join(r.salida.strip().splitlines()[0].split()))
+    else:
+        l.append(f"Tiempo de arranque: {r.explicar()}")
+    cmd = leer(ruta("proc", "cmdline"))
+    if cmd:
+        # Las paletas de la consola (vt.default_*) son largas y no aportan nada.
+        partes = [p for p in cmd.split() if not p.startswith("vt.default_")]
+        l.append("Parámetros del kernel: " + " ".join(partes))
+    return l
+
+
+def sec_cpu_memoria(opciones):
+    l = []
+    info = leer(ruta("proc", "cpuinfo"), 1 << 20)
+    if info:
+        modelo, logicos, fisicos = None, 0, set()
+        nucleos = None
+        fisico_actual = "0"
+        for linea in info.splitlines():
+            k, _, v = linea.partition(":")
+            k, v = k.strip(), v.strip()
+            if k == "processor":
+                logicos += 1
+            elif k == "model name" and not modelo:
+                modelo = v
+            elif k == "physical id":
+                fisico_actual = v
+                fisicos.add(v)
+            elif k == "cpu cores" and nucleos is None:
+                nucleos = int(v) if v.isdigit() else None
+        l.append(f"CPU: {modelo or 'desconocida'}")
+        total = nucleos * max(1, len(fisicos)) if nucleos else None
+        l.append(f"Núcleos: {total or '?'} físicos, {logicos or '?'} hilos")
+    else:
+        l.append("CPU: desconocida (no se puede leer /proc/cpuinfo)")
+    mem = leer(ruta("proc", "meminfo"))
+    datos = {}
+    for linea in (mem or "").splitlines():
+        k, _, v = linea.partition(":")
+        partes = v.split()
+        if partes and partes[0].isdigit():
+            datos[k.strip()] = int(partes[0])
+    def gib(kb):
+        return f"{kb / 1048576:.1f} GiB"
+    if "MemTotal" in datos:
+        l.append(f"RAM total: {gib(datos['MemTotal'])}"
+                 + (f" (disponible {gib(datos['MemAvailable'])})" if "MemAvailable" in datos else ""))
+        l.append(f"Swap total: {gib(datos.get('SwapTotal', 0))}")
+    else:
+        l.append("RAM: desconocida (no se puede leer /proc/meminfo)")
+    zram = [d for d in listar(ruta("sys", "block")) if d.startswith("zram")]
+    for d in zram:
+        tam = leer(ruta("sys", "block", d, "disksize"))
+        alg = leer(ruta("sys", "block", d, "comp_algorithm")) or "?"
+        m = re.search(r"\[(\w+)\]", alg)
+        tam_txt = f"{int(tam) / 1073741824:.1f} GiB" if tam and tam.isdigit() else "?"
+        l.append(f"zram: {d} {tam_txt}, compresión {m.group(1) if m else alg}")
+    if not zram:
+        l.append("zram: no")
+    swaps = leer(ruta("proc", "swaps"))
+    if swaps:
+        lineas = swaps.splitlines()[1:]
+        if lineas:
+            l.append("Zonas de intercambio:")
+            for s in lineas:
+                p = s.split()
+                if len(p) >= 3:
+                    nombre = p[0] if p[0].startswith("/dev/") else "(archivo)"
+                    l.append(f"    {nombre} tipo {p[1]}, {int(p[2]) // 1024} MiB" if p[2].isdigit()
+                             else f"    {nombre} tipo {p[1]}")
+    return l
+
+
+def bloques_lspci(clases):
+    r = ejecutar(["lspci", "-nnk"])
+    if not r.ok:
+        return None, r.explicar()
+    bloques, actual = [], None
+    for linea in r.salida.splitlines():
+        if linea and not linea[0].isspace():
+            actual = [linea] if any(c in linea for c in clases) else None
+            if actual is not None:
+                bloques.append(actual)
+        elif actual is not None and linea.strip().split(":")[0] in (
+                "Subsystem", "Kernel driver in use", "Kernel modules", "DeviceName"):
+            actual.append("    " + linea.strip())
+    return bloques, None
+
+
+def modulos_cargados():
+    texto = leer(ruta("proc", "modules"), 1 << 20) or ""
+    return {linea.split()[0] for linea in texto.splitlines() if linea.split()}
+
+
+def sec_grafica(opciones):
+    l = []
+    bloques, error = bloques_lspci(("VGA compatible controller", "3D controller", "Display controller"))
+    if error:
+        l.append(f"lspci: {error}")
+    elif not bloques:
+        l.append("lspci: no se encontró ninguna tarjeta gráfica PCI")
+    else:
+        for b in bloques:
+            l.extend(b)
+    mods = modulos_cargados()
+    interesantes = ["nvidia", "nvidia_drm", "nvidia_modeset", "nouveau", "amdgpu", "radeon", "i915",
+                    "xe", "vmwgfx", "virtio_gpu", "qxl", "bochs", "simpledrm"]
+    cargados = [m for m in interesantes if m in mods]
+    l.append("Módulos de vídeo cargados: " + (", ".join(cargados) if cargados else "ninguno de los conocidos"))
+    tarjetas = [d for d in listar(ruta("sys", "class", "drm")) if re.fullmatch(r"card\d+", d)]
+    for c in tarjetas:
+        drv = base_enlace(ruta("sys", "class", "drm", c, "device", "driver"))
+        l.append(f"DRM {c}: driver {drv or '?'}")
+    env = entorno_hyprland()
+    if env is None:
+        l.append("Monitores: no hay sesión de Hyprland accesible")
+        return l
+    r = ejecutar(["hyprctl", "monitors", "all", "-j"], env)
+    if not r.ok:
+        l.append(f"Monitores (hyprctl): {r.explicar()}")
+        return l
+    try:
+        monitores = json.loads(r.salida)
+    except ValueError:
+        l.append("Monitores (hyprctl): respuesta no válida")
+        return l
+    l.append("Monitores (Hyprland):")
+    for m in monitores:
+        estado = "desactivado" if m.get("disabled") else "activo"
+        l.append(f"    {m.get('name', '?')}: {m.get('width')}x{m.get('height')} @ "
+                 f"{float(m.get('refreshRate') or 0):.2f} Hz, escala {m.get('scale')}, "
+                 f"rotación {m.get('transform')}, VRR {'sí' if m.get('vrr') else 'no'}, {estado}")
+    return l
+
+
+def sec_sonido(opciones):
+    l = []
+    cards = leer(ruta("proc", "asound", "cards"))
+    if cards is None:
+        l.append("Tarjetas ALSA: no se puede leer /proc/asound/cards")
+    elif "no soundcards" in cards.lower() or not cards.strip():
+        l.append("Tarjetas ALSA: ninguna")
+    else:
+        l.append("Tarjetas ALSA:")
+        l.extend("    " + x.strip() for x in cards.splitlines() if re.match(r"\s*\d+\s*\[", x))
+    l.append(f"pipewire (usuario): {servicio('pipewire', True)}")
+    l.append(f"wireplumber (usuario): {servicio('wireplumber', True)}")
+    r = ejecutar(["wpctl", "status"])
+    if not r.ok:
+        l.append(f"PipeWire (wpctl): {r.explicar()}")
+        return l
+    l.extend(resumir_wpctl(r.salida))
+    return l
+
+
+def resumir_wpctl(texto):
+    """Solo los dispositivos, salidas y entradas de audio; marca el predeterminado."""
+    l, bloque, seccion = [], None, None
+    for linea in texto.splitlines():
+        limpia = linea.replace("│", " ").replace("├", " ").replace("└", " ").replace("─", " ")
+        if limpia.strip() in ("Audio", "Video", "Settings"):
+            seccion = limpia.strip()
+            continue
+        m = re.match(r"\s*(Devices|Sinks|Sources):", limpia)
+        if m:
+            bloque = m.group(1)
+            continue
+        if re.match(r"\s*(Filters|Streams|Clients|Default Configured)", limpia):
+            bloque = None
+            continue
+        if seccion != "Audio" or not bloque:
+            continue
+        m = re.match(r"\s*(\*)?\s*(\d+)\.\s+(.+?)(\s+\[.*\])?\s*$", limpia)
+        if m:
+            nombre = m.group(3).strip()
+            # Los nombres de los dispositivos Bluetooth los pone el usuario: no se copian.
+            if es_bluetooth_pipewire(m.group(2)):
+                nombre = "<dispositivo Bluetooth>"
+            etiqueta = {"Devices": "Dispositivo", "Sinks": "Salida", "Sources": "Entrada"}[bloque]
+            pre = " (predeterminada)" if m.group(1) else ""
+            l.append(f"    {etiqueta}: {nombre}{pre}")
+    return (["PipeWire (wpctl):"] + l) if l else ["PipeWire (wpctl): sin dispositivos de audio"]
+
+
+def es_bluetooth_pipewire(ident):
+    r = ejecutar(["wpctl", "inspect", ident], tiempo=3)
+    return r.ok and re.search(r'(device\.api|api\.bluez5)\S*\s*=\s*"?bluez', r.salida) is not None
+
+
+def sec_red(opciones):
+    l = []
+    interfaces = [i for i in listar(ruta("sys", "class", "net")) if i != "lo"]
+    if not interfaces:
+        l.append("Interfaces: ninguna (o /sys/class/net no legible)")
+    for i in interfaces:
+        base = ruta("sys", "class", "net", i)
+        if existe(os.path.join(base, "wireless")) or existe(os.path.join(base, "phy80211")):
+            tipo = "wifi"
+        elif not existe(os.path.join(base, "device")):
+            tipo = "virtual"
+        elif leer(os.path.join(base, "type")) == "1":
+            tipo = "ethernet"
+        else:
+            tipo = "otra"
+        drv = base_enlace(os.path.join(base, "device", "driver")) or "-"
+        bus = base_enlace(os.path.join(base, "device", "subsystem")) or "-"
+        estado = leer(os.path.join(base, "operstate")) or "?"
+        l.append(f"{i}: {tipo}, driver {drv}, bus {bus}, estado {estado}")
+    bloques, error = bloques_lspci(("Network controller", "Ethernet controller"))
+    if error:
+        l.append(f"Chips de red PCI (lspci): {error}")
+    elif bloques:
+        l.append("Chips de red PCI:")
+        for b in bloques:
+            l.extend("    " + x for x in b)
+    r = ejecutar(["lsusb"])
+    if r.ok:
+        usb = [x for x in r.salida.splitlines()
+               if re.search(r"(?i)wireless|wi-?fi|802\.11|wlan|ethernet|realtek.*(rtl8|80211)|ralink|"
+                            r"mediatek|atheros|broadcom", x)]
+        if usb:
+            l.append("Posibles adaptadores de red USB:")
+            l.extend("    " + x for x in usb)
+    rf = listar(ruta("sys", "class", "rfkill"))
+    for r_ in rf:
+        b = ruta("sys", "class", "rfkill", r_)
+        tipo = leer(os.path.join(b, "type")) or "?"
+        soft = leer(os.path.join(b, "soft")) == "1"
+        hard = leer(os.path.join(b, "hard")) == "1"
+        l.append(f"rfkill {tipo}: {'bloqueado por hardware' if hard else 'bloqueado por software' if soft else 'libre'}")
+    l.append(f"NetworkManager: {servicio('NetworkManager')}")
+    return l
+
+
+def sec_bluetooth(opciones):
+    l = []
+    adaptadores = [a for a in listar(ruta("sys", "class", "bluetooth")) if re.fullmatch(r"hci\d+", a)]
+    if not adaptadores:
+        l.append("Adaptador: ninguno detectado")
+    for a in adaptadores:
+        drv = base_enlace(ruta("sys", "class", "bluetooth", a, "device", "driver")) or "?"
+        l.append(f"Adaptador {a}: driver {drv}")
+    l.append(f"bluetooth.service: {servicio('bluetooth')}")
+    return l
+
+
+def sec_portatil(opciones):
+    l = []
+    fuentes = listar(ruta("sys", "class", "power_supply"))
+    baterias = 0
+    for f in fuentes:
+        b = ruta("sys", "class", "power_supply", f)
+        tipo = leer(os.path.join(b, "type"))
+        if tipo == "Battery":
+            baterias += 1
+            presente = leer(os.path.join(b, "present"))
+            cap = leer(os.path.join(b, "capacity"))
+            estado = leer(os.path.join(b, "status"))
+            texto = f"Batería {f}: presente {'sí' if presente != '0' else 'no'}"
+            if cap:
+                texto += f", carga {cap} %"
+            if estado:
+                texto += f", estado {estado}"
+            for lleno, diseno in (("energy_full", "energy_full_design"), ("charge_full", "charge_full_design")):
+                a, d = leer(os.path.join(b, lleno)), leer(os.path.join(b, diseno))
+                if a and d and a.isdigit() and d.isdigit() and int(d) > 0:
+                    texto += f", salud {100 * int(a) / int(d):.0f} %"
+                    break
+            tec = leer(os.path.join(b, "technology"))
+            if tec and tec != "Unknown":
+                texto += f", {tec}"
+            l.append(texto)
+        elif tipo == "Mains":
+            l.append(f"Corriente {f}: {'conectada' if leer(os.path.join(b, 'online')) == '1' else 'desconectada'}")
+    if not baterias:
+        l.append("Batería: ninguna")
+    luces = listar(ruta("sys", "class", "backlight"))
+    if not luces:
+        l.append("Retroiluminación: ninguna en /sys/class/backlight")
+    for x in luces:
+        b = ruta("sys", "class", "backlight", x)
+        l.append(f"Retroiluminación {x}: {leer(os.path.join(b, 'brightness')) or '?'}/"
+                 f"{leer(os.path.join(b, 'max_brightness')) or '?'}, tipo {leer(os.path.join(b, 'type')) or '?'}")
+    tapas = glob.glob(ruta("proc", "acpi", "button", "lid", "*", "state"))
+    if not tapas:
+        l.append("Tapa: no detectada")
+    for t in tapas:
+        estado = (leer(t) or "?").split(":")[-1].strip()
+        l.append(f"Tapa: {estado}")
+    entrada = leer(ruta("proc", "bus", "input", "devices"), 1 << 20)
+    if entrada is None:
+        l.append("Dispositivos de entrada: no legible")
+    else:
+        nombres = []
+        for bloque in entrada.split("\n\n"):
+            bus = re.search(r"Bus=(\w+)", bloque)
+            nombre = re.search(r'N: Name="(.*)"', bloque)
+            if not nombre:
+                continue
+            # Los nombres de los dispositivos Bluetooth los pone el usuario: no se copian.
+            if bus and bus.group(1) == "0005":
+                nombres.append("<dispositivo Bluetooth>")
+            else:
+                nombres.append(nombre.group(1))
+        tactil = [n for n in nombres if re.search(r"(?i)touchpad|trackpad|synaptics|elan|alps|glidepoint", n)]
+        l.append(f"Touchpad: {'sí (' + ', '.join(tactil) + ')' if tactil else 'no detectado'}")
+        l.append("Dispositivos de entrada:")
+        l.extend("    " + n for n in nombres)
+    return l
+
+
+def sec_almacenamiento(opciones):
+    l = []
+    r = ejecutar(["lsblk", "-d", "-o", "NAME,SIZE,ROTA,TRAN,MODEL,TYPE"])
+    if r.ok:
+        l.extend(r.salida.rstrip().splitlines())
+    else:
+        l.append(f"lsblk: {r.explicar()}")
+    nvme = [d for d in listar(ruta("sys", "block")) if d.startswith("nvme")]
+    l.append(f"NVMe: {'sí (' + ', '.join(nvme) + ')' if nvme else 'no'}")
+    return l
+
+
+def sec_usb(opciones):
+    r = ejecutar(["lsusb"])
+    if not r.ok:
+        return [f"lsusb: {r.explicar()}"]
+    return r.salida.rstrip().splitlines() or ["ningún dispositivo"]
+
+
+RE_FIRMWARE = re.compile(r"(?i)firmware.*(fail|error|missing|not found|unable|could not|couldn't)|"
+                         r"(fail|error|missing|unable).*firmware|direct firmware load")
+RE_DRIVERS = re.compile(r"(?i)\b(i915|xe|amdgpu|radeon|nouveau|nvidia|iwlwifi|iwlmvm|ath\d*k?|rtw\w*|"
+                        r"rtl\w+|mt7\w+|brcmfmac|b43|snd_hda\w*|sof\w*|bluetooth|btusb|btintel|btrtl)\b")
+RE_FALLO = re.compile(r"(?i)\b(fail\w*|error\w*|timeout|timed out|unable|invalid|bug|warn\w*|crash\w*|hang)\b")
+
+
+def sin_vacias(texto):
+    return [x for x in texto.splitlines() if x.strip() and not x.startswith("-- No entries")]
+
+
+def registro_kernel(sudo):
+    """Devuelve (lineas, origen) o (None, explicacion)."""
+    avisos = []
+    r = ejecutar(["journalctl", "-k", "-b", "--no-pager", "-o", "cat"], sudo=sudo, tiempo=10)
+    lineas = sin_vacias(r.salida)
+    if r.ok and lineas and "not seeing messages" not in r.error:
+        return lineas, "journalctl -k" + (" (sudo)" if sudo else "")
+    avisos.append(f"journalctl: {r.explicar() if not r.ok else 'sin entradas del kernel visibles para este usuario'}")
+    r = ejecutar(["dmesg", "--notime"], sudo=sudo, tiempo=6)
+    if r.ok and r.salida.strip():
+        return r.salida.splitlines(), "dmesg" + (" (sudo)" if sudo else "")
+    avisos.append(f"dmesg: {r.explicar()}")
+    return None, "; ".join(avisos)
+
+
+def sec_errores(opciones):
+    l = []
+    lineas, origen = registro_kernel(False)
+    if lineas is None and opciones.get("sudo") and not MODO_PRUEBA:
+        lineas, origen2 = registro_kernel(True)
+        if lineas is None:
+            origen = f"{origen}; con sudo: {origen2}"
+        else:
+            origen = origen2
+    if lineas is None:
+        l.append("Registro del kernel: requiere sudo (ejecuta: jaime0-diagnostico --sudo)")
+        l.append(f"    ({origen})")
+        return l
+    l.append(f"Origen: {origen}")
+    fw = [x for x in lineas if RE_FIRMWARE.search(x)]
+    drv = [x for x in lineas if RE_DRIVERS.search(x) and RE_FALLO.search(x) and x not in fw]
+    def volcar(titulo, lista, maximo=40):
+        unicos = list(dict.fromkeys(x.strip() for x in lista))
+        l.append(f"{titulo}: {len(unicos) if unicos else 'ninguno'}"
+                 + (f" ({len(lista)} con repeticiones)" if len(lista) > len(unicos) else ""))
+        for x in unicos[:maximo]:
+            l.append("    " + x[:300])
+        if len(unicos) > maximo:
+            l.append(f"    ... y {len(unicos) - maximo} más")
+    volcar("Firmware que falta o falla", fw)
+    volcar("Errores de drivers de gráfica, red, sonido o Bluetooth", drv)
+    r = ejecutar(["journalctl", "-k", "-b", "-p", "err", "--no-pager", "-o", "cat"],
+                 sudo=bool(opciones.get("sudo")) and "sudo" in origen and not MODO_PRUEBA, tiempo=10)
+    if r.ok and "not seeing messages" not in r.error:
+        volcar("Mensajes del kernel de prioridad error o superior", sin_vacias(r.salida), 30)
+    return l
+
+
+def sec_sesion(opciones):
+    l = []
+    procesos = procesos_en_marcha()
+    def marcha(*nombres):
+        return "en marcha" if any(n in procesos for n in nombres) else "no está en marcha"
+    l.append(f"Hyprland: {marcha('Hyprland')}")
+    env = entorno_hyprland()
+    en_sesion = None
+    if env is not None:
+        r = ejecutar(["hyprctl", "version"], env)
+        en_sesion = r.salida.strip().splitlines()[0][:160] if r.ok and r.salida.strip() else None
+        l.append("Versión en la sesión (hyprctl): " + (en_sesion or r.explicar()))
+    r = ejecutar(["Hyprland", "--version"], tiempo=5)
+    if r.ok and r.salida.strip():
+        binario = r.salida.strip().splitlines()[0][:160]
+        if binario != en_sesion:
+            l.append("Binario instalado (Hyprland --version): " + binario)
+    elif r.motivo:
+        l.append(f"Binario Hyprland: {r.motivo}")
+    l.append(f"Waybar: {marcha('waybar')}")
+    l.append(f"swaync (notificaciones): {marcha('swaync')}")
+    l.append(f"Quickshell (widgets): {marcha('quickshell', 'qs')}")
+    l.append(f"hypridle: {marcha('hypridle')}")
+    l.append(f"Sesión: XDG_SESSION_TYPE={os.environ.get('XDG_SESSION_TYPE', '-')}, "
+             f"XDG_CURRENT_DESKTOP={os.environ.get('XDG_CURRENT_DESKTOP', '-')}")
+    config = os.path.join(os.path.expanduser("~"), ".config", "hypr", "hyprland.lua")
+    if not os.path.isfile(config):
+        l.append("~/.config/hypr/hyprland.lua: no existe")
+        return l
+    # Se verifica aislado de la sesion en marcha: con su propio XDG_RUNTIME_DIR temporal y
+    # sin la firma de la instancia, para que no intente abrir los sockets de la sesion real.
+    aislado = tempfile.mkdtemp(prefix="jaime0-diagnostico-")
+    try:
+        r = ejecutar(["Hyprland", "--verify-config", "--config", config], tiempo=15,
+                     env_extra={"XDG_RUNTIME_DIR": aislado, "HYPRLAND_INSTANCE_SIGNATURE": None,
+                                "WAYLAND_DISPLAY": None, "DISPLAY": None})
+    finally:
+        shutil.rmtree(aislado, ignore_errors=True)
+    if r.motivo:
+        l.append(f"Verificación de hyprland.lua: {r.motivo}")
+        return l
+    texto = RE_ANSI.sub("", r.salida + "\n" + r.error).splitlines()
+    # Solo el veredicto y los errores, recortados: no se copia el archivo ni el registro.
+    importantes = [re.sub(r"^\[?\s*([A-Z]+)\s*\]:", r"\1:", x.strip())[:240] for x in texto
+                   if x.strip() and not re.match(r"\s*\[?\s*(DEBUG|LOG|TRACE|INFO)\b", x)
+                   and not set(x.strip()) <= set("=-")
+                   # Aviso normal al verificar fuera de la sesion: no hay socket de IPC.
+                   and "IPC will not work" not in x]
+    l.append(f"Verificación de hyprland.lua: {'correcta' if r.ok else 'con problemas'}"
+             f" (código de salida {r.codigo})")
+    l.extend("    " + x for x in importantes[-15:])
+    return l
+
+
+PAQUETES = ["hyprland", "waybar", "quickshell", "sway-notification-center", "hyprlock", "hypridle",
+            "pipewire", "wireplumber", "network-manager", "linux-image-amd64", "libgl1-mesa-dri",
+            "mesa-vulkan-drivers", "bluez", "xdg-desktop-portal-hyprland"]
+
+
+def sec_paquetes(opciones):
+    l = []
+    formato = "${Package}\t${Version}\t${db:Status-Abbrev}\n"
+    r = ejecutar(["dpkg-query", "-W", "-f", formato, *PAQUETES])
+    if r.motivo:
+        return [f"dpkg-query: {r.motivo}"]
+    versiones = {}
+    for linea in r.salida.splitlines():
+        p = linea.split("\t")
+        # db:Status-Abbrev: "ii" instalado, "hi" instalado y retenido (apt-mark hold).
+        if len(p) >= 3 and p[2][1:2] == "i":
+            versiones[p[0]] = p[1] + (" (retenido)" if p[2].startswith("h") else "")
+    ancho = max(len(p) for p in PAQUETES)
+    for p in PAQUETES:
+        l.append(f"{p.ljust(ancho)}  {versiones.get(p, 'no instalado')}")
+    r = ejecutar(["dpkg-query", "-W", "-f", formato, "firmware-*"])
+    fw = sorted(linea.split("\t")[0] for linea in r.salida.splitlines()
+                if len(linea.split("\t")) >= 3 and linea.split("\t")[2][1:2] == "i")
+    l.append("Firmware instalado: " + (", ".join(fw) if fw else "ningún paquete firmware-*"))
+    return l
+
+
+SECCIONES = [
+    ("Jaime0", sec_jaime0),
+    ("Sistema", sec_sistema),
+    ("CPU y memoria", sec_cpu_memoria),
+    ("Gráfica y monitores", sec_grafica),
+    ("Sonido", sec_sonido),
+    ("Red", sec_red),
+    ("Bluetooth", sec_bluetooth),
+    ("Portátil: batería, pantalla, tapa y entrada", sec_portatil),
+    ("Almacenamiento", sec_almacenamiento),
+    ("USB", sec_usb),
+    ("Firmware que falta y errores del kernel", sec_errores),
+    ("Sesión gráfica", sec_sesion),
+    ("Paquetes clave", sec_paquetes),
+]
+
+
+def generar(opciones):
+    inicio = time.monotonic()
+    partes = [f"Informe de diagnóstico de Jaime0 ({PROGRAMA})",
+              f"Generado: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
+              + (" (con --sudo)" if opciones.get("sudo") else ""),
+              "", AVISO_PRIVACIDAD, ""]
+    for n, (titulo, funcion) in enumerate(SECCIONES, 1):
+        partes.append(f"== {n}. {titulo} ==")
+        try:
+            lineas = funcion(opciones)
+        except Exception as e:  # una seccion rota nunca tumba el informe
+            lineas = [f"Error interno en esta sección ({type(e).__name__}); se continúa."]
+        partes.extend(lineas or ["(sin datos)"])
+        partes.append("")
+    partes.append(f"Generado en {time.monotonic() - inicio:.1f} s.")
+    return limpiar("\n".join(partes) + "\n")
+
+
+def colorear(texto):
+    return re.sub(r"(?m)^(== .* ==)$", "\033[1;32m\\1\033[0m", texto)
+
+
+AYUDA = """Uso: jaime0-diagnostico [--pantalla] [--sudo]
+
+Genera un informe de hardware y compatibilidad para adjuntarlo a una incidencia de
+Jaime0 en GitHub. No recoge direcciones MAC ni IP, redes Wi-Fi, nombre de usuario ni
+de equipo, números de serie ni el contenido de tus archivos.
+
+  (sin opciones)  guarda el informe en ~/jaime0-diagnostico-AAAAMMDD-HHMM.txt
+  --pantalla      lo muestra en la terminal en vez de guardarlo
+  --sudo          usa "sudo -n" para leer el registro del kernel (no pide contraseña;
+                  si sudo la necesita, ejecuta antes "sudo -v")
+  -h, --help      muestra esta ayuda
+"""
+
+
+def main(argv):
+    opciones = {"pantalla": False, "sudo": False}
+    for a in argv:
+        if a in ("-h", "--help", "--ayuda"):
+            print(AYUDA, end="")
+            return 0
+        if a == "--pantalla":
+            opciones["pantalla"] = True
+        elif a == "--sudo":
+            opciones["sudo"] = True
+        else:
+            print(f"{PROGRAMA}: opción desconocida: {a}\n\n{AYUDA}", end="", file=sys.stderr)
+            return 2
+    if not opciones["pantalla"]:
+        print("Recogiendo información del equipo (unos segundos)...", file=sys.stderr)
+    informe = generar(opciones)
+    if opciones["pantalla"]:
+        tty = hasattr(sys.stdout, "isatty") and sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+        sys.stdout.write(colorear(informe) if tty else informe)
+        return 0
+    nombre = f"jaime0-diagnostico-{datetime.datetime.now().strftime('%Y%m%d-%H%M')}.txt"
+    destino = os.path.join(os.path.expanduser("~"), nombre)
+    try:
+        with open(destino, "w", encoding="utf-8") as f:
+            f.write(informe)
+    except OSError as e:
+        print(f"{PROGRAMA}: no se pudo guardar {destino}: {e.strerror}. Usa --pantalla.", file=sys.stderr)
+        return 1
+    print(f"Informe guardado en {destino}")
+    print("Revísalo y adjúntalo a tu incidencia en GitHub (arrastra el archivo al cuadro de texto).")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        sys.exit(130)

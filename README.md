@@ -330,7 +330,7 @@ sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools
 
    Las pruebas en vivo necesitan una VM con aceleración 3D. `scripts/coords-barra.sh` guarda las posiciones de los módulos de la barra a 1280 px: si cambia la barra, hay que volver a medirlas.
 
-   Las pruebas del actualizador y de los ajustes no necesitan la ISO: `python3 -m unittest discover -s pruebas -v`.
+   Las comprobaciones que no necesitan la ISO (permisos, shellcheck, sintaxis de Python, JSON, Lua y QML, y las pruebas automáticas) están en `scripts/validar-repo.sh`, que GitHub Actions ejecuta en cada cambio. Qué se ha probado y qué falta: [docs/pruebas.md](docs/pruebas.md).
 
 Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambia a diario: si llega otra versión de Hyprland, revalida la configuración con `Hyprland --verify-config`.
 
@@ -346,8 +346,9 @@ Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambi
 | `config/includes.chroot_after_packages/` | Archivos del sistema: `/etc/skel`, instalador, scripts |
 | `scripts/` | Construcción de Waybar y traducciones, fondo, empaquetado de actualizaciones y verificaciones |
 | `publicaciones/` | Notas de cada versión publicada con `jaime0-update` |
-| `pruebas/` | Pruebas automáticas del actualizador y de los ajustes |
-| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md) y [ajustes](docs/ajustes.md) |
+| `pruebas/` | Pruebas automáticas (actualizador, ajustes, ancladas, tiempo, diagnóstico) |
+| `.github/workflows/` | Validación automática en GitHub Actions (no publica nada) |
+| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md), [ajustes](docs/ajustes.md) y [pruebas](docs/pruebas.md) |
 | `capturas/` | Capturas del sistema |
 
 ### Cambiar el nombre del sistema
@@ -389,7 +390,7 @@ Todas las pruebas se han hecho en VirtualBox, en UEFI con arranque seguro y en B
 - Discos NVMe (VirtualBox los ofrece solo con su paquete de extensión)
 - Varios monitores y escalado en pantallas HiDPI
 
-Si lo pruebas en un equipo físico, abre una [incidencia](https://github.com/Jaime-202/jaime0/issues) con lo que funcione y lo que no.
+Si lo pruebas en un equipo físico, abre una [incidencia](https://github.com/Jaime-202/jaime0/issues) con lo que funcione y lo que no, y adjunta el informe de `jaime0-diagnostico --sudo` (se guarda en `~/jaime0-diagnostico-*.txt`). No recoge direcciones MAC ni IP, redes Wi-Fi, usuario, nombre del equipo ni números de serie, pero revísalo antes de publicarlo. La lista de pruebas pendientes está en [docs/pruebas.md](docs/pruebas.md#4-pruebas-en-hardware-real-pendientes).
 
 ## Licencia
 

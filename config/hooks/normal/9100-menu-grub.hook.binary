@@ -12,7 +12,6 @@ if [ -f boot/grub/grub.cfg ]; then
         -e "s/Live system/${PRODUCTO} en vivo/" \
         boot/grub/grub.cfg
 fi
-for TEMA in boot/grub/live-theme/theme.txt; do
-    [ -f "${TEMA}" ] && sed -i -e "s/^title-text: .*/title-text: \"${PRODUCTO}\"/" "${TEMA}"
-done
+TEMA=boot/grub/live-theme/theme.txt
+[ -f "${TEMA}" ] && sed -i -e "s/^title-text: .*/title-text: \"${PRODUCTO}\"/" "${TEMA}"
 exit 0

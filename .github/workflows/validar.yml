@@ -1,0 +1,31 @@
+# Validacion de Jaime0 en cada push y solicitud de integracion: sintaxis de scripts y
+# configuraciones, permisos, secretos y pruebas automaticas (scripts/validar-repo.sh).
+# No compila la ISO ni publica nada: las publicaciones se hacen a mano.
+name: Validar
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validar-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Herramientas
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends shellcheck lua5.4 openssl
+
+      - name: Comprobaciones
+        run: bash scripts/validar-repo.sh
