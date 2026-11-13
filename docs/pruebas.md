@@ -45,7 +45,7 @@ Desde una terminal de la sesión (VM o equipo real). Comprueba Hyprland, los pro
 
 ## 3. Pruebas en máquina virtual
 
-VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las pruebas de sesión de la 0.2 se hicieron primero sobre la ISO 0.1.x en vivo con los archivos 0.2 encima; después se compiló la ISO 0.2.0-beta.1 (13-11-2026, SHA-256 `ae831ddc…0607`) y se repitieron arranque, instalación y `verificar-sesion.sh` con ella.
+VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las pruebas de sesión de la 0.2 se hicieron primero sobre la ISO 0.1.x en vivo con los archivos 0.2 encima; después se compiló la ISO 0.2.0-beta.1 (13-11-2026, SHA-256 `ae831ddc…0607`) y se repitieron arranque, instalación y `verificar-sesion.sh` con ella. La compilación final (SHA-256 `bd206dd5…1774`) solo añade el límite de 5 s de `notificaciones` y los scripts de prueba al día; con ella se repitió el arranque en vivo UEFI (`verificar-sesion.sh` 21/21) y no la instalación, cuyo contenido no cambia.
 
 | Prueba | Estado | Notas |
 |---|---|---|
