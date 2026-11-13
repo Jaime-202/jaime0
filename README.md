@@ -1,12 +1,71 @@
 # Jaime0
 
-Sistema operativo ligero, en vivo e instalable, basado en Debian Forky (testing), con Hyprland sobre Wayland. Trae terminales en mosaico sobre negro profundo, con un verde discreto que solo marca lo activo, un escritorio vacío al entrar, un instalador gráfico propio y actualizaciones sin reinstalar con `jaime0-update`.
+**Jaime0 es un sistema operativo para ordenadores de escritorio y portátiles.** Se puede probar desde un USB sin tocar el disco y, si convence, instalarlo con un asistente gráfico. Está pensado para quien quiere un equipo rápido y ordenado, que se maneja sobre todo con el teclado sin renunciar al ratón, y que funciona nada más instalarlo.
 
-Este repositorio contiene todo lo necesario para reconstruir la imagen: configuración de live-build, dotfiles de `/etc/skel`, hooks y scripts de verificación. La ISO lista para usar está en [Releases](https://github.com/Jaime-202/jaime0/releases).
-
-> **Estado:** probado solo en máquinas virtuales (VirtualBox, BIOS y UEFI con arranque seguro). Todavía no se ha probado en un equipo físico. Revisa [Qué no se ha probado](#qué-no-se-ha-probado) antes de instalarlo en un equipo con datos importantes, y haz copia de seguridad.
+Por dentro es **Debian** (la misma base que usan miles de servidores y otras distribuciones) con un escritorio moderno montado pieza a pieza: **Hyprland** como gestor de ventanas, una barra fina, notificaciones, bloqueo de pantalla, widgets opcionales y herramientas propias para ajustarlo y actualizarlo. Todo comparte la misma estética: negro profundo y un verde discreto que solo marca lo que está activo.
 
 ![Mosaico con btop, Neovim y Fastfetch](capturas/mosaico.png)
+
+> **Estado:** la versión publicada es la [0.1.2](https://github.com/Jaime-202/jaime0/releases), de prueba. La **0.2.0-beta.1** que describe este README está terminada y probada en máquinas virtuales, pero **su ISO aún no se ha publicado**. Nada se ha probado todavía en un equipo físico: revisa [Qué no se ha probado](#qué-no-se-ha-probado) y haz copia de seguridad antes de instalarlo en un equipo con datos importantes.
+
+## Qué es, explicado sin prisas
+
+### Una distribución de Linux
+
+Un sistema Linux se compone de muchas piezas hechas por proyectos distintos: el núcleo (Linux), los programas básicos, el gestor de paquetes, el escritorio... Una **distribución** elige esas piezas, las configura para que encajen y las entrega listas para instalar. Jaime0 es una distribución pequeña: no rehace lo que Debian ya hace bien y se centra en el escritorio y en cómo se usa el equipo.
+
+### Basada en Debian Forky
+
+Debian publica una versión estable cada dos años y, mientras tanto, prepara la siguiente en una rama llamada **testing**, que ahora se llama *Forky*. Jaime0 usa esa rama para tener programas recientes (Hyprland avanza muy deprisa). La contrapartida es que testing recibe cambios a diario y alguna actualización puede romper algo; por eso Jaime0 trae formas de volver atrás (ver más abajo).
+
+Los programas se instalan como en cualquier Debian, con `apt` y desde los repositorios oficiales. Jaime0 no tiene repositorio de paquetes propio.
+
+### Wayland y Hyprland: ventanas en mosaico
+
+En Linux, el programa que dibuja las ventanas en pantalla se llama **compositor**. Jaime0 usa **Wayland**, el sistema gráfico moderno que sustituye a X11, con **Hyprland** como compositor.
+
+Hyprland organiza las ventanas **en mosaico** (*tiling*): en lugar de amontonarlas y obligarte a moverlas y redimensionarlas a mano, las coloca solas una junto a otra aprovechando toda la pantalla. Abres una terminal y ocupa la pantalla; abres otra y se reparten el espacio. Todo tiene atajo (`SUPER + Intro` abre una terminal, `SUPER + Q` cierra, `SUPER + 1-9` cambia de escritorio), pero también se puede usar el ratón y dejar cualquier ventana flotante.
+
+### Ligero de verdad
+
+Con el escritorio en reposo usa unos **530 MiB de RAM** y arranca en unos **15 segundos** (sistema instalado 0.2.0-beta.1, medido con `free -m` y `systemd-analyze` en una VM UEFI con 4 GiB). No hay trucos: no corre nada que no haga falta, la barra no pregunta el estado cada segundo sino que espera a que algo cambie, el soporte para programas antiguos de X11 (XWayland) viene apagado y los widgets, si no los activas, ni siquiera se cargan.
+
+### Cómo encajan las piezas
+
+| Capa | Qué hace | Con qué |
+|---|---|---|
+| Arranque | Menú de arranque, cifrado del disco, animación de inicio | GRUB, shim firmado (Secure Boot), LUKS, Plymouth |
+| Acceso | Pide usuario y contraseña en una pantalla de texto | `greetd` con `tuigreet` |
+| Escritorio | Dibuja y organiza las ventanas | Hyprland, con configuración en Lua |
+| Barra y widgets | Escritorios, aplicaciones ancladas, estado y hora; reloj, música, tiempo... | Waybar (parcheado), Quickshell |
+| Servicios de la sesión | Notificaciones, bloqueo, inactividad, indicador de volumen, modo noche | swaync, Hyprlock, Hypridle, wob, Hyprsunset |
+| Herramientas de Jaime0 | Ajustes, ancladas, atajos, actualizaciones, diagnóstico | `jaime0-ajustes`, `jaime0-anclar`, `atajos`, `jaime0-update`, `jaime0-diagnostico` |
+| Sistema | Paquetes, red, sonido, Bluetooth | Debian Forky: `apt`, NetworkManager, PipeWire, BlueZ |
+
+Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
+
+### Seguro por defecto
+
+- **Cortafuegos activo** (UFW): el equipo sale a internet con normalidad, pero no acepta conexiones entrantes que no hayas abierto tú.
+- **Cifrado del disco opcional** (LUKS) desde el instalador: sin la clave, nadie puede leer tus datos aunque se lleve el disco.
+- **Secure Boot:** arranca con el cargador y el núcleo firmados por Debian, sin desactivar el arranque seguro.
+- **Avisos de seguridad:** la barra indica cuándo hay actualizaciones de Debian y cuáles corrigen fallos de seguridad.
+- **Memoria comprimida** (zram) en equipos con 8 GiB o menos: parte de la RAM se usa, comprimida, como espacio de intercambio, mucho más rápido que el disco.
+
+### Actualizar sin reinstalar y volver atrás
+
+Hay dos tipos de actualizaciones, cada una con su herramienta:
+
+- **Los programas de Debian** se actualizan con `apt`, como siempre.
+- **Lo propio de Jaime0** (configuración, scripts, temas) se actualiza con **`jaime0-update`**. Descarga versiones **firmadas** (Ed25519) desde GitHub Releases y comprueba la firma antes de tocar nada. Respeta los archivos que hayas personalizado: deja la versión nueva al lado para que elijas. Y guarda una copia de todo lo que cambia para poder **revertir**. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
+
+Si al instalar eliges el sistema de archivos **Btrfs**, además se guarda una **instantánea** del sistema antes y después de cada actualización (con *snapper*), y los cambios de paquetes se pueden deshacer con una orden. Con ext4, la opción por defecto, no hay instantáneas. Qué se puede recuperar y qué no: [docs/recuperacion.md](docs/recuperacion.md).
+
+### Para quién es, y para quién no
+
+**Te encaja** si te gusta trabajar con el teclado, quieres un sistema que arranque rápido y no gaste recursos sin motivo, o te pica la curiosidad por los escritorios en mosaico y quieres uno ya configurado y coherente.
+
+**Quizá no** si buscas un escritorio clásico con iconos y menú de inicio, necesitas una estabilidad a prueba de todo (para eso, Debian estable) o dependes de una gráfica NVIDIA reciente con su controlador propietario, que aquí no se ha probado.
 
 | Escritorio al entrar | Lista de atajos |
 |---|---|
@@ -16,19 +75,15 @@ Este repositorio contiene todo lo necesario para reconstruir la imagen: configur
 
 ## Características
 
-- **Ligero:** unos 530 MiB de RAM con el escritorio en reposo y arranque en unos 15 s (sistema instalado 0.2.0-beta.1, medido con `free -m` y `systemd-analyze` en una VM UEFI con 4 GiB), sin applets residentes ni XWayland activo.
-- **Hyprland con configuración Lua**, con mosaico `dwindle`, bordes finos, ventanas opacas, blur mínimo y animaciones cortas.
-- **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, aplicaciones ancladas en el centro y estado y hora a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto, y la campana y las ancladas solo cuando cambian.
-- **Widgets de escritorio** opcionales (Quickshell): reloj, música, tiempo, volumen y brillo, sistema y calendario, cada uno en la posición que elijas. Vienen apagados y, sin ninguno activo, no consumen nada. Ver [docs/ajustes.md](docs/ajustes.md#widgets-de-escritorio).
-- **Seguro y ligero por defecto:** cortafuegos activado (no entra nada que no hayas pedido), zram en equipos con 8 GiB de RAM o menos y aviso de actualizaciones de seguridad de Debian. Flatpak/Flathub, solo si lo activas (`jaime0-flatpak activar`). Ver [docs/recuperacion.md](docs/recuperacion.md).
-- **Aplicaciones ancladas:** hasta 6 en el centro de la barra. Un punto marca las abiertas; al pulsar, se enfoca su ventana o se inicia. Se gestionan con `jaime0-anclar firefox`, `jaime0-anclar quitar firefox` o desde `jaime0-ajustes`.
-- **Actualizaciones sin reinstalar:** `jaime0-update` instala versiones firmadas desde GitHub Releases (canales stable, beta y experimental), respeta tus personalizaciones, guarda copias y puede revertir. Los paquetes de Debian siguen con `apt`. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
-- **Ajustes en un solo sitio:** `jaime0-ajustes` cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y altura y posición de la barra, y lo aplica al momento. Tus ajustes viven en `~/.config/jaime0/ajustes` y ninguna actualización los toca. Ver [docs/ajustes.md](docs/ajustes.md).
+- **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, aplicaciones ancladas en el centro y estado y hora a la derecha. El reloj se redibuja una vez por minuto, y la campana y las ancladas solo cuando cambian.
+- **Aplicaciones ancladas:** hasta 6 en el centro de la barra. Un punto marca las abiertas; al pulsar, se enfoca su ventana o se inicia. Se gestionan con `jaime0-anclar` o desde `jaime0-ajustes`.
+- **Widgets de escritorio** opcionales (Quickshell): reloj, música, tiempo, volumen y brillo, sistema y calendario, cada uno donde elijas. Ver [docs/ajustes.md](docs/ajustes.md#widgets-de-escritorio).
+- **Ajustes en un solo sitio:** `jaime0-ajustes`, en la terminal o con su ventana, cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y la barra, y lo aplica al momento. Tus ajustes viven en `~/.config/jaime0/ajustes` y ninguna actualización los toca.
+- **Notificaciones y bloqueo:** centro de notificaciones con no molestar y controles de música; pantalla de bloqueo con la hora y la canción que suena; bloqueo automático por inactividad.
 - **Comando `atajos`:** lista todos los atajos reales y permite añadir los tuyos, comprobando antes que la configuración es válida.
-- **Instalador gráfico** basado en Calamares: borrar el disco, instalar junto a otro sistema o particionar a mano, con cifrado LUKS opcional y sin necesidad de red.
-- **Arranque seguro (Secure Boot):** con shim y GRUB firmados por Debian, en el sistema en vivo y en el instalado.
-- **BIOS y UEFI**, y arranque desde USB grabado en modo imagen.
-- **Modo seguro** en el menú de arranque, para equipos cuya gráfica dé problemas.
+- **Instalador gráfico** (Calamares): borrar el disco, instalar junto a otro sistema o particionar a mano, con cifrado opcional, ext4 o Btrfs, y sin necesidad de red.
+- **BIOS y UEFI**, Secure Boot, arranque desde USB grabado en modo imagen y **modo seguro** para gráficas problemáticas.
+- **Flatpak/Flathub**, solo si lo activas (`jaime0-flatpak activar`).
 
 ## Requisitos
 
