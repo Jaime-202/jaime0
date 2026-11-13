@@ -18,7 +18,9 @@ echo "== Paquetes =="
 for P in hyprlock hypridle swaylock wob hyprsunset hyprpicker brightnessctl playerctl adwaita-icon-theme; do
     instalado "$P" && ok "$P instalado" || fallo "$P no instalado"
 done
-for P in hyprlock hypridle brave-browser firefox-esr firefox chromium bibata-cursor-theme; do
+# 0.2: hyprlock e hypridle son el bloqueo y la inactividad (ver arriba); lo que no debe
+# estar es swayidle, al que sustituye hypridle (inactividad solo lo usa si falta hypridle).
+for P in swayidle brave-browser firefox-esr firefox chromium bibata-cursor-theme; do
     instalado "$P" && fallo "$P no deberia estar" || ok "$P ausente"
 done
 
@@ -32,7 +34,21 @@ PY
 grep -rIq 'btop-flotante' chroot/etc/skel chroot/usr/local/bin && fallo "queda btop-flotante" || ok "sin regla ni clase btop-flotante"
 [ -x $BIN/abrir-btop ] && sh -n $BIN/abrir-btop && ok "abrir-btop ejecutable y sin errores de sintaxis" || fallo "abrir-btop"
 grep -q 'kitty --class btop' $BIN/abrir-btop && grep -q 'address:' $BIN/abrir-btop && ok "abrir-btop enfoca el abierto o abre uno en kitty" || fallo "abrir-btop sin enfoque"
-grep -q 'class = "^(kitty|btop|nmtui-flotante|atajos-flotante)$"' "$LUA" && ok "btop con la opacidad de las terminales" || fallo "regla de opacidad de btop"
+# 0.2: ya no hay regla de opacidad por clase; la de todas las ventanas sale de jaime0-ajustes
+# (opacidad_inactiva). btop tiene la misma que kitty si ninguna regla de opacidad nombra a
+# kitty o btop (las que quedan solo fuerzan opacas pantalla completa, video y reproductores).
+python3 - "$LUA" <<'PY' && ok "btop con la opacidad de las terminales (opacidad_inactiva, sin regla por clase)" || fallo "regla de opacidad de btop"
+import re, sys
+t = open(sys.argv[1], encoding='utf-8').read()
+assert re.search(r'^\s*active_opacity\s*=\s*1\.0,', t, re.M)
+assert re.search(r'^\s*inactive_opacity\s*=\s*ajuste\("opacidad_inactiva", decimal, 1\.0\),', t, re.M)
+reglas = re.findall(r'hl\.window_rule\(\{(.*?)^\}\)', t, re.S | re.M)
+assert reglas
+for r in reglas:
+    if re.search(r'^\s*opacity\s*=', r, re.M):
+        assert not re.search(r'kitty|btop', r), r
+        assert '1.0 override 1.0 override' in r, r
+PY
 grep -q 'match  = { class = "^(nmtui-flotante|atajos-flotante)$" }' "$LUA" && ok "btop ya no es flotante" || fallo "regla flotante-utilidades"
 grep -q 'org\\\\.pulseaudio\\\\.pavucontrol|pavucontrol|blueman-manager' "$LUA" && ok "pavucontrol y blueman siguen flotantes" || fallo "regla de pavucontrol"
 

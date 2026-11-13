@@ -1,0 +1,23 @@
+#!/bin/sh
+# Corre dentro del sistema de destino, al final de la instalacion. Si / esta en Btrfs,
+# configura snapper para "/": con su gancho de apt (/etc/apt/apt.conf.d/80snapper) hay
+# una instantanea antes y otra despues de cada operacion de paquetes, y jaime0-update hace
+# lo mismo con cada actualizacion. Solo instantaneas numeradas (las 10 ultimas), sin las
+# horarias. /boot queda fuera (ext4): ver docs/recuperacion.md. En ext4 no hace nada.
+set -e
+
+if [ "$(stat -f -c %T /)" = btrfs ] && command -v snapper >/dev/null 2>&1 \
+        && [ ! -e /etc/snapper/configs/root ]; then
+    snapper --no-dbus -c root create-config /
+    sed -i -e 's/^TIMELINE_CREATE=.*/TIMELINE_CREATE="no"/' \
+           -e 's/^NUMBER_LIMIT=.*/NUMBER_LIMIT="10"/' \
+           -e 's/^NUMBER_LIMIT_IMPORTANT=.*/NUMBER_LIMIT_IMPORTANT="5"/' \
+           /etc/snapper/configs/root
+    systemctl enable snapper-cleanup.timer
+fi
+
+# Sin Btrfs no hay nada que vigilar; con el, las horarias estan apagadas en la configuracion.
+systemctl disable snapper-timeline.timer snapper-boot.timer >/dev/null 2>&1 || true
+
+rm -f /usr/local/sbin/hypr-configurar-snapper
+exit 0

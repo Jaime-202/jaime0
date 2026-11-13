@@ -16,6 +16,15 @@ export PATH=/tmp/vs4-falso:$PATH
 ok()    { echo "[OK]    $1"; }
 fallo() { echo "[FALLO] $1"; }
 
+# Sin aceleracion 3D (p. ej. VM de construccion con VMSVGA sin 3D) Mesa no puede crear la
+# pantalla EGL y Hyprland aborta al crear el backend, antes de abrir su socket: no es un fallo
+# de Jaime0, y todo lo que sigue dependeria de la sesion. Solo se acepta si Hyprland ya no
+# corre y su salida tiene la huella de Mesa; cualquier otro motivo sigue siendo un fallo.
+HUELLA_SIN_3D='No 3D enabled|failed to create dri2 screen|MESA-LOADER: failed to open'
+sin_3d() {
+    ! pgrep -u "$(id -u)" -x Hyprland >/dev/null && grep -qE "$HUELLA_SIN_3D" "$1"
+}
+
 mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 cd "$HOME"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
@@ -31,6 +40,11 @@ sleep 15
 export HYPRLAND_INSTANCE_SIGNATURE=$(ls "$XDG_RUNTIME_DIR/hypr" | head -1)
 export WAYLAND_DISPLAY=$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)
 
+if ! hyprctl monitors 2>/dev/null | grep -q '^Monitor' && sin_3d "$XDG_RUNTIME_DIR/hypr.log"; then
+    echo "[PEND]  prueba en vivo no aplicable: la GPU no tiene aceleracion 3D y Hyprland no puede arrancar (Mesa: $(grep -m1 -oE "$HUELLA_SIN_3D" "$XDG_RUNTIME_DIR/hypr.log")). Activa la aceleracion 3D de la VM y repite"
+    pkill -u "$(id -u)" -x pipewire-pulse; pkill -u "$(id -u)" -x wireplumber; pkill -u "$(id -u)" -x pipewire; pkill -u "$(id -u)" -x dbus-daemon
+    exit 0
+fi
 [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && hyprctl monitors | grep -q '^Monitor' && ok "Hyprland arranca en la VM" || fallo "Hyprland no arranca"
 E=$(hyprctl configerrors | grep -v '^$' | grep -vi 'no errors' | head -3)
 [ -z "$E" ] && ok "Hyprland sin errores de configuracion" || fallo "configerrors: $E"
@@ -70,11 +84,13 @@ if grep -q 'Disabling module "clock"' "$L"; then fallo "modulo clock desactivado
 if grep -q 'Disabling module "pulseaudio"' "$L"; then fallo "modulo pulseaudio desactivado"; else ok "modulo pulseaudio activo"; fi
 grep -E 'Disabling module|\[error\]' "$L" | cut -c1-150
 
-notify-send -u normal "Prueba" "Notificación de prueba"; sleep 2
+# Con timeout: si el demonio no responde, notify-send o swaync-client esperan sin fin.
+timeout 10 notify-send -u normal "Prueba" "Notificación de prueba"; sleep 2
 capas | grep -qx swaync-notification-window && ok "swaync muestra la notificacion" || fallo "swaync sin ventana de notificacion"
-notificaciones panel; sleep 1
+timeout 10 notificaciones panel; R=$?; sleep 1
+[ "$R" -eq 124 ] && fallo "notificaciones panel se queda colgado"
 capas | grep -qx swaync-control-center && ok "centro de notificaciones abierto" || fallo "el centro no se abre"
-notificaciones panel; sleep 1
+timeout 10 notificaciones panel; sleep 1
 
 # Clic real en un boton de escritorio: es lo que el waybar original no podia hacer.
 hyprctl dispatch 'hl.dsp.focus({ workspace = 3 })' >/dev/null; sleep 1

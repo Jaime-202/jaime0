@@ -140,7 +140,7 @@ for PAR in pruebau:corta pruebaa:completa; do
 done
 mkdir -p capturas-software; cp chroot/tmp/vs6x-*/*.png capturas-software/ 2>/dev/null; cp chroot/tmp/vs6x-*/*.log capturas-software/ 2>/dev/null; chmod -R a+rX capturas-software
 
-F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA")
+F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA"); P=$(grep -c '^\[PEND\]' "$SALIDA")
 echo
-echo "RESULTADO: ${F} fallo(s), ${O} correctos"
+echo "RESULTADO: ${F} fallo(s), ${P} pendiente(s), ${O} correctos"
 [ "$F" -eq 0 ]

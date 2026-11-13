@@ -68,7 +68,7 @@ Detalles del actualizador: [actualizaciones.md](actualizaciones.md).
 | Paquetes solo con `apt` | Es el gestor oficial de Debian; un gestor paralelo duplicaría trabajo y riesgos |
 | zram con systemd-zram-generator y no zram-tools | Es declarativo y permite activarlo solo con poca RAM (`host-memory-limit`) sin código propio; se integra en `swap.target`. El archivo de `/etc` sustituye al del paquete, que lo crearía en cualquier equipo y con lz4 |
 | UFW y no nftables a mano | Trae probadas las reglas que necesita un cliente (DHCP, ICMPv6, mDNS), se activa sin el kernel en marcha (en el chroot) y abrir un puerto es `sudo ufw allow N` |
-| Rollback solo de archivos propios | Sin Btrfs ni instantáneas, revertir paquetes de Debian no es fiable. Se documenta como límite en vez de prometerlo |
+| Rollback de archivos propios; Btrfs + snapper como opción | En ext4 (por defecto) revertir paquetes de Debian no es fiable y se documenta como límite. Btrfs se ofrece en el instalador con snapper y subvolúmenes aparte para `/home`, registros y cachés; `/boot` sigue en ext4 por LUKS, así que el núcleo no vuelve atrás |
 | Ajustes del usuario fuera de `/etc/skel` | `~/.config/jaime0/ajustes` no lo trae ninguna versión, así que `jaime0-update` nunca lo toca. Los archivos de Hyprland, Waybar y rofi siguen siendo los oficiales sin cambios, de modo que las actualizaciones se aplican sin conflictos |
 | Esquema de ajustes solo en `jaime0-ajustes` | Valida con límites y lo expone con `ver --json` a la interfaz. Hyprland solo comprueba el tipo, para no repetir límites, y ante un valor roto usa el predeterminado |
 | Histórico de huellas en el manifiesto | Reconoce archivos sin tocar de cualquier versión anterior, también en instalaciones que no tenían manifiesto (0.1.x) |

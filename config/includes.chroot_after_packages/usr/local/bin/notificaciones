@@ -12,9 +12,11 @@
 if command -v swaync >/dev/null 2>&1; then
     case "$1" in
         iniciar)    exec swaync ;;
-        panel)      exec swaync-client --toggle-panel --skip-wait ;;
-        nomolestar) exec swaync-client --toggle-dnd --skip-wait ;;
-        cerrar)     exec swaync-client --close-all --skip-wait ;;
+        # Si swaync no esta en marcha, swaync-client espera para siempre a que aparezca:
+        # con un limite, un clic en la campana nunca deja un proceso colgado.
+        panel)      exec timeout 5 swaync-client --toggle-panel --skip-wait ;;
+        nomolestar) exec timeout 5 swaync-client --toggle-dnd --skip-wait ;;
+        cerrar)     exec timeout 5 swaync-client --close-all --skip-wait ;;
         # Una linea JSON en cada cambio: Waybar no sondea. Si swaync aun no ha arrancado,
         # se reintenta cada pocos segundos.
         barra)      while :; do swaync-client --subscribe-waybar 2>/dev/null; sleep 3; done ;;

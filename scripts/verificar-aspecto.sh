@@ -172,7 +172,7 @@ rm -rf chroot/tmp/vs5x; mkdir -p chroot/tmp/vs5x; chown "$(chroot chroot id -u r
 chroot --userspec=ricer:ricer chroot env HOME_PRUEBA=/home/ricer /tmp/vivo5.sh 2>&1 | tee -a "$SALIDA"
 mkdir -p capturas-aspecto; cp chroot/tmp/vs5x/*.png capturas-aspecto/ 2>/dev/null; cp chroot/tmp/vs5x/*.log chroot/tmp/vs5x/*.txt capturas-aspecto/ 2>/dev/null; chmod -R a+rX capturas-aspecto
 
-F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA")
+F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA"); P=$(grep -c '^\[PEND\]' "$SALIDA")
 echo
-echo "RESULTADO: ${F} fallo(s), ${O} correctos"
+echo "RESULTADO: ${F} fallo(s), ${P} pendiente(s), ${O} correctos"
 [ "$F" -eq 0 ]

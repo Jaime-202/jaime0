@@ -10,7 +10,7 @@ Qué hace Jaime0 para volver atrás cuando algo sale mal, qué no puede hacer to
 | Una actualización se corta a medias (apagón, error) | Se deshace sola al volver a ejecutar `jaime0-update`, o `sudo jaime0-update recuperar` | Igual: archivos de Jaime0 |
 | Una configuración tuya entra en conflicto | Se conserva la tuya; la nueva queda al lado (`.jaime0-nuevo`). `jaime0-update resolver` | Archivo a archivo |
 | La gráfica no deja arrancar el escritorio | Entrada **Modo seguro** en el menú de arranque (`nomodeset`) y consola de reparación | Arranque |
-| Un paquete de Debian se rompe al actualizar | **Sin Btrfs: no hay vuelta atrás automática.** Con Btrfs y snapper: ver abajo | — |
+| Un paquete de Debian se rompe al actualizar | **En ext4 (por defecto): no hay vuelta atrás automática.** Instalado en Btrfs: `sudo snapper -c root list` y `sudo snapper undochange PRE..POST` (ver abajo) | Btrfs: todo `/` salvo `/home`, `/var/log`, `/var/cache` y `/boot` |
 
 ## Estudio: Btrfs con instantáneas
 
@@ -38,14 +38,14 @@ Qué hace Jaime0 para volver atrás cuando algo sale mal, qué no puede hacer to
 ### Decisión
 
 1. **Hecho:** `jaime0-update` crea instantáneas pre/post cuando `/` está en Btrfs con la configuración `root` de snapper; si snapper falla, la actualización sigue y avisa. No hace nada en ext4. Probado con pruebas automáticas y la orden comprobada en un Btrfs real.
-2. **Pendiente de la ISO 0.2 (fase de integración):** ofrecer Btrfs en el instalador **como opción** (ext4 sigue por defecto), con:
+2. **Hecho en la ISO 0.2:** el instalador ofrece Btrfs **como opción** (ext4 sigue por defecto; en el paso de particiones, "Sistema de archivos"):
    - `partition.conf`: `availableFileSystemTypes: [ "ext4", "btrfs" ]`, y la partición del sistema sin sistema de archivos fijo para que use el elegido.
-   - `mount.conf`: subvolúmenes `@` (`/`), `@home`, `@log` (`/var/log`) y `@cache` (`/var/cache`), para que las instantáneas no guarden registros ni cachés; opciones `noatime,compress=zstd:1`.
-   - Un paso `shellprocess` tras instalar: si `/` es Btrfs, `snapper --no-dbus -c root create-config /` con un límite de 10 instantáneas numeradas y sin las horarias (`TIMELINE_CREATE="no"`), y `snapper-cleanup.timer` activo.
+   - `mount.conf`: subvolúmenes `@` (`/`), `@home`, `@log` (`/var/log`) y `@cache` (`/var/cache`), para que las instantáneas no guarden registros ni cachés, y `@swap` para el archivo de intercambio. Opciones de montaje: las de Calamares (`relatime`, `discard=async`), **sin compresión**.
+   - Paso `shellprocess@snapper` (`/usr/local/sbin/hypr-configurar-snapper`) tras instalar: si `/` es Btrfs, `snapper --no-dbus -c root create-config /` con un límite de 10 instantáneas numeradas (5 importantes), sin las horarias (`TIMELINE_CREATE="no"`) y con `snapper-cleanup.timer` activo. En ext4 no hace nada.
    - `snapper` y `btrfs-progs` en la ISO.
-   
-   No se ha cambiado el instalador ahora porque no se puede probar sin compilar la ISO, y un error ahí deja equipos sin instalar. Se hará junto con las pruebas de instalación.
-3. **Futuro:** un asistente en el USB en vivo (`jaime0-recuperar`) que liste las instantáneas de un disco Btrfs y sustituya `@` por la elegida.
+
+   **Probado (13-11-2026, VM UEFI, Btrfs + LUKS):** subvolúmenes creados y montados según el fstab, configuración `root` de snapper hecha, `apt install` creó su par de instantáneas pre/post, arranque normal con Plymouth y clave LUKS hasta tuigreet, y `verificar-sesion.sh` 21/21. **Pendiente:** `undochange` sobre el sistema instalado y hardware real.
+3. **Futuro:** un asistente en el USB en vivo (`jaime0-recuperar`) que liste las instantáneas de un disco Btrfs y sustituya `@` por la elegida; compresión `zstd` (requiere probar el rendimiento antes de activarla).
 
 ## Cortafuegos
 

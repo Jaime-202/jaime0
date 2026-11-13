@@ -13,6 +13,8 @@ instalado() { chroot chroot dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep
 
 [ "$(id -u)" -eq 0 ] || { echo "Ejecuta con sudo."; exit 1; }
 [ -d chroot/etc/apt ] || { echo "No existe ./chroot."; exit 1; }
+# Rastro de versiones anteriores de esta misma prueba (rofi con HOME=/etc/skel).
+[ -d chroot/etc/skel/.cache ] && echo "AVISO: existe chroot/etc/skel/.cache (lo dejo una ejecucion anterior de verificar-barra.sh; no esta en la ISO si se compilo antes). Borralo con: sudo rmdir chroot/etc/skel/.cache"
 
 echo "== Paquetes de ui.list.chroot =="
 for P in $(cat config/package-lists/ui.list.chroot); do
@@ -107,7 +109,9 @@ echo "== Binarios =="
 chroot chroot rofi -help 2>&1 | grep -qE '^[[:space:]]*.*wayland' && ok "rofi con backend wayland" || fallo "rofi sin wayland"
 chroot chroot sh -c 'rofi -help' 2>&1 | grep -iE 'drun|dmenu' | head -2 | cut -c1-100
 chroot chroot rofi -dump-config >/dev/null 2>&1 && ok "rofi -dump-config" || fallo "rofi -dump-config"
-chroot chroot env HOME=/etc/skel rofi -dump-theme >/tmp/vs4tema 2>&1
+# XDG_CACHE_HOME aparte: si no, rofi crea /etc/skel/.cache (700) en el chroot, que todo usuario
+# nuevo heredaria y que verificar-software detecta como "directorio sin 755".
+chroot chroot env HOME=/etc/skel XDG_CACHE_HOME=/tmp/vs4cache rofi -dump-theme >/tmp/vs4tema 2>&1
 grep -qi '#54e58a\|rgba ( 84, 229, 138' /tmp/vs4tema && ok "rofi -dump-theme analiza el tema" || { fallo "rofi -dump-theme"; head -5 /tmp/vs4tema; }
 sed 's/location:         center;/location center;;;{/' "chroot$SKEL/rofi/jaime0.rasi" > chroot/tmp/roto.rasi
 chroot chroot env HOME=/tmp rofi -theme /tmp/roto.rasi -dump-theme >/tmp/vs4tema 2>&1
@@ -149,7 +153,7 @@ chroot --userspec=prueba:prueba chroot env HOME_PRUEBA=/home/prueba /tmp/vivo.sh
 mkdir -p capturas-barra; cp chroot/tmp/vs4x/*.png capturas-barra/ 2>/dev/null; chmod -R a+rX capturas-barra
 
 
-F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA")
+F=$(grep -c '^\[FALLO\]' "$SALIDA"); O=$(grep -c '^\[OK\]' "$SALIDA"); P=$(grep -c '^\[PEND\]' "$SALIDA")
 echo
-echo "RESULTADO: ${F} fallo(s), ${O} correctos"
+echo "RESULTADO: ${F} fallo(s), ${P} pendiente(s), ${O} correctos"
 [ "$F" -eq 0 ]

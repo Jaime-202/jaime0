@@ -13,6 +13,51 @@ unset LIBGL_ALWAYS_SOFTWARE GSK_RENDERER
 ok()   { echo "[OK]    $1"; }
 fallo() { echo "[FALLO] $1"; }
 
+# Sin aceleracion 3D (p. ej. VM de construccion con VMSVGA sin 3D) Mesa no puede crear la
+# pantalla EGL y Hyprland aborta al crear el backend, antes de abrir su socket: no es un fallo
+# de Jaime0, y todo lo que sigue dependeria de la sesion. Solo se acepta si Hyprland ya no
+# corre y su salida tiene la huella de Mesa; cualquier otro motivo sigue siendo un fallo.
+HUELLA_SIN_3D='No 3D enabled|failed to create dri2 screen|MESA-LOADER: failed to open'
+sin_3d() {
+    ! pgrep -u "$(id -u)" -x Hyprland >/dev/null && grep -qE "$HUELLA_SIN_3D" "$1"
+}
+
+# Lo que no necesita Hyprland: se comprueba tambien sin 3D. La salida de fastfetch se reconoce
+# por su linea OS con Jaime0 (la de WM/Hyprland solo aparece con la sesion en marcha).
+FF='OS.*Jaime0'
+CON_SESION=1
+sin_sesion() {
+    P=$(STARSHIP_SHELL= starship prompt 2>&1); echo "$P" | grep -q '❯' && ok "starship genera prompt con la config propia" || fallo "starship prompt: $P"
+    SAL=$(KITTY_WINDOW_ID=1 TERM=xterm-kitty zsh -ic 'exit' 2>&1 </dev/null)
+    echo "$SAL" | grep -qE "$FF" && ok "fastfetch se ejecuta con kitty interactivo" || fallo "fastfetch no salio en kitty: $(echo "$SAL" | head -3 | cut -c1-120)"
+    SAL=$(env -u KITTY_WINDOW_ID zsh -ic 'exit' 2>&1 </dev/null)
+    echo "$SAL" | grep -qE "$FF" && fallo "fastfetch sale fuera de kitty" || ok "fastfetch no sale fuera de kitty"
+    SAL=$(KITTY_WINDOW_ID=1 zsh -c 'exit' 2>&1 </dev/null)
+    echo "$SAL" | grep -qE "$FF" && fallo "fastfetch sale sin modo interactivo" || ok "fastfetch no sale sin modo interactivo"
+    fastfetch --config "$HOME/.config/fastfetch/config.jsonc" 2>&1 | grep -qiE 'error|invalid' && fallo "fastfetch informa de errores" || ok "fastfetch sin errores de config"
+
+    echo "-- Fastfetch y Starship --"
+    # Desde zsh, como en una terminal real: el modulo shell informa del proceso padre.
+    SAL=$(zsh -c "fastfetch --pipe; true" 2>&1)
+    echo "$SAL" | grep -iE "zsh|bash|sh " | head -2 | sed "s/^/Linea de shell: /"
+    # WM y Hyprland solo salen con la sesion en marcha.
+    CLAVES="OS PC zsh Jaime0"; [ "$CON_SESION" = 1 ] && CLAVES="OS WM PC Hyprland zsh Jaime0"
+    for K in $CLAVES; do echo "$SAL" | grep -q "$K" && ok "fastfetch muestra $K" || fallo "fastfetch sin $K"; done
+    N=$(echo "$SAL" | grep -c "│ ├"); [ "$N" -ge 7 ] && ok "fastfetch en arbol: $N ramas" || fallo "fastfetch sin arbol ($N)"
+    echo "$SAL" | grep -q "$(id -un)@" && ok "fastfetch muestra usuario@host" || fallo "fastfetch sin usuario@host"
+    SAL2=$(fastfetch 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    echo "$SAL2" | grep -q ":ooooo:" && ok "fastfetch dibuja el logo J0" || fallo "fastfetch sin el logo J0"
+    D=$(STARSHIP_SHELL= starship prompt --right --status=0 2>&1); echo "$D" | sed 's/\x1b\[[0-9;]*m//g' | grep -qE '[0-9]{2}:[0-9]{2}:[0-9]{2}' && ok "starship: hora a la derecha" || fallo "starship derecha: $D"
+    D=$(STARSHIP_SHELL= starship prompt --right --status=1 2>&1); echo "$D" | sed 's/\x1b\[[0-9;]*m//g' | grep -q ' 1 ' && ok "starship: codigo de error a la derecha" || fallo "starship derecha con error: $D"
+
+    echo "-- Neovim --"
+    NV=$(nvim --headless "$X/prueba.py" -c 'lua io.stdout:write(tostring(vim.o.relativenumber).."|"..tostring(vim.o.termguicolors).."|"..vim.g.colors_name.."|"..vim.fn.synIDattr(vim.fn.hlID("Normal"),"bg").."|"..LineaEstado():sub(1,12))' -c 'qa!' 2>&1)
+    echo "Neovim: $(echo "$NV" | cut -c1-90)"
+    echo "$NV" | grep -q '^true|true|jaime0-transparente||' && ok "nvim: numeros relativos, colores y fondo transparente" || fallo "nvim: $NV"
+    echo "$NV" | grep -qiE 'error|E[0-9]+:' && fallo "nvim informa de errores" || ok "nvim abre sin errores"
+    [ "$(gsettings get org.gnome.desktop.interface gtk-theme)" = "'Adwaita-dark'" ] && ok "GSettings: Adwaita-dark" || fallo "GSettings gtk-theme"
+}
+
 chmod 700 "$X"; cd "$HOME"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$X/bus"
 dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --fork --nopidfile
@@ -32,6 +77,12 @@ export WAYLAND_DISPLAY=$(ls "$X" | grep -E '^wayland-[0-9]+$' | head -1)
 hyprctl eval 'for _, b in ipairs(atajosMultimedia or {}) do b:set_enabled(false) end' >/dev/null 2>&1
 
 
+if ! hyprctl monitors 2>/dev/null | grep -q '^Monitor' && sin_3d "$X/hypr.log"; then
+    echo "[PEND]  prueba en vivo no aplicable: la GPU no tiene aceleracion 3D y Hyprland no puede arrancar (Mesa: $(grep -m1 -oE "$HUELLA_SIN_3D" "$X/hypr.log")). Activa la aceleracion 3D de la VM y repite"
+    CON_SESION=0; sin_sesion
+    pkill -u "$(id -u)" -x pipewire-pulse; pkill -u "$(id -u)" -x wireplumber; pkill -u "$(id -u)" -x pipewire; pkill -u "$(id -u)" -x dbus-daemon
+    exit 0
+fi
 [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && hyprctl monitors | grep -q '^Monitor' && ok "Hyprland arranca en la VM" || fallo "Hyprland no arranca"
 E=$(hyprctl configerrors | grep -v '^$' | grep -vi 'no errors' | head -3)
 [ -z "$E" ] && ok "Hyprland sin errores de configuracion" || fallo "configerrors: $E"
@@ -118,32 +169,7 @@ IFS='|' read -r ZV ZS ZF ZH ZST ZK <<< "$Z"
 wlrctl keyboard type 'echo "$ZSH'; sleep 2; foto s5-zsh-autosugerencia
 hyprctl dispatch 'hl.dsp.window.close()' >/dev/null; sleep 2
 
-P=$(STARSHIP_SHELL= starship prompt 2>&1); echo "$P" | grep -q '❯' && ok "starship genera prompt con la config propia" || fallo "starship prompt: $P"
-SAL=$(KITTY_WINDOW_ID=1 TERM=xterm-kitty zsh -ic 'exit' 2>&1 </dev/null)
-echo "$SAL" | grep -q 'Hyprland' && ok "fastfetch se ejecuta con kitty interactivo" || fallo "fastfetch no salio en kitty: $(echo "$SAL" | head -3 | cut -c1-120)"
-SAL=$(env -u KITTY_WINDOW_ID zsh -ic 'exit' 2>&1 </dev/null)
-echo "$SAL" | grep -q 'Hyprland' && fallo "fastfetch sale fuera de kitty" || ok "fastfetch no sale fuera de kitty"
-SAL=$(KITTY_WINDOW_ID=1 zsh -c 'exit' 2>&1 </dev/null)
-echo "$SAL" | grep -q 'Hyprland' && fallo "fastfetch sale sin modo interactivo" || ok "fastfetch no sale sin modo interactivo"
-fastfetch --config "$HOME/.config/fastfetch/config.jsonc" 2>&1 | grep -qiE 'error|invalid' && fallo "fastfetch informa de errores" || ok "fastfetch sin errores de config"
-
-echo "-- Fastfetch y Starship --"
-# Desde zsh, como en una terminal real: el modulo shell informa del proceso padre.
-SAL=$(zsh -c "fastfetch --pipe; true" 2>&1)
-echo "$SAL" | grep -iE "zsh|bash|sh " | head -2 | sed "s/^/Linea de shell: /"
-for K in "OS" "WM" "PC" "Hyprland" "zsh" "Jaime0"; do echo "$SAL" | grep -q "$K" && ok "fastfetch muestra $K" || fallo "fastfetch sin $K"; done
-N=$(echo "$SAL" | grep -c "│ ├"); [ "$N" -ge 7 ] && ok "fastfetch en arbol: $N ramas" || fallo "fastfetch sin arbol ($N)"
-echo "$SAL" | grep -q "$(id -un)@" && ok "fastfetch muestra usuario@host" || fallo "fastfetch sin usuario@host"
-SAL2=$(fastfetch 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
-echo "$SAL2" | grep -q ":ooooo:" && ok "fastfetch dibuja el logo J0" || fallo "fastfetch sin el logo J0"
-D=$(STARSHIP_SHELL= starship prompt --right --status=0 2>&1); echo "$D" | sed 's/\x1b\[[0-9;]*m//g' | grep -qE '[0-9]{2}:[0-9]{2}:[0-9]{2}' && ok "starship: hora a la derecha" || fallo "starship derecha: $D"
-D=$(STARSHIP_SHELL= starship prompt --right --status=1 2>&1); echo "$D" | sed 's/\x1b\[[0-9;]*m//g' | grep -q ' 1 ' && ok "starship: codigo de error a la derecha" || fallo "starship derecha con error: $D"
-
-echo "-- Neovim --"
-NV=$(nvim --headless "$X/prueba.py" -c 'lua io.stdout:write(tostring(vim.o.relativenumber).."|"..tostring(vim.o.termguicolors).."|"..vim.g.colors_name.."|"..vim.fn.synIDattr(vim.fn.hlID("Normal"),"bg").."|"..LineaEstado():sub(1,12))' -c 'qa!' 2>&1)
-echo "Neovim: $(echo "$NV" | cut -c1-90)"
-echo "$NV" | grep -q '^true|true|jaime0-transparente||' && ok "nvim: numeros relativos, colores y fondo transparente" || fallo "nvim: $NV"
-echo "$NV" | grep -qiE 'error|E[0-9]+:' && fallo "nvim informa de errores" || ok "nvim abre sin errores"
+sin_sesion
 
 echo "-- btop --"
 hyprctl dispatch 'hl.dsp.focus({ workspace = 3 })' >/dev/null; sleep 1
@@ -155,7 +181,6 @@ pkill -x btop; sleep 2
 grep -q 'jaime0' "$HOME/.config/btop/btop.conf" && ok "btop conserva el tema tras salir" || fallo "btop perdio el tema"
 
 echo "-- GTK --"
-[ "$(gsettings get org.gnome.desktop.interface gtk-theme)" = "'Adwaita-dark'" ] && ok "GSettings: Adwaita-dark" || fallo "GSettings gtk-theme"
 hyprctl dispatch 'hl.dsp.focus({ workspace = 4 })' >/dev/null; sleep 1
 thunar > "$X/thunar.log" 2>&1 &
 sleep 7

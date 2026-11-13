@@ -112,7 +112,7 @@ Nunca se tocan documentos, datos personales ni programas que hayas instalado: so
 - Los paquetes que una versión pida instalar (campo `paquetes` del manifiesto).
 - Lo que generan los hooks al compilar la ISO (tema de Plymouth, fuentes descargadas, cursores...). Esos cambios solo llegan con una ISO nueva.
 
-Jaime0 no usa instantáneas del sistema de archivos (Btrfs/Snapper), así que no hay un rollback completo del sistema.
+En una instalación en ext4 (la opción por defecto) no hay instantáneas del sistema de archivos, así que no hay rollback completo. Si instalaste en Btrfs, `jaime0-update` y `apt` crean instantáneas pre/post con snapper y `jaime0-update revertir` indica la orden `snapper undochange` exacta; ni así vuelven atrás el núcleo ni `/boot` (ver [recuperacion.md](recuperacion.md)).
 
 ## Si vienes de Jaime0 0.1.x
 
