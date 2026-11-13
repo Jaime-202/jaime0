@@ -57,6 +57,7 @@ PREFIJOS_PERMITIDOS = (
     "usr/local/bin/",
     "usr/local/share/marca/",
     "usr/local/share/dbus-1/services/",
+    "etc/apt/apt.conf.d/20jaime0-",
     "usr/lib/systemd/user/",
     "usr/share/jaime0/",
     "usr/share/backgrounds/jaime0/",
@@ -921,6 +922,10 @@ def fase_sistema(version, opciones):
         os.makedirs(DIR_CACHE, mode=0o700, exist_ok=True)
         escribir_atomico(os.path.join(DIR_CACHE, nombre_carga), datos, 0o600)
 
+        # Con / en Btrfs y snapper configurado: instantanea antes de tocar nada (paquetes y
+        # archivos). /boot queda fuera: ver docs/recuperacion.md.
+        previa = instantanea("pre", f"jaime0-update {instalada or '?'} -> {version}")
+
         faltan = paquetes_que_faltan(manifiesto.get("paquetes", [])) if not MODO_PRUEBA else []
         if faltan:
             info(f"Paquetes necesarios: {' '.join(faltan)}")
@@ -953,16 +958,49 @@ def fase_sistema(version, opciones):
             raise Fallo(f"Actualización interrumpida ({e}). Los archivos de Jaime0 siguen en {instalada}.")
         transaccion.terminar({"plan": [{k: p[k] for k in ("rel", "accion")} for p in plan]})
         escribir_json(CONFLICTOS_SISTEMA, conflictos)
+        posterior = instantanea("post", f"jaime0-update {instalada or '?'} -> {version}", previa) if previa else None
 
         cambiados = [p["rel"] for p in plan if p["accion"] in ("nuevo", "restaurar", "actualizar", "eliminar")]
         avisos = acciones_posteriores(cambiados)
         podar_copias(DIR_COPIAS)
         n_conf = sum(1 for p in plan if p["accion"] == "conflicto")
+        snaps = f"; instantáneas {previa}..{posterior}" if previa and posterior else ""
         registrar(REGISTRO_SISTEMA, f"OK {instalada} -> {version}: {len(cambiados)} cambios, "
-                                    f"{n_conf} conflictos; copia en {transaccion.dir}")
-        escribir_json(os.path.join(DIR_ESTADO, "ultima.json"),
-                      {"version": version, "avisos": sorted(avisos), "copia": transaccion.dir})
+                                    f"{n_conf} conflictos; copia en {transaccion.dir}{snaps}")
+        ultima = {"version": version, "avisos": sorted(avisos), "copia": transaccion.dir}
+        if previa and posterior:
+            ultima["instantaneas"] = [previa, posterior]
+            info(f"Instantáneas de snapper: {previa} (antes) y {posterior} (después).")
+        escribir_json(os.path.join(DIR_ESTADO, "ultima.json"), ultima)
         return plan, avisos
+
+
+# Solo en las pruebas: un snapper falso (lista JSON con la orden, p. ej. [python, script]).
+SNAPPER = json.loads(os.environ["JAIME0_SNAPPER"]) if MODO_PRUEBA and os.environ.get("JAIME0_SNAPPER") else ["snapper"]
+
+
+def snapper_disponible():
+    return os.path.exists(ruta("etc/snapper/configs/root")) and shutil.which(SNAPPER[0]) is not None
+
+
+def instantanea(tipo, descripcion, previa=None):
+    """Instantanea de snapper (configuracion "root"), si / esta en Btrfs con snapper. Nunca
+    detiene la actualizacion: si falla, se avisa y se sigue. Devuelve su numero o None."""
+    if not snapper_disponible():
+        return None
+    orden = SNAPPER + ["--no-dbus", "-c", "root", "create", "-t", tipo, "-c", "number",
+             "-d", descripcion, "-p"]
+    if previa:
+        orden += ["--pre-number", str(previa)]
+    try:
+        r = subprocess.run(orden, capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired):
+        r = None
+    numero = r.stdout.strip() if r and r.returncode == 0 else ""
+    if not numero.isdigit():
+        aviso("No se pudo crear la instantánea de snapper; la actualización sigue sin ella.")
+        return None
+    return int(numero)
 
 
 # ------------------------------------------------------------------------------------
@@ -1160,19 +1198,25 @@ def cmd_estado(opciones):
 def cmd_comprobar(opciones):
     conf = leer_conf()
     instalada = version_instalada()
+    debian = estado_debian()
+    if debian and not opciones.silencioso:
+        mostrar_debian(debian)
+    if debian and opciones.notificar:
+        notificar_seguridad(debian)
     try:
         publicacion, manifiesto = buscar_actualizacion(conf, instalada)
     except Fallo as e:
+        guardar_disponible(None, debian, mantener_version=True)
         if opciones.silencioso:
             registrar(registro_actual(), f"comprobar: {e}")
             return 1
         raise
     if not publicacion:
-        guardar_disponible(None)
+        guardar_disponible(None, debian)
         if not opciones.silencioso:
             info(verde("✓") + f" Jaime0 {instalada or ''} está al día en el canal {conf['canal']}.")
         return 0
-    guardar_disponible(manifiesto)
+    guardar_disponible(manifiesto, debian)
     if opciones.notificar:
         notificar(manifiesto)
     if not opciones.silencioso:
@@ -1194,19 +1238,102 @@ def archivo_disponible():
     return os.path.join(dir_estado_usuario(), "disponible.json")
 
 
-def guardar_disponible(manifiesto):
-    """Recuerda la ultima version encontrada (o que no hay ninguna) y avisa a la barra."""
+def guardar_disponible(manifiesto, debian=None, mantener_version=False):
+    """Recuerda lo encontrado en la ultima comprobacion (version de Jaime0 y paquetes de
+    Debian pendientes) y avisa a la barra."""
     if es_root():
         return  # el estado es de cada usuario
     ruta = archivo_disponible()
+    try:
+        anterior = leer_json(ruta, {}) or {}
+    except Fallo:
+        anterior = {}
+    estado = {}
     if manifiesto:
-        escribir_json(ruta, {"version": manifiesto["version"], "canal": manifiesto.get("canal", "")})
+        estado = {"version": manifiesto["version"], "canal": manifiesto.get("canal", "")}
+    elif mantener_version:  # GitHub no respondio: se conserva lo que se sabia
+        estado = {k: anterior[k] for k in ("version", "canal") if k in anterior}
+    if debian:
+        estado["debian"] = debian
+    if estado:
+        escribir_json(ruta, estado)
     else:
         try:
             os.unlink(ruta)
         except FileNotFoundError:
             pass
     avisar_barra()
+
+
+def estado_debian():
+    """Paquetes de Debian por actualizar segun las listas locales de apt (las refresca el
+    temporizador apt-daily) y, si esta debsecan, cuales corrigen vulnerabilidades conocidas
+    (consulta security-tracker.debian.org). Solo lee: nunca instala. None si no se sabe."""
+    if MODO_PRUEBA:
+        prueba = os.environ.get("JAIME0_PRUEBA_DEBIAN")
+        return json.loads(prueba) if prueba else None
+    if not shutil.which("apt"):
+        return None
+    entorno = dict(os.environ, LC_ALL="C")
+    try:
+        r = subprocess.run(["apt", "list", "--upgradable"], capture_output=True, text=True,
+                           timeout=120, env=entorno)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    pendientes = sorted({l.split("/", 1)[0] for l in r.stdout.splitlines() if "[upgradable from" in l})
+    seguridad = []
+    if shutil.which("debsecan"):
+        suite = "forky"
+        try:
+            with open("/etc/os-release", encoding="utf-8") as f:
+                for linea in f:
+                    if linea.startswith("VERSION_CODENAME="):
+                        suite = linea.split("=", 1)[1].strip().strip('"') or suite
+            d = subprocess.run(["debsecan", "--suite", suite, "--only-fixed", "--format", "packages"],
+                               capture_output=True, text=True, timeout=120, env=entorno)
+            if d.returncode == 0:
+                seguridad = sorted(set(d.stdout.split()) & set(pendientes))
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return {"paquetes": len(pendientes), "seguridad": seguridad,
+            "comprobado": datetime.datetime.now().isoformat(timespec="minutes")}
+
+
+def mostrar_debian(debian):
+    n, seg = debian.get("paquetes", 0), debian.get("seguridad", [])
+    if not n:
+        info(verde("✓") + " Los paquetes de Debian están al día.")
+        return
+    texto = f"Debian: {n} paquete{'s' if n != 1 else ''} por actualizar"
+    if seg:
+        texto += f", {len(seg)} con correcciones de seguridad ({', '.join(seg[:6])}{'…' if len(seg) > 6 else ''})"
+        info(ambar(texto))
+    else:
+        info(texto)
+    info(tenue("Para instalarlos: sudo apt full-upgrade (o jaime0-update, que lo ofrece al final)."))
+
+
+def notificar_seguridad(debian):
+    """Una notificacion cuando aparecen correcciones de seguridad nuevas. No instala nada."""
+    seg = debian.get("seguridad") or []
+    if not seg or not shutil.which("notify-send"):
+        return
+    avisado = os.path.join(dir_estado_usuario(), "avisado-seguridad")
+    huella = hashlib.sha256(" ".join(seg).encode()).hexdigest()
+    try:
+        with open(avisado, encoding="utf-8") as f:
+            if f.read().strip() == huella:
+                return
+    except FileNotFoundError:
+        pass
+    os.makedirs(os.path.dirname(avisado), exist_ok=True)
+    with open(avisado, "w", encoding="utf-8") as f:
+        f.write(huella + "\n")
+    subprocess.run(["notify-send", "--app-name=Jaime0", "--icon=security-high",
+                    "Actualizaciones de seguridad de Debian",
+                    f"{len(seg)} paquete{'s' if len(seg) != 1 else ''} con correcciones de seguridad. "
+                    "Para instalarlas: sudo apt full-upgrade"],
+                   capture_output=True, timeout=30)
 
 
 def avisar_barra():
@@ -1239,10 +1366,19 @@ def cmd_barra(opciones):
     disponible, instalada = datos.get("version"), version_instalada()
     clave_d = clave_version(disponible) if isinstance(disponible, str) else None
     clave_i = clave_version(instalada) if instalada else None
-    if clave_d and (clave_i is None or clave_d > clave_i):
-        salida = {"text": ICONO_BARRA, "class": "disponible",
-                  "tooltip": f"Jaime0 {disponible} disponible (canal {datos.get('canal') or '?'})\n"
-                             "Clic: ver los cambios. Para instalar: jaime0-update"}
+    nueva = bool(clave_d and (clave_i is None or clave_d > clave_i))
+    debian = datos.get("debian") if isinstance(datos.get("debian"), dict) else {}
+    seguridad = debian.get("seguridad") or []
+    lineas = []
+    if nueva:
+        lineas.append(f"Jaime0 {disponible} disponible (canal {datos.get('canal') or '?'})")
+    if seguridad:
+        lineas.append(f"Debian: {len(seguridad)} {'actualizaciones' if len(seguridad) != 1 else 'actualización'} de seguridad "
+                      f"({debian.get('paquetes', 0)} paquetes por actualizar en total)")
+    if lineas:
+        lineas.append("Clic: ver los detalles. Para instalar: jaime0-update")
+        salida = {"text": ICONO_BARRA, "class": "seguridad" if seguridad else "disponible",
+                  "tooltip": "\n".join(lineas)}
     else:
         salida = {"text": "", "class": "al-dia", "tooltip": ""}
     print(json.dumps(salida, ensure_ascii=False))
@@ -1551,6 +1687,10 @@ def cmd_revertir(opciones):
     titulo(f"Revertir {alcance}: {datos.get('hasta')} → {datos.get('desde')}")
     info(f"Se restauran {len(datos['entradas'])} archivos desde {mostrar_ruta(os.path.dirname(diario))}.")
     info(tenue("Solo los archivos de Jaime0; los paquetes de Debian no cambian."))
+    snaps = (leer_json(os.path.join(DIR_ESTADO, "ultima.json"), {}) or {}).get("instantaneas") if alcance == "sistema" else None
+    if snaps and len(snaps) == 2:
+        info(tenue(f"Con Btrfs, para deshacer también los paquetes de esa actualización: "
+                   f"sudo snapper undochange {snaps[0]}..{snaps[1]}  (no cambia /boot: ver docs/recuperacion.md)"))
     if not preguntar("¿Revertir?", opciones):
         return 0
     with Cerrojo(CERROJO_SISTEMA if alcance == "sistema" else os.path.join(dir_estado_usuario(), ".cerrojo")):

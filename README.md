@@ -20,6 +20,7 @@ Este repositorio contiene todo lo necesario para reconstruir la imagen: configur
 - **Hyprland con configuración Lua**, con mosaico `dwindle`, bordes finos, ventanas opacas, blur mínimo y animaciones cortas.
 - **Barra fina** (26 px), opaca y continua: escritorios a la izquierda, aplicaciones ancladas en el centro y estado y hora a la derecha. No sondea lo que llega por eventos: el reloj se redibuja una vez por minuto, y la campana y las ancladas solo cuando cambian.
 - **Widgets de escritorio** opcionales (Quickshell): reloj, música, tiempo, volumen y brillo, sistema y calendario, cada uno en la posición que elijas. Vienen apagados y, sin ninguno activo, no consumen nada. Ver [docs/ajustes.md](docs/ajustes.md#widgets-de-escritorio).
+- **Seguro y ligero por defecto:** cortafuegos activado (no entra nada que no hayas pedido), zram en equipos con 8 GiB de RAM o menos y aviso de actualizaciones de seguridad de Debian. Flatpak/Flathub, solo si lo activas (`jaime0-flatpak activar`). Ver [docs/recuperacion.md](docs/recuperacion.md).
 - **Aplicaciones ancladas:** hasta 6 en el centro de la barra. Un punto marca las abiertas; al pulsar, se enfoca su ventana o se inicia. Se gestionan con `jaime0-anclar firefox`, `jaime0-anclar quitar firefox` o desde `jaime0-ajustes`.
 - **Actualizaciones sin reinstalar:** `jaime0-update` instala versiones firmadas desde GitHub Releases (canales stable, beta y experimental), respeta tus personalizaciones, guarda copias y puede revertir. Los paquetes de Debian siguen con `apt`. Ver [docs/actualizaciones.md](docs/actualizaciones.md).
 - **Ajustes en un solo sitio:** `jaime0-ajustes` cambia acento, fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y altura y posición de la barra, y lo aplica al momento. Tus ajustes viven en `~/.config/jaime0/ajustes` y ninguna actualización los toca. Ver [docs/ajustes.md](docs/ajustes.md).
@@ -348,7 +349,7 @@ Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambi
 | `publicaciones/` | Notas de cada versión publicada con `jaime0-update` |
 | `pruebas/` | Pruebas automáticas (actualizador, ajustes, ancladas, tiempo, diagnóstico) |
 | `.github/workflows/` | Validación automática en GitHub Actions (no publica nada) |
-| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md), [ajustes](docs/ajustes.md) y [pruebas](docs/pruebas.md) |
+| `docs/` | [Arquitectura](docs/arquitectura.md), [actualizaciones](docs/actualizaciones.md), [ajustes](docs/ajustes.md), [recuperación y seguridad](docs/recuperacion.md) y [pruebas](docs/pruebas.md) |
 | `capturas/` | Capturas del sistema |
 
 ### Cambiar el nombre del sistema

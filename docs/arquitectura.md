@@ -14,6 +14,7 @@
 | Sonido, red | PipeWire + WirePlumber, NetworkManager (`nmtui` desde la barra), BlueZ + blueman |
 | Actualizaciones | `jaime0-update` (componentes propios, firmados) + `apt` (paquetes) |
 | Ajustes | `jaime0-ajustes`: predeterminados en `/usr/share/jaime0/ajustes.predeterminados`, cambios del usuario en `~/.config/jaime0/ajustes`. Hyprland los lee en `hyprland.lua`; Waybar y rofi, desde `~/.config/jaime0/generado/`. Ver [ajustes.md](ajustes.md) |
+| Seguridad y memoria | UFW (entrante denegado, `ufw.service` sin procesos residentes), zram con `systemd-zram-generator` (solo con 8 GiB o menos), avisos de seguridad con debsecan. Ver [recuperacion.md](recuperacion.md) |
 | Widgets | `jaime0-widgets` arranca un único Quickshell (`/usr/share/jaime0/widgets`) solo si hay widgets activos; lee `generado/widgets.json` en caliente. El tiempo, de `jaime0-tiempo` (Open-Meteo, con caché) |
 | Aplicaciones ancladas | `jaime0-anclar`: ajuste `anclas`; `jaime0-anclar vigilar` escucha el socket de eventos de Hyprland y escribe el estado que lee Waybar (señal 9) |
 
@@ -65,6 +66,8 @@ Detalles del actualizador: [actualizaciones.md](actualizaciones.md).
 | Firma Ed25519 verificada con `openssl` | `openssl` ya llega a la ISO (dependencia de `ca-certificates`); no añade dependencias. GPG sería más pesado de manejar para una sola clave |
 | Python 3 sin dependencias externas | `python3` ya forma parte de la imagen; la fusión, los diarios y las pruebas son mucho más claros que en shell |
 | Paquetes solo con `apt` | Es el gestor oficial de Debian; un gestor paralelo duplicaría trabajo y riesgos |
+| zram con systemd-zram-generator y no zram-tools | Es declarativo y permite activarlo solo con poca RAM (`host-memory-limit`) sin código propio; se integra en `swap.target`. El archivo de `/etc` sustituye al del paquete, que lo crearía en cualquier equipo y con lz4 |
+| UFW y no nftables a mano | Trae probadas las reglas que necesita un cliente (DHCP, ICMPv6, mDNS), se activa sin el kernel en marcha (en el chroot) y abrir un puerto es `sudo ufw allow N` |
 | Rollback solo de archivos propios | Sin Btrfs ni instantáneas, revertir paquetes de Debian no es fiable. Se documenta como límite en vez de prometerlo |
 | Ajustes del usuario fuera de `/etc/skel` | `~/.config/jaime0/ajustes` no lo trae ninguna versión, así que `jaime0-update` nunca lo toca. Los archivos de Hyprland, Waybar y rofi siguen siendo los oficiales sin cambios, de modo que las actualizaciones se aplican sin conflictos |
 | Esquema de ajustes solo en `jaime0-ajustes` | Valida con límites y lo expone con `ver --json` a la interfaz. Hyprland solo comprueba el tipo, para no repetir límites, y ante un valor roto usa el predeterminado |

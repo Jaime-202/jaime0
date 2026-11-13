@@ -1,0 +1,181 @@
+#!/bin/sh
+# Flatpak y Flathub como opcion. Jaime0 no trae ninguno de los dos: este comando los
+# activa o los retira cuando el usuario lo pide, y nunca se ejecuta solo.
+#
+#     jaime0-flatpak estado
+#     jaime0-flatpak activar [--si]      instala flatpak (apt) y anade Flathub al sistema
+#     jaime0-flatpak desactivar [--si]   quita Flathub y, si se confirma, el paquete flatpak
+#
+# --si responde que si a todas las preguntas.
+FLATHUB_URL=https://dl.flathub.org/repo/flathub.flatpakrepo
+REMOTO=flathub
+
+uso() {
+    cat <<'FIN'
+Uso: jaime0-flatpak estado
+     jaime0-flatpak activar [--si]
+     jaime0-flatpak desactivar [--si]
+
+Flatpak permite instalar aplicaciones de Flathub, aisladas del sistema y con sus propias
+bibliotecas, ademas de los paquetes de Debian (apt). Jaime0 no lo trae instalado.
+  estado       muestra si flatpak esta instalado, sus remotos y sus aplicaciones
+  activar      instala flatpak con apt y anade Flathub para todo el sistema
+  desactivar   quita Flathub y, si lo confirmas, desinstala flatpak
+  --si         no pregunta (responde que si)
+FIN
+}
+
+error() { printf 'jaime0-flatpak: %s\n' "$*" >&2; exit 1; }
+
+# Ejecuta como administrador: directamente si ya lo somos, si no con sudo.
+admin() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        error "hace falta ser administrador (sudo no esta disponible)"
+    fi
+}
+
+# Pregunta si/no; sin --si y sin terminal, la respuesta es no.
+confirmar() {
+    [ "$SI" = 1 ] && return 0
+    if [ ! -t 0 ]; then
+        printf '%s [s/N] no (sin terminal; usa --si)\n' "$1"
+        return 1
+    fi
+    printf '%s [s/N] ' "$1"
+    read -r RESPUESTA || return 1
+    case "$RESPUESTA" in s|S|si|SI|Si|sí|Sí|SÍ|y|Y|yes) return 0 ;; *) return 1 ;; esac
+}
+
+flatpak_instalado() { command -v flatpak >/dev/null 2>&1; }
+
+paquete_instalado() {
+    [ "$(dpkg-query -W -f '${db:Status-Status}' "$1" 2>/dev/null)" = installed ]
+}
+
+flathub_en_sistema() {
+    flatpak remotes --system --columns=name 2>/dev/null | grep -qx "$REMOTO"
+}
+
+# Aplicaciones (no runtimes) instaladas para todo el sistema desde Flathub.
+apps_de_flathub() {
+    flatpak list --system --app --columns=application,origin 2>/dev/null \
+        | awk -v r="$REMOTO" '$2 == r { print $1 }'
+}
+
+estado() {
+    if ! flatpak_instalado; then
+        echo "Flatpak: no instalado (activalo con: jaime0-flatpak activar)"
+        return 0
+    fi
+    echo "Flatpak: instalado ($(flatpak --version 2>/dev/null))"
+    if flathub_en_sistema; then
+        echo "Flathub: activado para todo el sistema"
+    else
+        echo "Flathub: no activado"
+    fi
+    REMOTOS=$(flatpak remotes --columns=name,options 2>/dev/null)
+    if [ -n "$REMOTOS" ]; then
+        echo "Remotos:"
+        printf '%s\n' "$REMOTOS" | sed 's/^/  /'
+    else
+        echo "Remotos: ninguno"
+    fi
+    N=$(flatpak list --app --columns=application 2>/dev/null | grep -c .)
+    echo "Aplicaciones instaladas: $N"
+    [ "$N" -gt 0 ] && flatpak list --app --columns=application,origin,installation | sed 's/^/  /'
+    return 0
+}
+
+activar() {
+    if flatpak_instalado && flathub_en_sistema; then
+        echo "Flatpak y Flathub ya estan activados. Nada que hacer."
+        return 0
+    fi
+    echo "Esto hara lo siguiente:"
+    flatpak_instalado || echo "  - Instalar el paquete flatpak de Debian con apt (unos 15 MiB con sus dependencias)."
+    echo "  - Anadir el remoto Flathub para todo el sistema:"
+    echo "     $FLATHUB_URL"
+    echo "No se instala ninguna aplicacion. Despues podras instalarlas con, por ejemplo:"
+    echo "  flatpak install flathub org.gnome.Calculator"
+    echo "Necesita conexion a internet y permisos de administrador."
+    confirmar "¿Continuar?" || { echo "Cancelado: no se ha cambiado nada."; return 1; }
+
+    if ! flatpak_instalado; then
+        echo "Instalando flatpak..."
+        if ! admin apt-get install -y flatpak; then
+            echo "Actualizando la lista de paquetes y reintentando..."
+            if ! { admin apt-get update && admin apt-get install -y flatpak; }; then
+                error "no se pudo instalar flatpak con apt"
+            fi
+        fi
+    fi
+    echo "Anadiendo Flathub..."
+    admin flatpak remote-add --system --if-not-exists "$REMOTO" "$FLATHUB_URL" \
+        || error "no se pudo anadir Flathub (¿hay conexion a internet?)"
+    echo "Listo. Flathub esta activado."
+    echo "Las aplicaciones de Flatpak aparecen en el lanzador tras cerrar sesion y volver a entrar."
+}
+
+desactivar() {
+    if ! flatpak_instalado; then
+        echo "Flatpak no esta instalado. Nada que hacer."
+        return 0
+    fi
+    if flathub_en_sistema; then
+        APPS=$(apps_de_flathub)
+        if [ -n "$APPS" ]; then
+            echo "Estas aplicaciones del sistema vienen de Flathub y se desinstalaran:"
+            printf '%s\n' "$APPS" | sed 's/^/  /'
+            confirmar "¿Desinstalarlas y quitar Flathub?" || { echo "Cancelado: no se ha cambiado nada."; return 1; }
+            # shellcheck disable=SC2086  # una aplicacion por palabra
+            admin flatpak uninstall --system -y --noninteractive $APPS \
+                || error "no se pudieron desinstalar las aplicaciones"
+        else
+            confirmar "Se quitara el remoto Flathub del sistema. ¿Continuar?" \
+                || { echo "Cancelado: no se ha cambiado nada."; return 1; }
+        fi
+        # --force: quedan runtimes de Flathub que ya no usa nadie; se retiran despues.
+        admin flatpak remote-delete --system --force "$REMOTO" || error "no se pudo quitar Flathub"
+        admin flatpak uninstall --system -y --noninteractive --unused >/dev/null 2>&1 || true
+        echo "Flathub quitado."
+    else
+        echo "Flathub no esta activado en el sistema."
+    fi
+
+    if flatpak remotes --user --columns=name 2>/dev/null | grep -q .; then
+        echo "Aviso: tu usuario tiene remotos propios (flatpak remotes --user); no se tocan."
+    fi
+    if flatpak list --app --columns=application 2>/dev/null | grep -q .; then
+        echo "Quedan aplicaciones de Flatpak instaladas: no se desinstala el paquete flatpak."
+        return 0
+    fi
+    if paquete_instalado flatpak && confirmar "¿Desinstalar tambien el paquete flatpak?"; then
+        admin apt-get remove -y flatpak || error "no se pudo desinstalar flatpak"
+        echo "Flatpak desinstalado. Sus dependencias se retiran con: sudo apt autoremove"
+        echo "(revisa antes la lista: apt quitara cualquier paquete que ya no use nadie)."
+    else
+        echo "El paquete flatpak se mantiene."
+    fi
+}
+
+ORDEN=${1:-}
+[ $# -gt 0 ] && shift
+SI=0
+for ARG in "$@"; do
+    case "$ARG" in
+        --si|-s) SI=1 ;;
+        *) uso >&2; exit 2 ;;
+    esac
+done
+
+case "$ORDEN" in
+    estado) estado ;;
+    activar) activar ;;
+    desactivar) desactivar ;;
+    -h|--help|ayuda) uso ;;
+    *) uso >&2; exit 2 ;;
+esac

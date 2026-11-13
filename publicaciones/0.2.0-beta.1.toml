@@ -12,8 +12,10 @@ cambios = [
     "Pantalla de bloqueo con hyprlock (hora, fecha, canción y fondo difuminado) e inactividad con hypridle; swaylock queda como respaldo si hyprlock fallara.",
     "Indicador de volumen y brillo (wob), modo noche (SUPER + F2), selector de color (SUPER + SHIFT + C) y configuración gráfica de pantallas (nwg-displays).",
     "Nuevo comando jaime0-update: actualizaciones firmadas desde GitHub Releases, canales stable, beta y experimental, protección de personalizaciones, copias, recuperación y reversión.",
-    "Aviso discreto en la barra y una notificación al día cuando hay una versión nueva. Nunca instala nada por su cuenta.",
+    "Aviso discreto en la barra y una notificación cuando hay una versión nueva de Jaime0 o actualizaciones de seguridad de Debian (debsecan). Nunca instala nada por su cuenta.",
     "jaime0-diagnostico: informe de hardware para adjuntar a incidencias, sin datos personales.",
+    "Cortafuegos UFW (no entra nada que no hayas pedido) y zram (swap comprimido) en equipos con 8 GiB de RAM o menos. Flatpak/Flathub opcional con jaime0-flatpak activar.",
+    "Con Btrfs y snapper, jaime0-update crea instantáneas antes y después de cada actualización.",
 ]
 
 problemas_conocidos = [
@@ -21,6 +23,8 @@ problemas_conocidos = [
     "Las instalaciones 0.1.x no traen jaime0-update: hay que instalarlo una vez a mano (ver docs/actualizaciones.md) o reinstalar desde la ISO.",
     "dunst y swayidle quedan instalados aunque ya no se usan. Puedes quitarlos con: sudo apt remove dunst swayidle",
     "Si habías modificado a mano la configuración de Hyprland, Waybar o rofi, se conserva tu versión y la nueva queda al lado (.jaime0-nuevo): los ajustes nuevos no tendrán efecto en ese programa hasta que la aceptes con jaime0-update resolver.",
+    "El cortafuegos se instala pero no se activa solo al actualizar (por si usas servidores propios). Para activarlo: sudo sed -i 's/^LOGLEVEL=.*/LOGLEVEL=off/' /etc/ufw/ufw.conf && sudo ufw enable (y abre lo que necesites, p. ej. sudo ufw allow 22/tcp).",
+    "Reinicia después de actualizar: zram usa la configuración de Jaime0 (solo con 8 GiB o menos, zstd) a partir del siguiente arranque.",
     "Cierra la sesión y vuelve a entrar después de actualizar: la barra, las notificaciones y el bloqueo nuevos se arrancan al iniciar la sesión.",
 ]
 
@@ -35,6 +39,9 @@ paquetes = [
     "hyprsunset",
     "hyprpicker",
     "nwg-displays",
+    "debsecan",
+    "ufw",
+    "systemd-zram-generator",
 ]
 
 [requisitos]

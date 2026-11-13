@@ -1,0 +1,33 @@
+#!/bin/sh
+# Cortafuegos y memoria. Se puede ejecutar varias veces con el mismo resultado.
+set -e
+
+# --- Cortafuegos (ufw) ---
+# Entrante denegado, saliente permitido y sin reglas abiertas: Jaime0 no trae servidores.
+# Las reglas base de ufw (before.rules) ya dejan pasar lo necesario como cliente: respuestas
+# a conexiones propias, DHCP, ICMP/ICMPv6 (descubrimiento de vecinos, SLAAC) y mDNS.
+# En el chroot no hay kernel propio ni systemd en marcha, asi que "ufw enable" no sirve: se
+# deja ENABLED=yes y el servicio activado. ufw.service es de una sola ejecucion
+# (oneshot, Before=network-pre.target): carga las reglas en el arranque, antes de la red,
+# y no deja ningun proceso. Vale para la sesion en vivo y para el sistema instalado, que
+# Calamares copia tal cual.
+if [ -f /etc/default/ufw ]; then
+    sed -i \
+        -e 's/^DEFAULT_INPUT_POLICY=.*/DEFAULT_INPUT_POLICY="DROP"/' \
+        -e 's/^DEFAULT_OUTPUT_POLICY=.*/DEFAULT_OUTPUT_POLICY="ACCEPT"/' \
+        -e 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="DROP"/' \
+        -e 's/^IPV6=.*/IPV6=yes/' \
+        /etc/default/ufw
+fi
+# Sin registro de paquetes bloqueados: en una red domestica serian sobre todo difusiones
+# ajenas que solo llenan el diario. Para investigar algo: sudo ufw logging low
+sed -i -e 's/^ENABLED=.*/ENABLED=yes/' -e 's/^LOGLEVEL=.*/LOGLEVEL=off/' /etc/ufw/ufw.conf
+grep -q '^ENABLED=yes$' /etc/ufw/ufw.conf
+systemctl enable ufw.service
+
+# --- zram ---
+# systemd-zram-generator no necesita servicio activado: su generador lee
+# /etc/systemd/zram-generator.conf en cada arranque y crea systemd-zram-setup@zram0.service
+# solo si el equipo tiene 8 GiB de RAM o menos. Se comprueba que el archivo propio esta,
+# porque sin el se usaria el del paquete, que crea zram en cualquier equipo.
+grep -q '^host-memory-limit' /etc/systemd/zram-generator.conf

@@ -306,6 +306,47 @@ class Actualizacion(unittest.TestCase):
         self.assertEqual(e.leer("usr/local/bin/tiempo-waybar"), b"#!/bin/sh\necho se retira\n")
         self.assertEqual(e.leer("etc/skel/.config/kitty/kitty.conf"), b"# kitty v1\n")
 
+    def test_instantaneas_snapper(self):
+        e = self.e
+        registro = e.tmp / "snapper.log"
+        falso = e.tmp / "snapper_falso.py"
+        falso.write_text(
+            "import json, sys\n"
+            f"r = r'{registro}'\n"
+            "lineas = open(r).read().splitlines() if __import__('os').path.exists(r) else []\n"
+            "open(r, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "print(41 + len(lineas))\n", encoding="utf-8")
+        entorno = {"JAIME0_SNAPPER": json.dumps([sys.executable, str(falso)])}
+        # Sin la configuracion "root" de snapper (sistema ext4): ni se intenta.
+        e.publicar("0.2.1", siguiente(self.base, "0.2.1"))
+        self.assertEqual(e.ejecutar("--si", "--sin-paquetes", entorno=entorno)[0], 0)
+        self.assertFalse(registro.exists())
+        # Con Btrfs y snapper: una antes y otra despues, enlazadas.
+        (e.raiz / "etc/snapper/configs").mkdir(parents=True)
+        (e.raiz / "etc/snapper/configs/root").write_text('SUBVOLUME="/"\n', encoding="utf-8")
+        def version(numero):
+            v = siguiente(self.base, numero)
+            v["usr/local/bin/captura"] = f"#!/bin/sh\necho {numero}\n".encode()
+            return v
+        e.publicar("0.2.2", version("0.2.2"))
+        rc, salida = e.ejecutar("--si", "--sin-paquetes", entorno=entorno)
+        self.assertEqual(rc, 0, salida)
+        llamadas = [json.loads(l) for l in registro.read_text().splitlines()]
+        self.assertEqual(len(llamadas), 2)
+        self.assertIn("pre", llamadas[0])
+        self.assertIn("post", llamadas[1])
+        self.assertEqual(llamadas[1][llamadas[1].index("--pre-number") + 1], "41")
+        self.assertIn("41", salida)
+        ultima = json.loads(e.leer("var/lib/jaime0/ultima.json"))
+        self.assertEqual(ultima["instantaneas"], [41, 42])
+        # Si snapper falla, la actualizacion sigue.
+        falso.write_text("import sys\nsys.exit(1)\n", encoding="utf-8")
+        e.publicar("0.2.3", version("0.2.3"))
+        rc, salida = e.ejecutar("--si", "--sin-paquetes", entorno=entorno)
+        self.assertEqual(rc, 0, salida)
+        self.assertIn("instantánea", salida)
+        self.assertEqual(e.leer("usr/share/jaime0/version"), b"0.2.3\n")
+
     def test_indicador_de_la_barra(self):
         e = self.e
         def barra():
@@ -330,6 +371,19 @@ class Actualizacion(unittest.TestCase):
         # Al dia: comprobar borra el estado.
         self.assertEqual(e.ejecutar("comprobar")[0], 0)
         self.assertFalse(estado.exists())
+        # Jaime0 al dia pero con correcciones de seguridad de Debian: el icono aparece.
+        debian = json.dumps({"paquetes": 12, "seguridad": ["libssl3t64", "openssl"], "comprobado": "x"})
+        rc, salida = e.ejecutar("comprobar", entorno={"JAIME0_PRUEBA_DEBIAN": debian})
+        self.assertEqual(rc, 0, salida)
+        self.assertIn("2 con correcciones de seguridad", salida)
+        d = barra()
+        self.assertEqual(d["class"], "seguridad")
+        self.assertIn("2 actualizaciones de seguridad", d["tooltip"])
+        self.assertIn("12 paquetes", d["tooltip"])
+        # Solo paquetes normales pendientes: no molesta en la barra.
+        debian = json.dumps({"paquetes": 5, "seguridad": [], "comprobado": "x"})
+        e.ejecutar("comprobar", entorno={"JAIME0_PRUEBA_DEBIAN": debian})
+        self.assertEqual(barra()["text"], "")
 
     def test_canales(self):
         e = self.e

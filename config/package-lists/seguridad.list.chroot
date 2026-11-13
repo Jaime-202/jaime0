@@ -1,0 +1,5 @@
+# Cortafuegos: entrante denegado, saliente permitido (se activa en 0210-seguridad).
+ufw
+# zram como swap comprimido solo en equipos con 8 GiB de RAM o menos
+# (configuracion en /etc/systemd/zram-generator.conf).
+systemd-zram-generator

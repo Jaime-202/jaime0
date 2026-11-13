@@ -1,0 +1,8 @@
+// Jaime0: apt-daily refresca una vez al dia las listas de paquetes para que el aviso de
+// actualizaciones (jaime0-update comprobar) sepa que hay pendiente. Solo las listas: no
+// descarga ni instala nada por su cuenta. Las actualizaciones se instalan cuando tu quieras
+// (sudo apt full-upgrade o jaime0-update).
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Download-Upgradeable-Packages "0";
+APT::Periodic::Unattended-Upgrade "0";
+APT::Periodic::AutocleanInterval "0";

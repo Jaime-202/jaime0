@@ -30,6 +30,7 @@ Pruebas de `pruebas/` (`python3 -m unittest discover -s pruebas -v`):
 | `test_jaime0_ajustes.py` | Ajustes: validación, archivo del usuario, generados para Waybar/rofi/swaync/hyprlock/wob/widgets |
 | `test_jaime0_anclar.py` | Ancladas: nombres, máximo, orden, estado de los huecos, aplicaciones desinstaladas |
 | `test_jaime0_tiempo.py` | Tiempo: Open-Meteo de mentira, homónimos, caché, sin red |
+| `test_jaime0_flatpak.py` | Flatpak opcional: preguntas, cancelaciones y órdenes, con programas de mentira |
 | `test_jaime0_diagnostico.py` | Diagnóstico: que no salgan datos personales y que no falle sin comandos |
 
 ## 2. Sesión en marcha
@@ -59,6 +60,12 @@ VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las prue
 | Bloqueo hyprlock, clave incorrecta y correcta, relevo a swaylock | Probado | |
 | Inactividad: bloqueo y pantalla apagada (tiempos cortos) | Probado | |
 | Suspender y reanudar | **Parcial** | Bloquea antes y reanuda bloqueada. VirtualBox no despierta con la alarma del reloj, a veces tampoco con el teclado, y si queda congelada más de 3 min el vigilante de systemd reinicia logind y la red no vuelve sola. Es un efecto de la VM: **pendiente de hardware real** |
+| Cortafuegos UFW: salida, DNS, `apt update`, DHCP, SLAAC; puerto entrante cerrado | Probado | Puerto cerrado comprobado desde otro espacio de red (veth) |
+| zram: se activa con 4 GiB (zstd, prioridad 100); no se activa por encima del límite | Probado | Límite probado de verdad con 2 GiB y simulado con varias cantidades de RAM |
+| `jaime0-flatpak` activar y desactivar | Probado | Sin instalar ninguna aplicación |
+| Instantáneas de snapper en `jaime0-update` | Probado (pruebas automáticas) y orden comprobada en un Btrfs real | **Pendiente** en un sistema instalado en Btrfs (el instalador aún no lo ofrece) |
+| Avisos de seguridad (apt + debsecan) | Probado | 49 paquetes pendientes, 0 con correcciones de seguridad en ese momento |
+| Primer arranque con UFW y zram desde la ISO | **Pendiente** | Con la ISO 0.2 |
 | `apt full-upgrade` | Pendiente | Con la ISO 0.2 |
 | Migración 0.1.x → 0.2 con `jaime0-update` | **Simulado** (13-11-2026) | Partiendo de la ISO 0.1 en vivo sin nada de 0.2: instalación manual de `jaime0-update` según `docs/actualizaciones.md` (firma y carga verificadas), publicación 0.2 servida por HTTPS local con una clave de prueba, `/run/live` oculto para que la sesión pase por instalada. Resultado: 8 paquetes nuevos instalados, sistema y configuración en 0.2 en 42 s, personalización de `kitty.conf` conservada con su `.jaime0-nuevo`, dunst y `notificaciones-waybar` retirados, indicador de la barra que aparece y desaparece, y `verificar-sesion.sh` correcto tras volver a entrar. **Pendiente:** un sistema instalado de verdad, con reinicio, y la publicación firmada con la clave oficial |
 | NVMe, varios monitores | Pendiente | VirtualBox: NVMe solo con el paquete de extensión; varios monitores, configurable |
