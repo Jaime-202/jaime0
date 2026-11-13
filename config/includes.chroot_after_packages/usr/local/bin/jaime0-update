@@ -1148,7 +1148,11 @@ def cmd_estado(opciones):
         pendientes += len(leer_json(os.path.join(dir_estado_usuario(), "conflictos.json"), {}) or {})
     info(f"Conflictos         {ambar(str(pendientes)) if pendientes else '0'}")
     for diario in diarios(DIR_COPIAS):
-        if leer_json(diario).get("estado") == "aplicando":
+        try:
+            datos = leer_json(diario)
+        except Fallo:
+            continue  # sin sudo los diarios del sistema no se pueden leer; no es un error
+        if datos.get("estado") == "aplicando":
             info(rojo("Hay una actualización interrumpida: ejecuta 'sudo jaime0-update recuperar'."))
     return 0
 
@@ -1164,9 +1168,11 @@ def cmd_comprobar(opciones):
             return 1
         raise
     if not publicacion:
+        guardar_disponible(None)
         if not opciones.silencioso:
             info(verde("✓") + f" Jaime0 {instalada or ''} está al día en el canal {conf['canal']}.")
         return 0
+    guardar_disponible(manifiesto)
     if opciones.notificar:
         notificar(manifiesto)
     if not opciones.silencioso:
@@ -1175,6 +1181,72 @@ def cmd_comprobar(opciones):
         print()
         info(f"Para instalarla: {verde(PROGRAMA)}")
     return 100  # Codigo propio: hay actualizacion
+
+
+# ------------------------------------------------------------------------------------
+# Indicador de la barra (custom/actualizaciones de Waybar). Solo informa.
+# ------------------------------------------------------------------------------------
+SENAL_BARRA = 10
+ICONO_BARRA = "\U000f06b0"
+
+
+def archivo_disponible():
+    return os.path.join(dir_estado_usuario(), "disponible.json")
+
+
+def guardar_disponible(manifiesto):
+    """Recuerda la ultima version encontrada (o que no hay ninguna) y avisa a la barra."""
+    if es_root():
+        return  # el estado es de cada usuario
+    ruta = archivo_disponible()
+    if manifiesto:
+        escribir_json(ruta, {"version": manifiesto["version"], "canal": manifiesto.get("canal", "")})
+    else:
+        try:
+            os.unlink(ruta)
+        except FileNotFoundError:
+            pass
+    avisar_barra()
+
+
+def avisar_barra():
+    """Pide a Waybar que relea el indicador. Solo si lleva unos segundos en marcha: al
+    arrancar aun no atiende la senal y una senal RTMIN sin atender la cerraria."""
+    if MODO_PRUEBA or es_root() or not shutil.which("pgrep"):
+        return
+    r = subprocess.run(["pgrep", "-x", "-u", str(os.getuid()), "waybar"], capture_output=True, text=True)
+    try:
+        with open("/proc/uptime", encoding="ascii") as f:
+            uptime = float(f.read().split()[0])
+        for pid in r.stdout.split():
+            with open(f"/proc/{pid}/stat", encoding="ascii") as f:
+                inicio = int(f.read().rsplit(")", 1)[1].split()[19]) / os.sysconf("SC_CLK_TCK")
+            if uptime - inicio < 3:
+                return
+    except (OSError, ValueError, IndexError):
+        return
+    if r.stdout.split():
+        subprocess.run(["pkill", f"-RTMIN+{SENAL_BARRA}", "-x", "-u", str(os.getuid()), "waybar"])
+
+
+def cmd_barra(opciones):
+    """Una linea JSON para Waybar, sin red: la version encontrada por la ultima
+    comprobacion, si es mas nueva que la instalada. Tras actualizar desaparece sola."""
+    try:
+        datos = leer_json(archivo_disponible(), {}) or {}
+    except Fallo:
+        datos = {}  # estado roto: se ignora; la proxima comprobacion lo rehace
+    disponible, instalada = datos.get("version"), version_instalada()
+    clave_d = clave_version(disponible) if isinstance(disponible, str) else None
+    clave_i = clave_version(instalada) if instalada else None
+    if clave_d and (clave_i is None or clave_d > clave_i):
+        salida = {"text": ICONO_BARRA, "class": "disponible",
+                  "tooltip": f"Jaime0 {disponible} disponible (canal {datos.get('canal') or '?'})\n"
+                             "Clic: ver los cambios. Para instalar: jaime0-update"}
+    else:
+        salida = {"text": "", "class": "al-dia", "tooltip": ""}
+    print(json.dumps(salida, ensure_ascii=False))
+    return 0
 
 
 def notificar(manifiesto):
@@ -1268,6 +1340,7 @@ def cmd_actualizar(opciones):
 
     if not es_root():
         fase_usuario(opciones)
+        avisar_barra()  # la version instalada ha cambiado: el indicador se recalcula
     else:
         usuario = os.environ.get("SUDO_USER")
         if usuario and usuario != "root" and os.path.exists("/usr/sbin/runuser"):
@@ -1558,6 +1631,8 @@ def construir_argumentos():
 
     sub.add_parser("recuperar", help="deshace una actualización que se cortó a medias")
 
+    sub.add_parser("barra", help="estado para el indicador de la barra (sin red)")
+
     u = sub.add_parser("usuario", help="aplica a tu carpeta personal la configuración nueva")
     u.add_argument("--revisar", action="store_true")
     u.add_argument("--detalle", action="store_true")
@@ -1591,6 +1666,7 @@ def main(argv=None):
         "cambios": cmd_cambios, "estado": cmd_estado, "canal": cmd_canal,
         "conflictos": cmd_conflictos, "resolver": cmd_resolver, "historial": cmd_historial,
         "revertir": cmd_revertir, "recuperar": cmd_recuperar, "usuario": cmd_usuario,
+        "barra": cmd_barra,
         "_sistema": cmd_sistema_interno, "_canal": cmd_canal_interno,
     }
     try:

@@ -30,6 +30,7 @@ Busca la versión más nueva de tu canal y te enseña la versión, el canal, la 
 | `jaime0-update conflictos` | Archivos tuyos que no se han sobrescrito |
 | `jaime0-update resolver RUTA --diferencias\|--usar-nueva\|--mantener` | Resolver un conflicto |
 | `jaime0-update historial` | Registro de operaciones |
+| `jaime0-update barra` | Estado para el icono de la barra (sin red) |
 | `jaime0-update revertir [--usuario]` | Deshacer la última actualización de los archivos de Jaime0 |
 | `jaime0-update recuperar` | Deshacer una actualización que se cortó a medias |
 | `jaime0-update usuario` | Aplicar a tu carpeta la configuración nueva (útil para otros usuarios del equipo) |
@@ -51,6 +52,8 @@ Orden de versiones: `0.3.0-exp.1 < 0.3.0-beta.1 < 0.3.0 < 0.3.1`.
 ## Aviso de versiones nuevas
 
 El temporizador de usuario `jaime0-update-aviso.timer` comprueba una vez al día (y 10 minutos después de entrar) si hay versión nueva en tu canal. Si la hay, muestra **una sola notificación por versión** con el número y el canal. El botón *Ver los cambios* abre una terminal con las notas. **Nunca instala nada.**
+
+Además, un icono discreto aparece en la barra (a la izquierda de la campana) mientras haya una versión más nueva que la instalada. **Solo informa:** al pulsarlo se abre una terminal con `jaime0-update comprobar`, que muestra los cambios; para instalar hay que ejecutar `jaime0-update` y confirmar. La barra no consulta la red: lee lo que encontró la última comprobación (`jaime0-update barra`) y, al actualizar, el icono desaparece solo.
 
 Para desactivarlo: `systemctl --user disable --now jaime0-update-aviso.timer`.
 
@@ -138,7 +141,9 @@ Si la firma no se verifica (`Signature Verification Failure`), para: no sigas. C
 
 ```bash
 openssl pkey -pubin -in firma.pem -outform DER | sha256sum
-``` Sin manifiesto previo, los archivos que no has tocado se reconocen por el histórico de huellas de la 0.1.2; si tu ISO no salió exactamente de esa etiqueta, algunos aparecerán como conflicto (se conservan los tuyos).
+```
+
+Sin manifiesto previo, los archivos que no has tocado se reconocen por el histórico de huellas de la 0.1.2; si tu ISO no salió exactamente de esa etiqueta, algunos aparecerán como conflicto (se conservan los tuyos).
 
 ## Publicar una versión (mantenimiento)
 

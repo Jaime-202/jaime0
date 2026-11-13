@@ -19,7 +19,7 @@
 
     "modules-left": ["custom/logo", "hyprland/workspaces"],
     "modules-center": ["custom/ancla-1", "custom/ancla-2", "custom/ancla-3", "custom/ancla-4", "custom/ancla-5", "custom/ancla-6"],
-    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "custom/notificaciones", "group/bandeja", "clock", "custom/power"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "battery", "custom/actualizaciones", "custom/notificaciones", "group/bandeja", "clock", "custom/power"],
 
     "custom/logo": {
         "format": "",
@@ -180,6 +180,16 @@
             "on-scroll-up": "shift_up",
             "on-scroll-down": "shift_down"
         }
+    },
+
+    // Aviso de version nueva de Jaime0: solo informa y solo aparece si la hay. No consulta la
+    // red: lo actualiza el temporizador diario (jaime0-update comprobar) con la senal 10.
+    "custom/actualizaciones": {
+        "exec": "jaime0-update barra",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 10,
+        "on-click": "kitty --class jaime0-update -e sh -c 'jaime0-update comprobar; echo; echo Pulsa Intro para cerrar.; read -r _'"
     },
 
     // Campana del centro de notificaciones (swaync). Clic: abre el centro; clic derecho:

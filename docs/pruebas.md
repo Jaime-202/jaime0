@@ -60,7 +60,7 @@ VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las prue
 | Inactividad: bloqueo y pantalla apagada (tiempos cortos) | Probado | |
 | Suspender y reanudar | **Parcial** | Bloquea antes y reanuda bloqueada. VirtualBox no despierta con la alarma del reloj, a veces tampoco con el teclado, y si queda congelada más de 3 min el vigilante de systemd reinicia logind y la red no vuelve sola. Es un efecto de la VM: **pendiente de hardware real** |
 | `apt full-upgrade` | Pendiente | Con la ISO 0.2 |
-| Migración 0.1.2 → 0.2 con `jaime0-update` | Pendiente | Necesita una publicación 0.2 firmada (fase de actualizaciones) |
+| Migración 0.1.x → 0.2 con `jaime0-update` | **Simulado** (13-11-2026) | Partiendo de la ISO 0.1 en vivo sin nada de 0.2: instalación manual de `jaime0-update` según `docs/actualizaciones.md` (firma y carga verificadas), publicación 0.2 servida por HTTPS local con una clave de prueba, `/run/live` oculto para que la sesión pase por instalada. Resultado: 8 paquetes nuevos instalados, sistema y configuración en 0.2 en 42 s, personalización de `kitty.conf` conservada con su `.jaime0-nuevo`, dunst y `notificaciones-waybar` retirados, indicador de la barra que aparece y desaparece, y `verificar-sesion.sh` correcto tras volver a entrar. **Pendiente:** un sistema instalado de verdad, con reinicio, y la publicación firmada con la clave oficial |
 | NVMe, varios monitores | Pendiente | VirtualBox: NVMe solo con el paquete de extensión; varios monitores, configurable |
 
 ## 4. Pruebas en hardware real (pendientes)

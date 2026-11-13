@@ -306,6 +306,31 @@ class Actualizacion(unittest.TestCase):
         self.assertEqual(e.leer("usr/local/bin/tiempo-waybar"), b"#!/bin/sh\necho se retira\n")
         self.assertEqual(e.leer("etc/skel/.config/kitty/kitty.conf"), b"# kitty v1\n")
 
+    def test_indicador_de_la_barra(self):
+        e = self.e
+        def barra():
+            rc, salida = e.ejecutar("barra")
+            self.assertEqual(rc, 0, salida)
+            return json.loads(salida)
+        # Sin comprobar nunca: nada que mostrar (y no usa la red).
+        self.assertEqual(barra()["text"], "")
+        e.publicar("0.2.1", siguiente(self.base, "0.2.1"))
+        self.assertEqual(barra()["text"], "", "la barra no consulta la red por su cuenta")
+        self.assertEqual(e.ejecutar("comprobar")[0], 100)
+        d = barra()
+        self.assertEqual(d["class"], "disponible")
+        self.assertIn("0.2.1", d["tooltip"])
+        # Tras actualizar desaparece solo, aunque nadie vuelva a comprobar.
+        self.assertEqual(e.ejecutar("--si", "--sin-paquetes")[0], 0)
+        self.assertEqual(barra()["text"], "")
+        # Un estado roto no rompe la barra.
+        estado = e.casa / ".local/state/jaime0/disponible.json"
+        estado.write_text("{roto", encoding="utf-8")
+        self.assertEqual(barra()["text"], "")
+        # Al dia: comprobar borra el estado.
+        self.assertEqual(e.ejecutar("comprobar")[0], 0)
+        self.assertFalse(estado.exists())
+
     def test_canales(self):
         e = self.e
         e.publicar("0.3.0-beta.1", siguiente(self.base, "0.3.0-beta.1"))

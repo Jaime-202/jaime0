@@ -7,6 +7,15 @@ systemctl --global enable pipewire.socket
 systemctl --global enable pipewire-pulse.socket
 systemctl --global enable wireplumber.service
 
+# Waybar, swaync, hypridle, hyprsunset y wob se activan solos al instalarse para
+# graphical-session.target. En Jaime0 los arranca la sesion (hyprland.lua, notificaciones,
+# inactividad, modo-noche) y wob se activa por su socket: si se alcanzara ese target, habria
+# dos barras, dos hypridle y el modo noche siempre encendido. Se quitan esas activaciones.
+for UNIDAD in waybar swaync hypridle hyprsunset wob; do
+    systemctl --global disable "${UNIDAD}.service" 2>/dev/null || true
+done
+systemctl --global enable wob.socket
+
 # Debian ya no lee /usr/lib/pam.d: estos servicios deben estar en /etc/pam.d.
 for SERVICIO in systemd-user polkit-1; do
     [ -e "/etc/pam.d/${SERVICIO}" ] || cp "/usr/lib/pam.d/${SERVICIO}" "/etc/pam.d/${SERVICIO}"

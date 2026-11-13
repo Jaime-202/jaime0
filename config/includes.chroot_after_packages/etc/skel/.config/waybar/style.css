@@ -83,6 +83,7 @@ tooltip label {
 #battery.aviso      { color: @ambar; }
 #battery.critico    { color: @rojo; }
 #clock              { color: @texto; }
+#custom-actualizaciones                 { color: @acento; padding: 0 8px; }
 #custom-notificaciones                  { color: @gris; }
 #custom-notificaciones.notification     { color: @acento; }
 #custom-notificaciones.dnd-none,

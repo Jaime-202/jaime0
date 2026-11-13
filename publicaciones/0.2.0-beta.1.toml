@@ -1,22 +1,41 @@
 # Notas de la publicacion 0.2.0-beta.1. Las lee scripts/empaquetar-actualizacion.py
 # y van firmadas dentro del manifiesto.
-fecha = "2026-11-11"
+fecha = "2026-11-13"
 
 cambios = [
-    "Nueva identidad visual: negro profundo, verde #54E58A como acento y cian ocasional.",
-    "Waybar fina y compacta, sin cápsulas, con intervalos de refresco más largos.",
-    "Hyprland con bordes finos, esquinas de 6-8 px, menos transparencia y blur más ligero.",
-    "Fondo propio generado (malla digital oscura con puntos verdes), sin descargas al compilar.",
+    "Nueva identidad visual: negro profundo, verde #54E58A como acento y cian ocasional, con fondo propio (malla digital oscura con puntos verdes).",
+    "Ajustes en un solo sitio con jaime0-ajustes y su aplicación gráfica: acento (6 temas o un color), fondo, separación, bordes, esquinas, opacidad, desenfoque, animaciones y altura y posición de la barra. Tus ajustes viven en ~/.config/jaime0/ajustes y ninguna actualización los toca.",
+    "Redimensionar las ventanas arrastrando el borde, además de SUPER + clic derecho y SUPER + CTRL + flechas.",
+    "Barra fina y compacta: hasta 6 aplicaciones ancladas en el centro (jaime0-anclar), con un punto bajo las abiertas; la red por cable aparece como ETH y la hora pasa a la derecha.",
+    "Widgets de escritorio opcionales en Quickshell: reloj, música, tiempo (Open-Meteo, solo con la ciudad que escribas), volumen y brillo, sistema y calendario. Vienen apagados.",
+    "Notificaciones con Sway Notification Center: centro con no molestar, controles de música y volumen. Sustituye a dunst.",
+    "Pantalla de bloqueo con hyprlock (hora, fecha, canción y fondo difuminado) e inactividad con hypridle; swaylock queda como respaldo si hyprlock fallara.",
+    "Indicador de volumen y brillo (wob), modo noche (SUPER + F2), selector de color (SUPER + SHIFT + C) y configuración gráfica de pantallas (nwg-displays).",
     "Nuevo comando jaime0-update: actualizaciones firmadas desde GitHub Releases, canales stable, beta y experimental, protección de personalizaciones, copias, recuperación y reversión.",
-    "Aviso discreto una vez al día cuando hay una versión nueva (nunca instala solo).",
+    "Aviso discreto en la barra y una notificación al día cuando hay una versión nueva. Nunca instala nada por su cuenta.",
+    "jaime0-diagnostico: informe de hardware para adjuntar a incidencias, sin datos personales.",
 ]
 
 problemas_conocidos = [
-    "Versión beta: no se ha probado todavía en hardware real ni se ha medido el consumo tras el rediseño.",
+    "Versión beta: probada solo en máquinas virtuales; no se ha probado todavía en hardware real.",
     "Las instalaciones 0.1.x no traen jaime0-update: hay que instalarlo una vez a mano (ver docs/actualizaciones.md) o reinstalar desde la ISO.",
+    "dunst y swayidle quedan instalados aunque ya no se usan. Puedes quitarlos con: sudo apt remove dunst swayidle",
+    "Si habías modificado a mano la configuración de Hyprland, Waybar o rofi, se conserva tu versión y la nueva queda al lado (.jaime0-nuevo): los ajustes nuevos no tendrán efecto en ese programa hasta que la aceptes con jaime0-update resolver.",
+    "Cierra la sesión y vuelve a entrar después de actualizar: la barra, las notificaciones y el bloqueo nuevos se arrancan al iniciar la sesión.",
 ]
 
-paquetes = []
+# Paquetes de Debian nuevos: jaime0-update los instala con apt antes de cambiar ningún
+# archivo (si apt falla, no se cambia nada).
+paquetes = [
+    "quickshell",
+    "sway-notification-center",
+    "hyprlock",
+    "hypridle",
+    "wob",
+    "hyprsunset",
+    "hyprpicker",
+    "nwg-displays",
+]
 
 [requisitos]
 version_minima = "0.1.0"

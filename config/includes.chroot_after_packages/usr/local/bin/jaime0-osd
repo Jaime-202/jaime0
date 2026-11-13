@@ -13,7 +13,10 @@ set -u
 FIFO="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/wob.sock"
 
 mostrar() {
-    # Sin wob (o sin su socket) el cambio se hace igual; solo no se ve la barra.
+    # El socket lo activa el gestor de la sesion al entrar; si wob se acaba de instalar
+    # (actualizacion) aun no esta: se activa ahora. Sin wob el cambio se hace igual; solo
+    # no se ve la barra.
+    [ -p "$FIFO" ] || systemctl --user start wob.socket >/dev/null 2>&1
     [ -p "$FIFO" ] && timeout 1 sh -c 'printf "%s\n" "$1" > "$2"' _ "$1" "$FIFO" 2>/dev/null
     return 0
 }
