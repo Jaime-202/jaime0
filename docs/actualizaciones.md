@@ -119,7 +119,7 @@ En una instalación en ext4 (la opción por defecto) no hay instantáneas del si
 Las versiones 0.1.x no traen `jaime0-update`. Para instalarlo una vez a mano, verificando la firma (sustituye `V` por la versión publicada):
 
 ```bash
-V=0.2.0-beta.1
+V=0.2.0-beta.2
 cd "$(mktemp -d)"
 for f in manifiesto.json manifiesto.json.sig "jaime0-$V.tar.gz"; do curl -fLO "https://github.com/Jaime-202/jaime0/releases/download/v$V/$f"; done
 curl -fsSL -o firma.pem https://raw.githubusercontent.com/Jaime-202/jaime0/main/config/includes.chroot_after_packages/usr/share/jaime0/firma-actualizaciones.pem
@@ -136,7 +136,7 @@ jaime0-update
 Si la firma no se verifica (`Signature Verification Failure`), para: no sigas. Comprueba también que la clave pública descargada es la buena; su huella SHA-256 (formato DER) es:
 
 ```
-2143a86fac133152b40587618b3db70a1a7a182f2772908c048ff235d90ed727
+3a5d37d572023bda6147d91cbf3672b957eab93afeecc36ac74a48e2148c4d54
 ```
 
 ```bash
