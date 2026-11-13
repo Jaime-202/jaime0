@@ -229,7 +229,8 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("swaybg --image " .. fondo .. " --mode fill")
     -- Los archivos que lee Waybar (altura, posicion, acento, ancladas) se generan antes de
     -- abrirla. Despues, jaime0-anclar vigila las ventanas para el punto de las ancladas.
-    hl.exec_cmd("sh -c 'jaime0-ajustes generar; jaime0-anclar refrescar --sin-senal; exec waybar'")
+    -- Los widgets (Quickshell) solo arrancan si hay alguno activado en los ajustes.
+    hl.exec_cmd("sh -c 'jaime0-ajustes generar; jaime0-anclar refrescar --sin-senal; jaime0-widgets iniciar; exec waybar'")
     hl.exec_cmd("jaime0-anclar vigilar")
     -- Notificaciones: swaync (o dunst si swaync no esta instalado).
     hl.exec_cmd("notificaciones iniciar")

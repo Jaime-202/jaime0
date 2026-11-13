@@ -1,0 +1,55 @@
+#!/bin/sh
+# Widgets de escritorio de Jaime0: un solo proceso de Quickshell para todos.
+# Solo se arranca si hay algun widget activado en los ajustes (jaime0-ajustes); si se
+# desactivan todos, se para. Si Quickshell falla o no esta, el escritorio sigue igual.
+#
+#   jaime0-widgets iniciar       al entrar en la sesion (lo llama Hyprland)
+#   jaime0-widgets sincronizar   arranca o para segun los ajustes (lo llama jaime0-ajustes)
+#   jaime0-widgets reiniciar
+#   jaime0-widgets parar
+set -u
+
+SHELL_QML=/usr/share/jaime0/widgets/shell.qml
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/jaime0/generado/widgets.json"
+
+# Pids de los widgets: procesos que se llaman exactamente "quickshell" y llevan este
+# shell.qml. Con "pgrep -f" valdria cualquier proceso que mencionara la ruta (una shell
+# que lo lanza, una sesion SSH...) y "parar" lo mataria.
+pids() {
+    for p in $(pgrep -x -u "$(id -u)" quickshell 2>/dev/null); do
+        tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF -- "-p $SHELL_QML" && echo "$p"
+    done
+}
+
+en_marcha() { [ -n "$(pids)" ]; }
+
+hay_widgets() {
+    [ -f "$CONF" ] || return 1
+    python3 -I -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("widgets") else 1)' "$CONF" 2>/dev/null
+}
+
+arrancar() {
+    command -v quickshell >/dev/null 2>&1 || { echo "jaime0-widgets: falta quickshell" >&2; return 0; }
+    [ -f "$SHELL_QML" ] || return 0
+    en_marcha && return 0
+    setsid -f quickshell -p "$SHELL_QML" >/dev/null 2>&1 </dev/null
+}
+
+parar() {
+    P=$(pids)
+    [ -n "$P" ] && kill $P 2>/dev/null
+    return 0
+}
+
+case "${1:-}" in
+    iniciar|sincronizar)
+        if hay_widgets; then arrancar; else parar; fi ;;
+    reiniciar)
+        parar; sleep 0.3
+        hay_widgets && arrancar ;;
+    parar)
+        parar ;;
+    *)
+        echo "Uso: jaime0-widgets iniciar|sincronizar|reiniciar|parar" >&2; exit 2 ;;
+esac
+exit 0

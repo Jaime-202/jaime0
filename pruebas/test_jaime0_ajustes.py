@@ -107,6 +107,22 @@ class PruebasAjustes(unittest.TestCase):
         self.assertIn("bar_color = e0b050ff", wob)
         self.assertNotIn("[", wob, "wob: las claves por defecto van sin cabecera de seccion")
 
+    def test_widgets(self):
+        # Por defecto, ninguno: el escritorio empieza vacio.
+        self.e.ejecutar("generar")
+        self.assertEqual(json.loads(self.e.generado("widgets.json"))["widgets"], {})
+        self.assertEqual(self.e.ejecutar("poner", "widget_reloj", "arriba-izquierda", "widget_musica",
+                                         "abajo-derecha", "reloj_formato", "12h", "widgets_tarjetas", "no",
+                                         "tiempo_ciudad", "  San  Sebastián de los Reyes, España ")[0], 0)
+        w = json.loads(self.e.generado("widgets.json"))
+        self.assertEqual(w["widgets"], {"reloj": "arriba-izquierda", "musica": "abajo-derecha"})
+        self.assertEqual((w["reloj_formato"], w["tarjetas"], w["acento"]), ("12h", False, "#54e58a"))
+        self.assertEqual(w["ciudad"], "San Sebastián de los Reyes, España")
+        for args in (("widget_reloj", "izquierda"), ("tiempo_ciudad", "Madrid; rm -rf /"),
+                     ("tiempo_ciudad", "x" * 61), ("tiempo_ciudad", "123"), ("reloj_formato", "48h")):
+            self.assertEqual(self.e.ejecutar("poner", *args)[0], 1, args)
+        self.assertEqual(self.e.ejecutar("poner", "tiempo_ciudad", "")[0], 0)  # vacia: permitido
+
     def test_valores_invalidos_no_cambian_nada(self):
         self.e.ejecutar("poner", "borde", "1")
         antes = self.e.archivo.read_text(encoding="utf-8")

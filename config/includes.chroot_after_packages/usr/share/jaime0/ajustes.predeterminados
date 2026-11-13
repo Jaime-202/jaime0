@@ -23,6 +23,21 @@ barra_posicion = arriba
 # nombre de su .desktop sin extension. Se gestionan con jaime0-anclar.
 anclas = kitty thunar
 
+# Widgets de escritorio (Quickshell). Cada uno en una posicion o "no": arriba-izquierda,
+# arriba-centro, arriba-derecha, centro, abajo-izquierda, abajo-centro, abajo-derecha.
+# Vienen apagados: el escritorio empieza vacio y sin ningun proceso de widgets.
+widget_reloj = no
+widget_musica = no
+widget_tiempo = no
+widget_sonido = no
+widget_sistema = no
+widget_calendario = no
+widgets_tarjetas = si
+reloj_formato = 24h
+# Ciudad para el tiempo (Open-Meteo). Solo se envia el nombre que escribas aqui: nunca se
+# usa tu IP ni tu ubicacion. Vacia: el widget del tiempo lo pide.
+tiempo_ciudad =
+
 # Temas de acento: tema.NOMBRE = #rrggbb. "acento" acepta un nombre o un color #rrggbb.
 tema.verde = #54e58a
 tema.cian = #55cde0

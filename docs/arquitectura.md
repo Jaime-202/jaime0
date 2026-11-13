@@ -14,6 +14,7 @@
 | Sonido, red | PipeWire + WirePlumber, NetworkManager (`nmtui` desde la barra), BlueZ + blueman |
 | Actualizaciones | `jaime0-update` (componentes propios, firmados) + `apt` (paquetes) |
 | Ajustes | `jaime0-ajustes`: predeterminados en `/usr/share/jaime0/ajustes.predeterminados`, cambios del usuario en `~/.config/jaime0/ajustes`. Hyprland los lee en `hyprland.lua`; Waybar y rofi, desde `~/.config/jaime0/generado/`. Ver [ajustes.md](ajustes.md) |
+| Widgets | `jaime0-widgets` arranca un único Quickshell (`/usr/share/jaime0/widgets`) solo si hay widgets activos; lee `generado/widgets.json` en caliente. El tiempo, de `jaime0-tiempo` (Open-Meteo, con caché) |
 | Aplicaciones ancladas | `jaime0-anclar`: ajuste `anclas`; `jaime0-anclar vigilar` escucha el socket de eventos de Hyprland y escribe el estado que lee Waybar (señal 9) |
 
 ## Flujo de construcción

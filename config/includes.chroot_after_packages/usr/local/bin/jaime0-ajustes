@@ -69,7 +69,23 @@ ESQUEMA = {
     "barra_altura":        {"tipo": "entero", "min": 20, "max": 48, "grupo": "Barra", "etiqueta": "Altura de la barra"},
     "barra_posicion":      {"tipo": "opcion", "opciones": ["arriba", "abajo"], "grupo": "Barra", "etiqueta": "Posición de la barra"},
     "anclas":              {"tipo": "anclas", "max": 6, "grupo": "Barra", "etiqueta": "Aplicaciones ancladas"},
+    # Widgets de escritorio (jaime0-widgets, en Quickshell): cada uno en una posicion o "no".
+    "widget_reloj":        {"tipo": "opcion", "opciones": None, "grupo": "Widgets", "etiqueta": "Reloj"},
+    "widget_musica":       {"tipo": "opcion", "opciones": None, "grupo": "Widgets", "etiqueta": "Música"},
+    "widget_tiempo":       {"tipo": "opcion", "opciones": None, "grupo": "Widgets", "etiqueta": "Tiempo"},
+    "widget_sonido":       {"tipo": "opcion", "opciones": None, "grupo": "Widgets", "etiqueta": "Volumen y brillo"},
+    "widget_sistema":      {"tipo": "opcion", "opciones": None, "grupo": "Widgets", "etiqueta": "Sistema"},
+    "widget_calendario":   {"tipo": "opcion", "opciones": None, "grupo": "Widgets", "etiqueta": "Calendario"},
+    "widgets_tarjetas":    {"tipo": "sino", "grupo": "Widgets", "etiqueta": "Widgets sobre tarjeta"},
+    "reloj_formato":       {"tipo": "opcion", "opciones": ["24h", "12h"], "grupo": "Widgets", "etiqueta": "Formato del reloj"},
+    "tiempo_ciudad":       {"tipo": "texto", "max": 60, "grupo": "Widgets", "etiqueta": "Ciudad para el tiempo"},
 }
+POSICIONES_WIDGET = ["no", "arriba-izquierda", "arriba-centro", "arriba-derecha", "centro",
+                     "abajo-izquierda", "abajo-centro", "abajo-derecha"]
+for _clave, _e in ESQUEMA.items():
+    if _clave.startswith("widget_"):
+        _e["opciones"] = POSICIONES_WIDGET
+WIDGETS = [c[len("widget_"):] for c in ESQUEMA if c.startswith("widget_")]
 
 # Solo para un sistema sin el archivo de predeterminados (no deberia pasar).
 RESERVA = {
@@ -77,7 +93,12 @@ RESERVA = {
     "separacion_interior": "4", "separacion_exterior": "8", "borde": "2", "esquinas": "8",
     "opacidad_inactiva": "1.0", "desenfoque": "si", "animaciones": "si",
     "barra_altura": "26", "barra_posicion": "arriba", "anclas": "kitty thunar",
+    "widget_reloj": "no", "widget_musica": "no", "widget_tiempo": "no", "widget_sonido": "no",
+    "widget_sistema": "no", "widget_calendario": "no", "widgets_tarjetas": "si",
+    "reloj_formato": "24h", "tiempo_ciudad": "",
 }
+# Ciudad: letras de cualquier idioma, espacios y signos de nombres de lugar.
+CIUDAD = re.compile(r"^[^\W\d_](?:[^\W_]|[ .,'’()-])*$")
 
 LINEA = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*=\s*(.*?)\s*$")
 COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -158,6 +179,13 @@ def validar(clave, texto, temas):
         if COLOR.match(t):
             return t.lower()
         raise Error(f"acento: usa un tema ({', '.join(temas)}) o un color #rrggbb")
+    if e["tipo"] == "texto":
+        t = " ".join(t.split())
+        if len(t) > e["max"]:
+            raise Error(f"{clave}: como máximo {e['max']} caracteres")
+        if t and not CIUDAD.match(t):
+            raise Error(f"{clave}: escribe solo el nombre del lugar (por ejemplo: Madrid, o Valencia, España)")
+        return t
     if e["tipo"] == "anclas":
         # Identificadores de aplicacion (nombre del .desktop sin extension), en orden.
         # Que esten instaladas lo comprueba jaime0-anclar al anclar; si luego se
@@ -279,6 +307,14 @@ def generar():
         "fondo": valores["fondo"] + "\n",
         "anclas": valores["anclas"] + "\n",
         "swaync.css": f"/* Generado por {PROGRAMA}: no lo edites. */\n@define-color acento {acento};\n",
+        # Widgets de escritorio (jaime0-widgets): solo los activados, con su posicion.
+        "widgets.json": json.dumps({
+            "acento": acento,
+            "tarjetas": valores["widgets_tarjetas"] == "si",
+            "reloj_formato": valores["reloj_formato"],
+            "ciudad": valores["tiempo_ciudad"],
+            "widgets": {w: valores[f"widget_{w}"] for w in WIDGETS if valores[f"widget_{w}"] != "no"},
+        }, ensure_ascii=False, indent=4) + "\n",
         # Indicador de volumen y brillo (wob, via jaime0-osd).
         "wob.ini": (f"# Generado por {PROGRAMA}: no lo edites.\n"
                     "timeout = 1200\nmax = 100\nwidth = 260\nheight = 26\nborder_offset = 0\n"
@@ -322,6 +358,9 @@ def aplicar():
     if "swaync.css" in cambiados and en_marcha("swaync"):
         subprocess.run(["swaync-client", "--reload-css", "--skip-wait"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+    if "widgets.json" in cambiados and shutil.which("jaime0-widgets"):
+        # Los widgets releen el archivo solos; esto solo arranca o para el proceso.
+        subprocess.run(["jaime0-widgets", "sincronizar"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if "anclas" in cambiados and shutil.which("jaime0-anclar"):
         subprocess.run(["jaime0-anclar", "refrescar"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if "fondo" in cambiados and en_marcha("swaybg"):

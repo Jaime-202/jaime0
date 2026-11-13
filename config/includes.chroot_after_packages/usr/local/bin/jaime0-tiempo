@@ -1,0 +1,159 @@
+#!/usr/bin/python3 -I
+# jaime0-tiempo: el tiempo actual para el widget del escritorio, en una linea JSON.
+#
+# Usa Open-Meteo (sin clave ni registro). Solo se envia el nombre de la ciudad escrito en
+# los ajustes (tiempo_ciudad) y, despues, sus coordenadas: nunca se usa la IP ni la
+# ubicacion del equipo. Guarda cache en ~/.cache/jaime0/tiempo.json: como mucho una
+# consulta cada 25 minutos, y sin red se muestra el ultimo dato (hasta 6 horas).
+
+import importlib.machinery
+import importlib.util
+import json
+import os
+import sys
+import time
+import urllib.parse
+import urllib.request
+
+PROGRAMA = "jaime0-tiempo"
+VIGENCIA = 25 * 60
+MAXIMO_SIN_RED = 6 * 3600
+URL_GEO = "https://geocoding-api.open-meteo.com/v1/search"
+URL_TIEMPO = "https://api.open-meteo.com/v1/forecast"
+
+
+def cargar_ajustes():
+    ruta = os.path.join(os.path.dirname(os.path.realpath(__file__)), "jaime0-ajustes")
+    cargador = importlib.machinery.SourceFileLoader("jaime0_ajustes", ruta)
+    spec = importlib.util.spec_from_loader(cargador.name, cargador)
+    modulo = importlib.util.module_from_spec(spec)
+    cargador.exec_module(modulo)
+    return modulo
+
+
+A = cargar_ajustes()
+if A.MODO_PRUEBA:  # Solo en las pruebas: servidores falsos (file://)
+    URL_GEO = os.environ.get("JAIME0_TIEMPO_GEO", URL_GEO)
+    URL_TIEMPO = os.environ.get("JAIME0_TIEMPO_PREVISION", URL_TIEMPO)
+
+# Codigos WMO de Open-Meteo -> descripcion e icono (Nerd Font). El 0 y el 1 cambian de
+# noche.
+CODIGOS = {
+    0: ("Despejado", "\U000f0599"), 1: ("Poco nuboso", "\U000f0595"), 2: ("Nubes y claros", "\U000f0595"),
+    3: ("Nublado", "\U000f0590"), 45: ("Niebla", "\U000f0591"), 48: ("Niebla helada", "\U000f0591"),
+    51: ("Llovizna débil", "\U000f0597"), 53: ("Llovizna", "\U000f0597"), 55: ("Llovizna intensa", "\U000f0597"),
+    56: ("Llovizna helada", "\U000f067f"), 57: ("Llovizna helada", "\U000f067f"),
+    61: ("Lluvia débil", "\U000f0597"), 63: ("Lluvia", "\U000f0597"), 65: ("Lluvia intensa", "\U000f0596"),
+    66: ("Lluvia helada", "\U000f067f"), 67: ("Lluvia helada", "\U000f067f"),
+    71: ("Nieve débil", "\U000f0598"), 73: ("Nieve", "\U000f0598"), 75: ("Nieve intensa", "\U000f0598"),
+    77: ("Granizo fino", "\U000f0592"), 80: ("Chubascos", "\U000f0597"), 81: ("Chubascos", "\U000f0597"),
+    82: ("Chubascos fuertes", "\U000f0596"), 85: ("Chubascos de nieve", "\U000f0598"), 86: ("Chubascos de nieve", "\U000f0598"),
+    95: ("Tormenta", "\U000f0593"), 96: ("Tormenta con granizo", "\U000f067e"), 99: ("Tormenta con granizo", "\U000f067e"),
+}
+NOCHE = "\U000f0594"
+
+
+class Fallo(Exception):
+    pass
+
+
+def descargar(url, parametros):
+    destino = url + "?" + urllib.parse.urlencode(parametros)
+    if url.startswith("file://"):  # pruebas
+        destino = url
+    peticion = urllib.request.Request(destino, headers={"User-Agent": PROGRAMA})
+    try:
+        with urllib.request.urlopen(peticion, timeout=10) as r:
+            return json.load(r)
+    except (OSError, ValueError) as e:
+        raise Fallo("Sin conexión con el servicio del tiempo") from e
+
+
+def buscar_ciudad(texto):
+    """'Valencia, España' -> lugar. La parte tras la coma elige entre homonimos."""
+    nombre, _, pista = texto.partition(",")
+    nombre, pista = nombre.strip(), pista.strip().lower()
+    datos = descargar(URL_GEO, {"name": nombre, "count": 10, "language": "es", "format": "json"})
+    lugares = datos.get("results") or []
+    if pista:
+        lugares = [l for l in lugares if pista in (str(l.get("country", "")).lower(),
+                                                   str(l.get("country_code", "")).lower(),
+                                                   str(l.get("admin1", "")).lower())] or lugares
+    if not lugares:
+        raise Fallo(f"No encuentro «{texto}». Revisa la ciudad en los ajustes")
+    l = lugares[0]
+    partes = [l.get("name", nombre)] + ([l["country"]] if l.get("country") else [])
+    return {"latitud": l["latitude"], "longitud": l["longitude"], "nombre": ", ".join(partes)}
+
+
+def consultar(lugar):
+    d = descargar(URL_TIEMPO, {
+        "latitude": lugar["latitud"], "longitude": lugar["longitud"],
+        "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m,is_day",
+        "daily": "temperature_2m_max,temperature_2m_min",
+        "timezone": "auto", "forecast_days": 1,
+    })
+    try:
+        actual, diario = d["current"], d["daily"]
+        codigo = int(actual["weather_code"])
+        descripcion, icono = CODIGOS.get(codigo, ("—", "\U000f0590"))
+        if codigo in (0, 1) and not actual.get("is_day", 1):
+            icono = NOCHE
+        return {
+            "ok": True, "ciudad": lugar["nombre"],
+            "temperatura": round(float(actual["temperature_2m"]), 1),
+            "sensacion": round(float(actual["apparent_temperature"]), 1),
+            "maxima": round(float(diario["temperature_2m_max"][0])),
+            "minima": round(float(diario["temperature_2m_min"][0])),
+            "viento": round(float(actual["wind_speed_10m"])),
+            "descripcion": descripcion, "icono": icono,
+            "actualizado": str(actual.get("time", ""))[-5:],
+        }
+    except (KeyError, IndexError, TypeError, ValueError) as e:
+        raise Fallo("Respuesta inesperada del servicio del tiempo") from e
+
+
+def archivo_cache():
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(base, "jaime0", "tiempo.json")
+
+
+def leer_cache():
+    try:
+        with open(archivo_cache(), encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def tiempo(ciudad, ahora=None):
+    ahora = time.time() if ahora is None else ahora
+    if not ciudad:
+        return {"ok": False, "error": "Escribe tu ciudad en los ajustes (Widgets)"}
+    cache = leer_cache()
+    misma = cache.get("ciudad") == ciudad
+    if misma and cache.get("datos") and ahora - cache.get("hora", 0) < VIGENCIA:
+        return cache["datos"]
+    try:
+        lugar = cache.get("lugar") if misma and cache.get("lugar") else buscar_ciudad(ciudad)
+        datos = consultar(lugar)
+    except Fallo as e:
+        if misma and cache.get("datos") and ahora - cache.get("hora", 0) < MAXIMO_SIN_RED:
+            return dict(cache["datos"], antiguo=True)
+        return {"ok": False, "error": str(e)}
+    A.escribir_atomico(archivo_cache(), json.dumps(
+        {"ciudad": ciudad, "lugar": lugar, "datos": datos, "hora": ahora}, ensure_ascii=False) + "\n")
+    return datos
+
+
+def main(argv):
+    if argv[:1] in (["-h"], ["--help"]):
+        print(f"Uso: {PROGRAMA}  (escribe el tiempo de la ciudad de los ajustes en JSON)")
+        return 0
+    valores, _, _, _ = A.efectivos()
+    print(json.dumps(tiempo(valores["tiempo_ciudad"]), ensure_ascii=False))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

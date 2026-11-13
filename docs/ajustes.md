@@ -59,6 +59,10 @@ Al aplicar, se recarga Hyprland (`hyprctl reload`), Waybar relee su configuraci�
 | `barra_altura` | 20-48 | `26` | Altura de Waybar |
 | `barra_posicion` | `arriba` / `abajo` | `arriba` | Posición de Waybar |
 | `anclas` | Hasta 6 identificadores de aplicación (nombre del `.desktop`) | `kitty thunar` | Aplicaciones ancladas en el centro de la barra. Mejor con `jaime0-anclar` |
+| `widget_reloj`, `widget_musica`, `widget_tiempo`, `widget_sonido`, `widget_sistema`, `widget_calendario` | `no` o `arriba-izquierda`, `arriba-centro`, `arriba-derecha`, `centro`, `abajo-izquierda`, `abajo-centro`, `abajo-derecha` | `no` | Widgets de escritorio y su posición |
+| `widgets_tarjetas` | `si` / `no` | `si` | Widgets sobre una tarjeta oscura o directamente sobre el fondo |
+| `reloj_formato` | `24h` / `12h` | `24h` | Formato del widget del reloj |
+| `tiempo_ciudad` | Nombre de un lugar (por ejemplo `Valencia, España`) | vacía | Ciudad del widget del tiempo |
 
 Los fondos que ofrece la aplicación son los de `/usr/share/backgrounds/jaime0` y los que pongas en `~/.local/share/backgrounds`.
 
@@ -86,10 +90,43 @@ Cómo funciona, sin sondeo:
 - Iconos monocromos de la fuente Nerd Font, como el resto de la barra. Se eligen por el nombre de la aplicación o, si no se conoce, por su categoría.
 - Consumo medido en la VM de pruebas: `vigilar` ocupa unos 15 MB (PSS) y no gasta CPU en reposo.
 
+## Widgets de escritorio
+
+```bash
+jaime0-ajustes poner widget_reloj arriba-izquierda widget_tiempo arriba-derecha tiempo_ciudad Madrid
+```
+
+| Widget | Muestra |
+|---|---|
+| Reloj | Hora grande y fecha |
+| Música | Carátula, título, artista, progreso y controles de cualquier reproductor MPRIS (Spotify, mpv, navegadores). Sin reproductor no se ve |
+| Tiempo | Temperatura, estado, máxima y mínima de `tiempo_ciudad` |
+| Volumen y brillo | Deslizadores de volumen (PipeWire) y brillo (solo si la pantalla lo permite) |
+| Sistema | CPU, RAM, disco, temperatura y batería (lo que el equipo no tenga no se muestra) |
+| Calendario | Mes actual, con el día de hoy en el color de acento |
+
+Cómo funcionan:
+
+- Vienen todos apagados: el escritorio empieza vacío y sin ningún proceso de widgets.
+- Todos van en un solo proceso de Quickshell, que `jaime0-widgets` arranca solo si hay alguno activado y para si se desactivan todos. Los cambios de posición, acento, formato o tarjeta se aplican en caliente, sin reiniciar.
+- Si Quickshell falla o no está instalado, el escritorio sigue igual: los widgets son lo único que no aparece.
+- Están en la capa de debajo de las ventanas: no tapan nada y respetan la barra.
+- **Tiempo:** `jaime0-tiempo` consulta [Open-Meteo](https://open-meteo.com/) (datos con licencia CC BY 4.0). Solo envía el nombre de la ciudad que escribas y, después, sus coordenadas; nunca la IP ni la ubicación del equipo. Consulta como mucho cada 25 minutos y, sin red, muestra el último dato de hasta 6 horas.
+
+Consumo medido en la VM de pruebas (sesión en vivo, VirtualBox, dibujo por software):
+
+| Widgets activos | Memoria (PSS) | CPU media en reposo (60 s) |
+|---|---|---|
+| Ninguno | 0 (no hay proceso) | 0 |
+| Solo el reloj | 84 MB | 0,02 % |
+| Los 6 (música en pausa) | 107 MB | 0,22 % |
+
 ## Límites conocidos
 
 - El acento aún no cambia el día de hoy del calendario de la barra, swaylock (solo de respaldo), kitty, btop ni GTK: siguen en verde.
 - Si modificaste a mano `~/.config/hypr/hyprland.lua`, `~/.config/waybar/*` o `~/.config/rofi/jaime0.rasi` antes de la 0.2, `jaime0-update` conserva tu versión (conflicto) y los ajustes no tendrán efecto en ese programa hasta que aceptes la nueva (`jaime0-update resolver RUTA --usar-nueva`).
 - Una altura de barra distinta de 26 mueve los módulos: `scripts/coords-barra.sh` mide a 26 px.
+- Los widgets se muestran en la pantalla principal; con varios monitores no se pueden repartir entre pantallas.
+- El reloj de 12 horas escribe AM/PM, sin traducir.
 - Una aplicación anclada que se desinstala desaparece de la barra, pero sigue en la lista (`jaime0-anclar` la marca como no instalada) por si se vuelve a instalar.
 - La aplicación se reconoce por la clase de su ventana (`StartupWMClass`, el nombre del `.desktop` o el del programa). Si alguna usa una clase distinta, el punto no aparecerá.

@@ -33,6 +33,7 @@ El trabajo original de este repositorio se publica bajo la licencia MIT (`LICENS
 | wob | ISC | https://github.com/francma/wob |
 | nwg-displays | MIT | https://github.com/nwg-piotr/nwg-displays |
 | Quickshell | LGPL-3.0-only | https://quickshell.org/ |
+| Datos del tiempo: Open-Meteo (los consulta `jaime0-tiempo`) | CC BY 4.0 | https://open-meteo.com/ |
 | btop | Apache-2.0 | https://github.com/aristocratos/btop |
 | Thunar | GPL-2.0-or-later | https://docs.xfce.org/xfce/thunar/start |
 | greetd y tuigreet | GPL-3.0 | https://sr.ht/~kennylevinsen/greetd/ |

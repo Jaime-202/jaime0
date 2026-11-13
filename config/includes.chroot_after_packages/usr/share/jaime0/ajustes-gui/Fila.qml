@@ -86,7 +86,9 @@ Item {
                 case "sino":
                     return conInterruptor;
                 case "opcion":
-                    return conSelector;
+                    return fila.ajuste.clave.startsWith("widget_") ? conPosicion : conSelector;
+                case "texto":
+                    return conCampo;
                 case "acento":
                     return conMuestras;
                 case "anclas":
@@ -208,6 +210,25 @@ Item {
             opciones: fila.ajuste.opciones
             valor: fila.ajuste.valor
             onElegido: opcion => fila.poner(fila.ajuste.clave, opcion)
+        }
+    }
+
+    Component {
+        id: conPosicion
+
+        Posicion {
+            valor: fila.ajuste.valor
+            onElegido: opcion => fila.poner(fila.ajuste.clave, opcion)
+        }
+    }
+
+    Component {
+        id: conCampo
+
+        Campo {
+            valor: fila.ajuste.valor
+            pista: "Escribe tu ciudad"
+            onAplicado: texto => fila.poner(fila.ajuste.clave, texto)
         }
     }
 
