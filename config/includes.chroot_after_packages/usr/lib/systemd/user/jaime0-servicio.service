@@ -1,0 +1,9 @@
+[Unit]
+Description=Servicio de salud y control de Jaime0
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/jaime0-servicio ejecutar
+Restart=on-failure
+RestartSec=5
+Nice=5

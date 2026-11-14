@@ -1,6 +1,31 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fase 1 (análisis) terminada.** Nada de esto está implementado todavía; este documento fija las decisiones y los formatos de datos antes de escribir código.
+Estado: **Fases 1 y 2 terminadas.** Funcionan el servicio, `jaime0-salud`, la ventana con SYSTEM OVERVIEW, el atajo y el indicador de la barra. Las demás secciones dicen en qué fase llegarán y no muestran datos inventados.
+
+## Uso (fase 2)
+
+| Qué | Cómo |
+|---|---|
+| Abrir o cerrar el Control Center | `SUPER + I`, clic en el indicador de Jaime0 de la barra (junto a la batería) o `jaime0-control` |
+| Dentro | `1`–`7` cambian de sección, `Esc` cierra |
+| Estado en la terminal | `jaime0-salud` (`--json` para la salida completa) |
+| El servicio | `systemctl --user status jaime0-servicio`; lo arranca la sesión de Hyprland |
+| Cambiar el atajo | `atajos quitar "SUPER+I"` y `atajos añadir "TECLAS" "jaime0-control" "Control Center"` |
+
+### Resultados de la fase 2 (14-11-2026, VM `jaime0-pruebas`, sistema instalado 0.3.0-beta.1 con los archivos nuevos copiados)
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas (`pruebas/`) | 105 correctas (31 nuevas del servicio y de `jaime0-salud`) |
+| `validar-repo.sh` | Sin fallos salvo `luac`, que falta en la VM de compilación (GitHub Actions sí lo tiene) |
+| Servicio | Arranca, publica `instante.json` y `estado.json`, lee el perfil (power-profiles-daemon) y el cortafuegos, para limpio (borra su socket) |
+| API | `rapido` pasa el muestreo a 2 s y caduca sola; JSON roto y órdenes desconocidas se rechazan sin caerse |
+| Estado global | Detectó un fallo real (`swaync.service` en *failed*), pasó a WARNING y volvió a ONLINE al corregirlo; los cambios quedan en la actividad |
+| Ventana | Datos reales en SYSTEM OVERVIEW, 0 avisos de QML; abre y cierra con `SUPER + I`, con el clic en la barra y con `Esc`; al cerrar, el proceso termina y el servicio vuelve a 10 s |
+| Consumo | Servicio: 41 MiB, 0,3 % de un núcleo en reposo y 1,8 % con la ventana abierta. Ventana: 130 MiB y 5,4 % de un núcleo (la VM dibuja por software) |
+| No probado | Temperaturas, frecuencias, batería real y NVIDIA: la VM no los tiene (se ven como `N/D`) |
+
+Arreglos encontrados al probar: `swaync` podía arrancar dos veces por D-Bus (el nombre `org.erikreider.swaync.cc` del paquete iba a la unidad de systemd) y la unidad quedaba *failed*; ahora ese nombre también lo arranca `notificaciones iniciar`. La barra de la cabecera, en bucle, gastaba un 22 % de CPU: ahora es una pasada cada 10 s.
 
 ## Qué hay hoy y qué se reutiliza
 
@@ -110,8 +135,12 @@ Todos los archivos llevan `"v": 1`. Los valores que no existen se escriben `null
  "disco":[{"punto":"/","usado":24.1,"total":476.9,"lectura":0.0,"escritura":0.1}],
  "bateria":{"nivel":83,"estado":"descargando","vatios":11.2,"minutos_estimados":231,"salud":91.0},
  "procesos":[{"pid":1234,"nombre":"brave","cpu":8.2,"ram":512}],
+ "cargador":true,"uptime":4210,
+ "fallidas":[],
  "estado":"ONLINE","alertas":0}
 ```
+
+`fallidas` es la lista de unidades de systemd en estado *failed* (sistema y sesión, consultada cada 60 s) o `null` si no se pudo consultar. `bateria.minutos_estimados` solo existe descargando y va marcado con `"estimado": true`.
 
 `$XDG_RUNTIME_DIR/jaime0/estado.json`: perfil activo y anterior, estado global (`ONLINE`/`WARNING`/`CRITICAL`) con sus motivos, resumen de privacidad (`SECURE`/`WARNING`/`UNAVAILABLE`) y alertas activas. Waybar lo lee al recibir su señal.
 

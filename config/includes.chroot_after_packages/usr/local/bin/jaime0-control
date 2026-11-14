@@ -1,0 +1,49 @@
+#!/bin/sh
+# jaime0-control: abre o cierra el Jaime0 Control Center (ventana de Quickshell).
+#
+#   jaime0-control           abre la ventana, o la cierra si ya esta abierta
+#   jaime0-control cerrar    la cierra si esta abierta
+#
+# La ventana no mide nada: muestra lo que publica jaime0-servicio, que se arranca aqui si
+# no estaba en marcha. Sin Quickshell el resto de Jaime0 funciona igual; el estado se
+# consulta con "jaime0-salud".
+
+QML=/usr/share/jaime0/control/shell.qml
+
+# Procesos que se llaman exactamente "quickshell" y llevan esta configuracion.
+pids() {
+    for p in $(pgrep -x -u "$(id -u)" quickshell 2>/dev/null); do
+        tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF -- "-p $QML" && echo "$p"
+    done
+}
+
+cerrar() {
+    P=$(pids)
+    [ -n "$P" ] || return 1
+    # shellcheck disable=SC2086
+    kill $P 2>/dev/null
+    return 0
+}
+
+case "${1:-}" in
+    cerrar) cerrar; exit 0 ;;
+    "") ;;
+    *) echo "Uso: jaime0-control [cerrar]" >&2; exit 2 ;;
+esac
+
+cerrar && exit 0
+
+systemctl --user start jaime0-servicio.service 2>/dev/null
+
+if ! command -v quickshell >/dev/null 2>&1 || [ ! -f "$QML" ]; then
+    MSG="Falta Quickshell: no se puede abrir el Control Center. El estado del sistema se ve con: jaime0-salud"
+    echo "jaime0-control: $MSG" >&2
+    notify-send --app-name=Jaime0 "Control Center" "$MSG" 2>/dev/null
+    exit 1
+fi
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    echo "jaime0-control: no hay sesion grafica (WAYLAND_DISPLAY). Usa: jaime0-salud" >&2
+    exit 1
+fi
+
+setsid -f quickshell -p "$QML" >/dev/null 2>&1 </dev/null

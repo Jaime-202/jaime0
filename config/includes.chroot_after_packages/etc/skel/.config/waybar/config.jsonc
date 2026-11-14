@@ -19,7 +19,7 @@
 
     "modules-left": ["custom/logo", "hyprland/workspaces"],
     "modules-center": ["custom/ancla-1", "custom/ancla-2", "custom/ancla-3", "custom/ancla-4", "custom/ancla-5", "custom/ancla-6"],
-    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "power-profiles-daemon", "battery", "custom/actualizaciones", "custom/notificaciones", "group/bandeja", "clock", "custom/power"],
+    "modules-right": ["cpu", "memory", "pulseaudio", "network", "bluetooth", "custom/jaime0", "battery", "custom/actualizaciones", "custom/notificaciones", "group/bandeja", "clock", "custom/power"],
 
     "custom/logo": {
         "format": "",
@@ -147,18 +147,16 @@
         "on-click": "blueman-manager"
     },
 
-    // Perfil de energia (power-profiles-daemon): clic para pasar por ahorro, equilibrado
-    // y rendimiento. Lo lee por D-Bus, sin sondear.
-    "power-profiles-daemon": {
-        "format": "{icon}",
-        "tooltip-format": "Perfil de energía: {profile}\nClic: cambiar",
+    // Jaime0: perfil activo y estado global (SYSTEM ONLINE / WARNING / CRITICAL) que publica
+    // jaime0-servicio. Sin sondeo: el servicio avisa con la senal 11 cuando algo cambia.
+    // Si el servicio esta parado muestra el perfil de power-profiles-daemon. Clic: Control Center.
+    "custom/jaime0": {
+        "exec": "jaime0-salud barra",
+        "return-type": "json",
+        "interval": "once",
+        "signal": 11,
         "tooltip": true,
-        "format-icons": {
-            "default": "󰾅",
-            "performance": "󰓅",
-            "balanced": "󰾅",
-            "power-saver": "󰾆"
-        }
+        "on-click": "jaime0-control"
     },
 
     "battery": {

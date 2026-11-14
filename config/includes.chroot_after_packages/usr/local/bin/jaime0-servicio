@@ -1,0 +1,948 @@
+#!/usr/bin/python3 -I
+# jaime0-servicio: servicio de salud del sistema del Control Center (Fase 2).
+#
+#   jaime0-servicio ejecutar        demonio (bucle de GLib): mide, evalua, escribe
+#                                   instante.json y estado.json y atiende control.sock
+#   jaime0-servicio medir [--json]  una medicion inmediata (dos lecturas separadas 0,5 s);
+#                                   imprime el JSON de instante
+#
+# Diseno (ver docs/control-center.md): un unico dueno del estado. Las CLIs y la interfaz
+# solo leen los archivos o piden por el socket. Sin subprocesos en el muestreo (solo el
+# aviso a Waybar cuando algo cambia). Secciones: medicion, estado, bus, api, servicio.
+#
+# Pruebas: JAIME0_RAIZ apunta a un sistema de mentira para /proc y /sys (solo sin root);
+# JAIME0_RUNTIME sustituye a $XDG_RUNTIME_DIR/jaime0.
+
+import argparse
+import collections
+import functools
+import glob
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+import traceback
+
+PROGRAMA = "jaime0-servicio"
+VERSION_DATOS = 1
+SENAL_BARRA = 11            # RTMIN+11: la barra relee el indicador
+INTERVALO_NORMAL = 10       # segundos entre muestras
+INTERVALO_RAPIDO = 2        # segundos mientras la interfaz esta abierta
+DURACION_RAPIDO = 15        # segundos que dura cada peticion "rapido"
+REFRESCO_LENTO = 60         # segundos entre consultas de unidades fallidas y cortafuegos
+TAMANO_ANILLO = 3600        # muestras como maximo (una hora a 1 s; sobra a 2 s y a 10 s)
+
+# Umbrales unicos del estado global (ver evaluar).
+UMBRALES = {
+    "temp_aviso": 85.0, "temp_critico": 95.0,          # cpu.temp, en grados
+    "disco_aviso": 85.0, "disco_critico": 95.0,        # % ocupado
+    "bateria_aviso": 15, "bateria_critico": 5,         # % y descargando
+    "ram_libre_critico": 5.0,                          # % disponible por debajo
+    "swap_aviso": 50.0,                                # % de swap usada por encima
+    "presion_aviso": 20.0,                             # avg10 de /proc/pressure/memory
+}
+
+
+def es_root():
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+def raiz():
+    """Raiz de /proc y /sys: la falsa de JAIME0_RAIZ solo sin privilegios."""
+    return "/" if es_root() else os.environ.get("JAIME0_RAIZ", "/")
+
+
+def modo_prueba():
+    return raiz() != "/"
+
+
+def ruta(*partes):
+    return os.path.join(raiz(), *[p.lstrip("/\\") for p in partes])
+
+
+def directorio_ejecucion():
+    """JAIME0_RUNTIME o $XDG_RUNTIME_DIR/jaime0, creado con 0700."""
+    d = os.environ.get("JAIME0_RUNTIME")
+    if not d:
+        base = os.environ.get("XDG_RUNTIME_DIR")
+        if not base:
+            raise RuntimeError("no hay XDG_RUNTIME_DIR ni JAIME0_RUNTIME")
+        d = os.path.join(base, "jaime0")
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    return d
+
+
+def registrar(texto):
+    print(f"{PROGRAMA}: {texto}", file=sys.stderr, flush=True)
+
+
+def protegido(defecto):
+    """Aisla un manejador: si falla, lo registra y devuelve `defecto` (True mantiene viva
+    una fuente de GLib)."""
+    def deco(f):
+        @functools.wraps(f)
+        def envoltorio(*a, **k):
+            try:
+                return f(*a, **k)
+            except Exception:
+                registrar("error en " + f.__name__ + ":\n" + traceback.format_exc())
+                return defecto
+        return envoltorio
+    return deco
+
+
+def escribir_json(destino, objeto):
+    """Escritura atomica: temporal en el mismo directorio y os.replace."""
+    tmp = destino + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(objeto, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, destino)
+
+
+# ---------------------------------------------------------------------------
+# Medicion: solo lee /proc y /sys, sin subprocesos
+# ---------------------------------------------------------------------------
+
+def leer(*partes):
+    try:
+        with open(ruta(*partes), encoding="utf-8", errors="replace") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def leer_ruta(p):
+    try:
+        with open(p, encoding="utf-8", errors="replace") as f:
+            return f.read().strip()
+    except OSError:
+        return None
+
+
+def leer_entero(p):
+    t = leer_ruta(p)
+    try:
+        return int(t) if t is not None else None
+    except ValueError:
+        return None
+
+
+def parsear_cpu_stat(texto):
+    """Devuelve ((inactivo, total), {n: (inactivo, total)}) en jiffies acumulados."""
+    total, nucleos = None, {}
+    for linea in (texto or "").splitlines():
+        if not linea.startswith("cpu"):
+            continue
+        c = linea.split()
+        try:
+            v = [int(x) for x in c[1:]]
+        except ValueError:
+            continue
+        if len(v) < 4:
+            continue
+        par = (v[3] + (v[4] if len(v) > 4 else 0), sum(v[:8]))  # inactivo+iowait; sin guest
+        if c[0] == "cpu":
+            total = par
+        elif c[0][3:].isdigit():
+            nucleos[int(c[0][3:])] = par
+    return total, nucleos
+
+
+def porcentaje_cpu(antes, ahora):
+    """% de uso entre dos lecturas (inactivo, total); None si no hay diferencia."""
+    if not antes or not ahora:
+        return None
+    dt = ahora[1] - antes[1]
+    if dt <= 0:
+        return None
+    uso = 100.0 * (1.0 - (ahora[0] - antes[0]) / dt)
+    return round(min(100.0, max(0.0, uso)), 1)
+
+
+def frecuencia_mhz(n):
+    kh = leer_entero(ruta("sys", "devices", "system", "cpu", f"cpu{n}", "cpufreq", "scaling_cur_freq"))
+    return None if kh is None else int(round(kh / 1000.0))
+
+
+def leer_ram():
+    texto = leer("proc", "meminfo")
+    if texto is None:
+        return None
+    kb = {}
+    for linea in texto.splitlines():
+        partes = linea.replace(":", " ").split()
+        if len(partes) >= 2 and partes[1].isdigit():
+            kb[partes[0]] = int(partes[1])
+    if "MemTotal" not in kb or "MemAvailable" not in kb:
+        return None
+    mib = lambda k: int(round(kb[k] / 1024.0))
+    return {"usada": int(round((kb["MemTotal"] - kb["MemAvailable"]) / 1024.0)),
+            "total": mib("MemTotal"),
+            "swap": int(round((kb.get("SwapTotal", 0) - kb.get("SwapFree", 0)) / 1024.0)),
+            "swap_total": mib("SwapTotal") if "SwapTotal" in kb else 0,
+            "presion": presion_memoria()}
+
+
+def presion_memoria():
+    """avg10 de la linea 'some' de /proc/pressure/memory, o None."""
+    for linea in (leer("proc", "pressure", "memory") or "").splitlines():
+        c = linea.split()
+        if c and c[0] == "some":
+            for campo in c[1:]:
+                if campo.startswith("avg10="):
+                    try:
+                        return float(campo[6:])
+                    except ValueError:
+                        return None
+    return None
+
+
+def leer_temperaturas():
+    """Lista [{"id": "<name>/<etiqueta>", "c": grados}] de todos los hwmon."""
+    salida = []
+    for entrada in sorted(glob.glob(ruta("sys", "class", "hwmon", "hwmon*", "temp*_input"))):
+        carpeta, archivo = os.path.split(entrada)
+        n = archivo[len("temp"):-len("_input")]
+        mili = leer_entero(entrada)
+        if mili is None:
+            continue
+        nombre = leer_ruta(os.path.join(carpeta, "name")) or os.path.basename(carpeta)
+        etiqueta = leer_ruta(os.path.join(carpeta, f"temp{n}_label")) or f"temp{n}"
+        salida.append({"id": f"{nombre}/{etiqueta}", "c": round(mili / 1000.0, 1)})
+    return salida
+
+
+def temperatura_cpu(temps):
+    """Package id 0 de coretemp, o Tctl de k10temp, o el maximo de coretemp; None si no hay."""
+    por_id = {t["id"]: t["c"] for t in temps}
+    if "coretemp/Package id 0" in por_id:
+        return por_id["coretemp/Package id 0"]
+    if "k10temp/Tctl" in por_id:
+        return por_id["k10temp/Tctl"]
+    nucleos = [t["c"] for t in temps if t["id"].startswith("coretemp/")]
+    return max(nucleos) if nucleos else None
+
+
+def estado_nvidia():
+    """'activa' | 'suspendida' | 'sin-driver' | None (no hay GPU NVIDIA). Nunca ejecuta
+    nvidia-smi: leer su temperatura despertaria la grafica."""
+    for dev in sorted(glob.glob(ruta("sys", "bus", "pci", "devices", "*"))):
+        if leer_ruta(os.path.join(dev, "vendor")) != "0x10de":
+            continue
+        clase = (leer_ruta(os.path.join(dev, "class")) or "")[:6]
+        if clase not in ("0x0300", "0x0302"):
+            continue
+        if not os.path.exists(os.path.join(dev, "driver")):
+            return "sin-driver"
+        return "suspendida" if leer_ruta(os.path.join(dev, "power", "runtime_status")) == "suspended" else "activa"
+    return None
+
+
+def uso_disco(punto):
+    """{"punto","usado","total"} en GiB con 1 decimal, o None si no se puede leer."""
+    try:
+        v = os.statvfs(ruta(punto))
+    except (OSError, AttributeError):
+        return None
+    gib = 1024.0 ** 3
+    total = v.f_blocks * v.f_frsize
+    return {"punto": punto, "usado": round((v.f_blocks - v.f_bfree) * v.f_frsize / gib, 1),
+            "total": round(total / gib, 1)}
+
+
+def puntos_de_disco():
+    """'/' y, si es otro sistema de archivos (por st_dev), '/home'."""
+    puntos = ["/"]
+    try:
+        if os.stat(ruta("home")).st_dev != os.stat(ruta()).st_dev:
+            puntos.append("/home")
+    except OSError:
+        pass
+    return puntos
+
+
+def parsear_diskstats(texto):
+    """{dispositivo: (sectores_leidos, sectores_escritos)}."""
+    d = {}
+    for linea in (texto or "").splitlines():
+        c = linea.split()
+        if len(c) >= 10 and c[5].isdigit() and c[9].isdigit():
+            d[c[2]] = (int(c[5]), int(c[9]))
+    return d
+
+
+def io_disco(antes, ahora, dt):
+    """(lectura, escritura) en MB/s (1 MB = 10^6 B, sectores de 512 B) o (None, None)."""
+    if not antes or not ahora or dt <= 0:
+        return None, None
+    mb = lambda s: round(max(0, s) * 512 / 1e6 / dt, 2)
+    return mb(ahora[0] - antes[0]), mb(ahora[1] - antes[1])
+
+
+def dispositivo_raiz():
+    """Nombre del dispositivo de bloque que contiene '/', o None si no se puede saber."""
+    try:
+        dev = os.stat(ruta()).st_dev
+        enlace = os.path.realpath(ruta("sys", "dev", "block", f"{os.major(dev)}:{os.minor(dev)}"))
+        return os.path.basename(enlace) or None
+    except (OSError, AttributeError):
+        return None
+
+
+ESTADOS_BATERIA = {"Charging": "cargando", "Discharging": "descargando", "Full": "llena",
+                   "Not charging": "sin-cargar"}
+
+
+def leer_bateria():
+    """Primera BAT* de tipo Battery como dict, o None si no hay bateria."""
+    base = ruta("sys", "class", "power_supply")
+    for d in sorted(glob.glob(os.path.join(base, "BAT*"))):
+        if leer_ruta(os.path.join(d, "type")) != "Battery":
+            continue
+        e = lambda nombre: leer_entero(os.path.join(d, nombre))
+        estado = ESTADOS_BATERIA.get(leer_ruta(os.path.join(d, "status")) or "", "desconocido")
+        pot, corr, volt = e("power_now"), e("current_now"), e("voltage_now")
+        vatios = None
+        if pot is not None and pot > 0:
+            vatios = round(pot / 1e6, 1)
+        elif corr and volt:
+            vatios = round(abs(corr) * volt / 1e12, 1)
+        minutos = None
+        if estado == "descargando" and vatios:
+            if pot is not None and pot > 0 and e("energy_now") is not None:
+                minutos = int(round(e("energy_now") / pot * 60))
+            elif corr and e("charge_now") is not None:
+                minutos = int(round(e("charge_now") / abs(corr) * 60))
+        salud = None
+        for lleno, diseno in (("energy_full", "energy_full_design"), ("charge_full", "charge_full_design")):
+            if e(lleno) is not None and e(diseno):
+                salud = round(100.0 * e(lleno) / e(diseno), 1)
+                break
+        return {"nivel": e("capacity"), "estado": estado, "vatios": vatios,
+                "minutos_estimados": minutos, "salud": salud, "estimado": True}
+    return None
+
+
+def leer_cargador():
+    """True/False si hay alguna fuente Mains; None si no hay ninguna."""
+    hay = False
+    for d in sorted(glob.glob(ruta("sys", "class", "power_supply", "*"))):
+        if leer_ruta(os.path.join(d, "type")) == "Mains":
+            hay = True
+            if leer_ruta(os.path.join(d, "online")) == "1":
+                return True
+    return False if hay else None
+
+
+def leer_uptime():
+    try:
+        return int(float((leer("proc", "uptime") or "").split()[0]))
+    except (IndexError, ValueError):
+        return None
+
+
+def tics_por_segundo():
+    try:
+        return os.sysconf("SC_CLK_TCK")
+    except (AttributeError, ValueError, OSError):
+        return 100
+
+
+def leer_procesos():
+    """{pid: (tics_cpu, nombre)} de /proc/[pid]/stat. Tolera procesos que desaparecen."""
+    d = {}
+    for p in glob.glob(ruta("proc", "[0-9]*")):
+        pid = os.path.basename(p)
+        if not pid.isdigit():
+            continue
+        try:
+            with open(os.path.join(p, "stat"), encoding="utf-8", errors="replace") as f:
+                t = f.read()
+            nombre = t[t.index("(") + 1:t.rindex(")")]
+            c = t[t.rindex(")") + 1:].split()
+            d[int(pid)] = (int(c[11]) + int(c[12]), nombre)   # utime + stime
+        except (OSError, ValueError, IndexError):
+            continue
+    return d
+
+
+def ram_proceso(pid):
+    """VmRSS en MiB o None."""
+    for linea in (leer("proc", str(pid), "status") or "").splitlines():
+        if linea.startswith("VmRSS:"):
+            try:
+                return int(round(int(linea.split()[1]) / 1024.0))
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
+def procesos_top(antes, ahora, dt, cuantos=5):
+    """Los de mas CPU entre dos muestras (100 % = un nucleo entero)."""
+    if not antes or dt <= 0:
+        return None
+    tics = tics_por_segundo()
+    lista = []
+    for pid, (t, nombre) in ahora.items():
+        if pid in antes:
+            cpu = (t - antes[pid][0]) / tics / dt * 100.0
+            if cpu > 0:
+                lista.append((cpu, pid, nombre))
+    lista.sort(reverse=True)
+    return [{"pid": pid, "nombre": nombre, "cpu": round(cpu, 1), "ram": ram_proceso(pid)}
+            for cpu, pid, nombre in lista[:cuantos]]
+
+
+class Muestreador:
+    """Guarda la lectura anterior para calcular los porcentajes por diferencias."""
+
+    def __init__(self):
+        self.previa = None
+
+    def crudo(self):
+        return {"mono": time.monotonic(),
+                "cpu": parsear_cpu_stat(leer("proc", "stat")),
+                "procs": leer_procesos(),
+                "disk": parsear_diskstats(leer("proc", "diskstats"))}
+
+    def base(self):
+        self.previa = self.crudo()
+
+    def muestrear(self):
+        ahora = self.crudo()
+        antes, self.previa = self.previa, ahora
+        dt = ahora["mono"] - antes["mono"] if antes else 0
+        total_a, nuc_a = antes["cpu"] if antes else (None, {})
+        total_b, nuc_b = ahora["cpu"]
+        indices = sorted(nuc_b)
+        mhz = [frecuencia_mhz(n) for n in indices]
+        temps = leer_temperaturas()
+        cpu = {"total": porcentaje_cpu(total_a, total_b),
+               "nucleos": [porcentaje_cpu(nuc_a.get(n), nuc_b[n]) for n in indices] if antes else None,
+               "mhz": mhz if any(m is not None for m in mhz) else None,
+               "temp": temperatura_cpu(temps)}
+        dev = dispositivo_raiz()
+        lectura = escritura = None
+        if antes and dev:
+            lectura, escritura = io_disco(antes["disk"].get(dev), ahora["disk"].get(dev), dt)
+        discos = []
+        for punto in puntos_de_disco():
+            u = uso_disco(punto)
+            if u:
+                u["lectura"], u["escritura"] = (lectura, escritura) if punto == "/" else (None, None)
+                discos.append(u)
+        return {"cpu": cpu, "ram": leer_ram(), "temp": temps,
+                "gpu": {"nvidia": estado_nvidia(), "temp": None},
+                "disco": discos or None, "bateria": leer_bateria(), "cargador": leer_cargador(),
+                "uptime": leer_uptime(),
+                "procesos": procesos_top(antes["procs"], ahora["procs"], dt) if antes else None}
+
+
+def armar_instante(med, t, intervalo, fallidas=None):
+    """Instante en el formato de docs/control-center.md. 'fallidas' (lista de unidades
+    systemd fallidas o None) es un campo extra para que evaluar() siga siendo puro."""
+    inst = {"v": VERSION_DATOS, "t": int(t), "intervalo": intervalo}
+    inst.update(med)
+    inst["fallidas"] = fallidas
+    inst["estado"], inst["alertas"] = "ONLINE", 0
+    return inst
+
+
+# ---------------------------------------------------------------------------
+# Estado global (funcion pura) y privacidad
+# ---------------------------------------------------------------------------
+
+def evaluar(inst, u=None):
+    """(estado, motivos) a partir de un instante y los umbrales. Motivos: lista de
+    {"gravedad","componente","texto"}; por componente solo se informa lo mas grave."""
+    u = u or UMBRALES
+    motivos = []
+
+    def nuevo(gravedad, componente, texto):
+        motivos.append({"gravedad": gravedad, "componente": componente, "texto": texto})
+
+    temp = (inst.get("cpu") or {}).get("temp")
+    if temp is not None:
+        if temp >= u["temp_critico"]:
+            nuevo("CRITICAL", "cpu", f"Temperatura de la CPU a {temp:.0f} °C")
+        elif temp >= u["temp_aviso"]:
+            nuevo("WARNING", "cpu", f"Temperatura de la CPU a {temp:.0f} °C")
+    for d in inst.get("disco") or []:
+        if d.get("total"):
+            pct = 100.0 * d["usado"] / d["total"]
+            if pct >= u["disco_critico"]:
+                nuevo("CRITICAL", "disco", f"Disco {d['punto']} al {pct:.0f} %")
+            elif pct >= u["disco_aviso"]:
+                nuevo("WARNING", "disco", f"Disco {d['punto']} al {pct:.0f} %")
+    bat = inst.get("bateria")
+    if bat and bat.get("nivel") is not None and bat.get("estado") == "descargando":
+        if bat["nivel"] <= u["bateria_critico"]:
+            nuevo("CRITICAL", "bateria", f"Batería al {bat['nivel']} %")
+        elif bat["nivel"] <= u["bateria_aviso"]:
+            nuevo("WARNING", "bateria", f"Batería al {bat['nivel']} %")
+    ram = inst.get("ram")
+    if ram:
+        if ram.get("total"):
+            libre = 100.0 * (ram["total"] - ram["usada"]) / ram["total"]
+            if libre < u["ram_libre_critico"]:
+                nuevo("CRITICAL", "ram", f"Memoria disponible al {libre:.0f} %")
+        if ram.get("swap_total", 0) > 0 and 100.0 * ram["swap"] / ram["swap_total"] > u["swap_aviso"]:
+            nuevo("WARNING", "swap", f"Swap usada al {100.0 * ram['swap'] / ram['swap_total']:.0f} %")
+        if ram.get("presion") is not None and ram["presion"] > u["presion_aviso"]:
+            nuevo("WARNING", "ram", f"Presión de memoria alta ({ram['presion']:.1f})")
+    fallidas = inst.get("fallidas")
+    if fallidas:
+        nuevo("WARNING", "systemd", f"Unidades fallidas: {', '.join(fallidas[:3])}"
+              + ("…" if len(fallidas) > 3 else ""))
+    if any(m["gravedad"] == "CRITICAL" for m in motivos):
+        return "CRITICAL", motivos
+    return ("WARNING" if motivos else "ONLINE"), motivos
+
+
+def resumen_privacidad(unidad_activa=None):
+    """Resumen de cortafuegos. No afirma que el sistema este protegido, solo lo que se ve.
+    unidad_activa: True/False segun ActiveState de ufw.service, None si no se pudo saber."""
+    conf = leer("etc", "ufw", "ufw.conf")
+    if conf is None:
+        return {"estado": "UNAVAILABLE", "detalles": ["El cortafuegos (UFW) no está instalado"]}
+    activado = any(l.strip().replace(" ", "").upper() == "ENABLED=YES" for l in conf.splitlines())
+    if activado and unidad_activa:
+        politica = (leer("etc", "default", "ufw") or "").replace('"', "").replace(" ", "")
+        denegado = any(l.startswith("DEFAULT_INPUT_POLICY=") and l.split("=", 1)[1] in ("DROP", "REJECT")
+                       for l in politica.splitlines())
+        return {"estado": "SECURE",
+                "detalles": ["Cortafuegos activo: entrante denegado por defecto" if denegado
+                             else "Cortafuegos activo"]}
+    if not activado:
+        return {"estado": "WARNING", "detalles": ["El cortafuegos (UFW) está desactivado"]}
+    return {"estado": "WARNING", "detalles": ["El cortafuegos (UFW) está configurado pero su servicio no está activo"]}
+
+
+def anillo_agregar(anillo, inst):
+    """Muestra reducida para el anillo en RAM (la ultima hora)."""
+    anillo.append({"t": inst["t"], "cpu": (inst.get("cpu") or {}).get("total"),
+                   "ram": (inst.get("ram") or {}).get("usada"),
+                   "temp": (inst.get("cpu") or {}).get("temp")})
+
+
+# ---------------------------------------------------------------------------
+# Bus: D-Bus con Gio (python3-gi). Importacion perezosa: sin gi el resto sigue valiendo.
+# ---------------------------------------------------------------------------
+
+def _gi():
+    import gi
+    gi.require_version("GLib", "2.0")
+    gi.require_version("Gio", "2.0")
+    from gi.repository import GLib, Gio
+    return GLib, Gio
+
+
+SYSTEMD = ("org.freedesktop.systemd1", "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager")
+PPD = ("net.hadess.PowerProfiles", "/net/hadess/PowerProfiles")
+
+
+def _llamar(con, destino, objeto, interfaz, metodo, params, cb):
+    """Llamada asincrona; cb(resultado_desempaquetado | None)."""
+    GLib, Gio = _gi()
+
+    def listo(fuente, res, _datos):
+        try:
+            valor = fuente.call_finish(res).unpack()
+        except Exception:
+            valor = None
+        try:
+            cb(valor)
+        except Exception:
+            registrar("error en una respuesta de D-Bus:\n" + traceback.format_exc())
+
+    con.call(destino, objeto, interfaz, metodo, params, None, Gio.DBusCallFlags.NONE, 3000, None, listo, None)
+
+
+def consultar_fallidas(cb):
+    """Unidades en estado failed del bus de sistema y del de sesion: cb(lista | None)."""
+    GLib, Gio = _gi()
+    resultados = {}
+
+    def fin(tipo, valor):
+        resultados[tipo] = None if valor is None else [u[0] for u in valor[0]]
+        if len(resultados) == 2:
+            listas = [r for r in resultados.values() if r is not None]
+            cb(sorted(set(sum(listas, []))) if listas else None)
+
+    for tipo in (Gio.BusType.SYSTEM, Gio.BusType.SESSION):
+        try:
+            con = Gio.bus_get_sync(tipo, None)
+        except Exception:
+            fin(tipo, None)
+            continue
+        _llamar(con, SYSTEMD[0], SYSTEMD[1], SYSTEMD[2], "ListUnitsFiltered",
+                GLib.Variant("(as)", (["failed"],)), functools.partial(fin, tipo))
+
+
+def consultar_unidad_activa(unidad, cb):
+    """ActiveState == 'active' de una unidad del bus de sistema: cb(True|False|None)."""
+    GLib, Gio = _gi()
+    try:
+        con = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    except Exception:
+        cb(None)
+        return
+
+    def tiene_objeto(valor):
+        if not valor:
+            cb(None)
+            return
+        _llamar(con, SYSTEMD[0], valor[0], "org.freedesktop.DBus.Properties", "Get",
+                GLib.Variant("(ss)", ("org.freedesktop.systemd1.Unit", "ActiveState")),
+                lambda v: cb(None if not v else v[0] == "active"))
+
+    _llamar(con, SYSTEMD[0], SYSTEMD[1], SYSTEMD[2], "LoadUnit", GLib.Variant("(s)", (unidad,)), tiene_objeto)
+
+
+def vigilar_perfil(cb):
+    """Perfil activo de power-profiles-daemon: cb(valor | None) ahora y en cada cambio."""
+    GLib, Gio = _gi()
+    try:
+        con = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    except Exception:
+        cb(None)
+        return None
+
+    def cambio(_con, _emisor, _objeto, _iface, _senal, params, _datos):
+        try:
+            _interfaz, cambiadas, _inval = params.unpack()
+            if "ActiveProfile" in cambiadas:
+                cb(cambiadas["ActiveProfile"])
+        except Exception:
+            registrar("error en PropertiesChanged:\n" + traceback.format_exc())
+
+    suscripcion = con.signal_subscribe(PPD[0], "org.freedesktop.DBus.Properties", "PropertiesChanged",
+                                       PPD[1], None, Gio.DBusSignalFlags.NONE, cambio, None)
+    _llamar(con, PPD[0], PPD[1], "org.freedesktop.DBus.Properties", "Get",
+            GLib.Variant("(ss)", (PPD[0], "ActiveProfile")), lambda v: cb(v[0] if v else None))
+    return con, suscripcion
+
+
+def avisar_barra():
+    """Pide a Waybar que relea el indicador (RTMIN+11). Solo si lleva unos segundos en
+    marcha: al arrancar aun no atiende la senal y una senal RTMIN sin atender la cerraria."""
+    if modo_prueba() or not shutil.which("pgrep"):
+        return
+    r = subprocess.run(["pgrep", "-x", "-u", str(os.getuid()), "waybar"],
+                       capture_output=True, text=True, timeout=3)
+    try:
+        with open("/proc/uptime", encoding="ascii") as f:
+            uptime = float(f.read().split()[0])
+        for pid in r.stdout.split():
+            with open(f"/proc/{pid}/stat", encoding="ascii") as f:
+                inicio = int(f.read().rsplit(")", 1)[1].split()[19]) / os.sysconf("SC_CLK_TCK")
+            if uptime - inicio < 3:
+                return
+    except (OSError, ValueError, IndexError):
+        return
+    if r.stdout.split():
+        subprocess.run(["pkill", f"-RTMIN+{SENAL_BARRA}", "-x", "-u", str(os.getuid()), "waybar"], timeout=3)
+
+
+# ---------------------------------------------------------------------------
+# API: una linea JSON por peticion, una linea JSON por respuesta
+# ---------------------------------------------------------------------------
+
+def procesar_linea(linea, ctx):
+    """Procesa una peticion y devuelve la respuesta como texto JSON (sin salto de linea).
+    ctx ofrece rapido() -> (intervalo, hasta), estado_doc() e instante_doc()."""
+    try:
+        peticion = json.loads(linea)
+    except ValueError:
+        return json.dumps({"ok": False, "error": "JSON mal formado"})
+    if not isinstance(peticion, dict):
+        return json.dumps({"ok": False, "error": "petición no válida"})
+    try:
+        orden = peticion.get("orden")
+        if orden == "rapido":
+            intervalo, hasta = ctx.rapido()
+            return json.dumps({"ok": True, "intervalo": intervalo, "hasta": hasta})
+        if orden in ("estado", "instante"):
+            doc = ctx.estado_doc() if orden == "estado" else ctx.instante_doc()
+            if doc is None:
+                return json.dumps({"ok": False, "error": "sin datos todavía"})
+            return json.dumps(doc, ensure_ascii=False)
+        return json.dumps({"ok": False, "error": "orden desconocida"})
+    except Exception:
+        registrar("error al atender una orden:\n" + traceback.format_exc())
+        return json.dumps({"ok": False, "error": "error interno"})
+
+
+# ---------------------------------------------------------------------------
+# Servicio: reune medicion, estado, bus y api
+# ---------------------------------------------------------------------------
+
+class Servicio:
+    def __init__(self, directorio=None):
+        self.dir = directorio or directorio_ejecucion()
+        self.muestreador = Muestreador()
+        self.anillo = collections.deque(maxlen=TAMANO_ANILLO)
+        self.actividad = collections.deque(maxlen=20)
+        self.instante = None
+        self.estado = None
+        self.motivos = []
+        self.perfil = None
+        self.fallidas = None
+        self.privacidad = resumen_privacidad(None)
+        self.desde = int(time.time())
+        self.rapido_hasta = 0.0
+        self.clave_aviso = None
+        self.previo_cargador = None
+        self.evento("Servicio iniciado")
+        # Lo siguiente solo se usa dentro del bucle de GLib
+        self._fuente = None
+        self._intervalo_programado = None
+        self._servidor = None
+        self._bucle = None
+
+    # -- estado y registro ---------------------------------------------------
+    def evento(self, texto):
+        self.actividad.append({"t": int(time.time()), "texto": texto})
+
+    def intervalo_actual(self):
+        return INTERVALO_RAPIDO if time.time() < self.rapido_hasta else INTERVALO_NORMAL
+
+    def rapido(self):
+        self.rapido_hasta = time.time() + DURACION_RAPIDO
+        if self._fuente is not None and self._intervalo_programado != INTERVALO_RAPIDO:
+            self._programar()
+        return INTERVALO_RAPIDO, int(self.rapido_hasta)
+
+    def instante_doc(self):
+        return self.instante
+
+    def estado_doc(self):
+        if self.estado is None:
+            return None
+        return {"v": VERSION_DATOS, "t": int(time.time()), "estado": self.estado, "motivos": self.motivos,
+                "perfil": {"activo": self.perfil, "fuente": "power-profiles-daemon"},
+                "privacidad": self.privacidad, "actividad": list(self.actividad),
+                "servicio": {"pid": os.getpid(), "desde": self.desde, "intervalo": self.intervalo_actual()}}
+
+    # -- ciclo de medicion ---------------------------------------------------
+    def muestrear(self):
+        med = self.muestreador.muestrear()
+        inst = armar_instante(med, time.time(), self.intervalo_actual(), self.fallidas)
+        estado, motivos = evaluar(inst, UMBRALES)
+        inst["estado"], inst["alertas"] = estado, len(motivos)
+        self.instante = inst
+        anillo_agregar(self.anillo, inst)
+        escribir_json(os.path.join(self.dir, "instante.json"), inst)
+        self.publicar(estado, motivos)
+
+    def publicar(self, estado, motivos):
+        """Anota los cambios, reescribe estado.json y avisa a Waybar si algo visible cambio."""
+        if self.estado is not None and estado != self.estado:
+            self.evento(f"Estado: {self.estado} → {estado}")
+        self.estado, self.motivos = estado, motivos
+        cargador = (self.instante or {}).get("cargador")
+        if self.previo_cargador is not None and cargador is not None and cargador != self.previo_cargador:
+            self.evento("Cargador conectado" if cargador else "Cargador desconectado")
+        if cargador is not None:
+            self.previo_cargador = cargador
+        escribir_json(os.path.join(self.dir, "estado.json"), self.estado_doc())
+        clave = (estado, self.perfil, len(motivos), self.privacidad["estado"])
+        if clave != self.clave_aviso:
+            self.clave_aviso = clave
+            try:
+                avisar_barra()
+            except Exception:
+                registrar("no se pudo avisar a Waybar:\n" + traceback.format_exc())
+
+    # -- bus -----------------------------------------------------------------
+    def poner_perfil(self, valor):
+        if valor == self.perfil:
+            return
+        if self.perfil is not None or valor is not None:
+            self.evento(f"Perfil de energía: {valor or 'N/D'}")
+        self.perfil = valor
+        if self.instante is not None:
+            self.publicar(self.estado, self.motivos)
+
+    def refrescar_lento(self):
+        """Unidades fallidas y cortafuegos: cada 60 s, no en cada muestra."""
+        def con_fallidas(lista):
+            self.fallidas = lista
+
+        def con_ufw(activa):
+            self.privacidad = resumen_privacidad(activa)
+
+        consultar_fallidas(con_fallidas)
+        if leer("etc", "ufw", "ufw.conf") is not None:
+            consultar_unidad_activa("ufw.service", con_ufw)
+        else:
+            self.privacidad = resumen_privacidad(None)
+
+    # -- bucle ---------------------------------------------------------------
+    def _programar(self):
+        GLib, _Gio = _gi()
+        if self._fuente is not None:
+            GLib.source_remove(self._fuente)
+        self._intervalo_programado = self.intervalo_actual()
+        self._fuente = GLib.timeout_add(self._intervalo_programado * 1000, self._tick)
+
+    def _tick(self):
+        self._fuente = None
+        try:
+            self.muestrear()
+        except Exception:
+            registrar("error al medir:\n" + traceback.format_exc())
+        finally:
+            self._programar()
+        return False
+
+    @protegido(True)
+    def _lento(self):
+        self.refrescar_lento()
+        return True
+
+    def _iniciar_api(self, GLib):
+        import socket
+        destino = os.path.join(self.dir, "control.sock")
+        try:
+            os.unlink(destino)
+        except OSError:
+            pass
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        anterior = os.umask(0o177)
+        try:
+            s.bind(destino)
+        finally:
+            os.umask(anterior)
+        os.chmod(destino, 0o600)
+        s.listen(8)
+        s.setblocking(False)
+        self._servidor = s
+        GLib.io_add_watch(s.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN, self._aceptar)
+
+    @protegido(True)
+    def _aceptar(self, _fd, _cond):
+        GLib, _Gio = _gi()
+        try:
+            con, _ = self._servidor.accept()
+        except (BlockingIOError, InterruptedError):
+            return True
+        con.setblocking(False)
+        buf = bytearray()
+
+        @protegido(False)
+        def leer_cliente(_fd2, _cond2):
+            try:
+                datos = con.recv(65536)
+            except (BlockingIOError, InterruptedError):
+                return True
+            except OSError:
+                datos = b""
+            if datos:
+                buf.extend(datos)
+            if len(buf) > 262144:
+                con.close()
+                return False
+            final = not datos
+            while True:
+                if b"\n" in buf:
+                    linea, _, resto = bytes(buf).partition(b"\n")
+                    buf[:] = resto
+                elif final and buf.strip():
+                    linea = bytes(buf)
+                    buf.clear()
+                else:
+                    break
+                respuesta = procesar_linea(linea.decode("utf-8", "replace"), self)
+                try:
+                    con.settimeout(1.0)
+                    con.sendall(respuesta.encode("utf-8") + b"\n")
+                    con.setblocking(False)
+                except OSError:
+                    con.close()
+                    return False
+            if final:
+                con.close()
+                return False
+            return True
+
+        GLib.io_add_watch(con.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR,
+                          leer_cliente)
+        return True
+
+    def ejecutar(self):
+        import signal
+        GLib, _Gio = _gi()
+        self._bucle = GLib.MainLoop()
+        try:
+            self._iniciar_api(GLib)
+            self.muestreador.base()
+            self._perfil_bus = vigilar_perfil(self.poner_perfil)
+            self.refrescar_lento()
+            GLib.timeout_add_seconds(REFRESCO_LENTO, self._lento)
+            self._fuente = GLib.timeout_add(1000, self._tick)   # primera muestra con 1 s de deltas
+            self._intervalo_programado = 1
+            salir = lambda *_: (self._bucle.quit(), GLib.SOURCE_REMOVE)[1]
+            # GLibUnix en PyGObject reciente; GLib.unix_signal_add en versiones anteriores.
+            try:
+                from gi.repository import GLibUnix
+                anadir_senal = lambda s: GLibUnix.signal_add(GLib.PRIORITY_HIGH, s, salir)
+            except ImportError:
+                anadir_senal = lambda s: GLib.unix_signal_add(GLib.PRIORITY_HIGH, s, salir)
+            anadir_senal(signal.SIGTERM)
+            anadir_senal(signal.SIGINT)
+            self._bucle.run()
+        finally:
+            self.limpiar()
+
+    def limpiar(self):
+        try:
+            if self._servidor is not None:
+                self._servidor.close()
+        except OSError:
+            pass
+        try:
+            os.unlink(os.path.join(self.dir, "control.sock"))
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------------------
+# Programa
+# ---------------------------------------------------------------------------
+
+def medir():
+    """Una medicion inmediata: dos lecturas separadas 0,5 s."""
+    m = Muestreador()
+    m.base()
+    time.sleep(0.5)
+    inst = armar_instante(m.muestrear(), time.time(), INTERVALO_NORMAL, None)
+    inst["estado"], motivos = evaluar(inst, UMBRALES)
+    inst["alertas"] = len(motivos)
+    return inst
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Servicio de salud del sistema de Jaime0.")
+    sub = ap.add_subparsers(dest="orden", required=True)
+    sub.add_parser("ejecutar", help="ejecuta el servicio (bucle de GLib)")
+    pm = sub.add_parser("medir", help="una medicion inmediata en JSON")
+    pm.add_argument("--json", action="store_true", help="imprime JSON (es lo unico que hace)")
+    args = ap.parse_args(argv)
+    if args.orden == "medir":
+        print(json.dumps(medir(), ensure_ascii=False))
+        return 0
+    try:
+        Servicio().ejecutar()
+    except KeyboardInterrupt:
+        pass
+    except Exception:
+        registrar("error fatal:\n" + traceback.format_exc())
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -243,6 +243,9 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("jaime0-anclar vigilar")
     -- Notificaciones: swaync (o dunst si swaync no esta instalado).
     hl.exec_cmd("notificaciones iniciar")
+    -- Servicio del Control Center: medicion, estado global y (mas adelante) perfiles y reglas.
+    -- Va aparte de la interfaz: funciona aunque el Control Center este cerrado.
+    hl.exec_cmd("systemctl --user start jaime0-servicio.service")
     -- Si la NVIDIA espera a que se registre su clave (Secure Boot), un aviso al entrar.
     hl.exec_cmd("sh -c 'sleep 6; exec jaime0-nvidia aviso'")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
@@ -438,6 +441,7 @@ atajo(mainMod .. " + L",              "bloquear",          "Bloquear la pantalla
 atajo(mainMod .. " + SHIFT + R",      "hyprctl reload",    "Recargar la configuración de Hyprland")
 atajo("SHIFT + Print",                "captura pantalla",  "Captura de la pantalla entera (archivo y portapapeles)")
 atajo(mainMod .. " + F2",             "modo-noche",        "Modo noche (tonos cálidos)")
+atajo(mainMod .. " + I",              "jaime0-control",    "Control Center")
 atajo(mainMod .. " + SHIFT + C",      "hyprpicker --autocopy --format=hex --lowercase-hex --notify", "Selector de color (copia el color)")
 atajo(mainMod .. " + Print",          "captura ventana",   "Captura de la ventana activa (archivo y portapapeles)")
 
@@ -513,6 +517,15 @@ hl.window_rule({
     float  = true,
     center = true,
     size   = { "monitor_w*0.7", "monitor_h*0.75" },
+})
+
+-- Jaime0 Control Center (jaime0-control, en Quickshell)
+hl.window_rule({
+    name   = "flotante-control-center",
+    match  = { class = "^org\\.quickshell$", title = "^Jaime0 Control Center$" },
+    float  = true,
+    center = true,
+    size   = { "monitor_w*0.86", "monitor_h*0.86" },
 })
 
 -- Aplicacion de ajustes (jaime0-ajustes, en Quickshell)

@@ -1,0 +1,191 @@
+#!/usr/bin/python3 -I
+# jaime0-salud: cliente de solo lectura del servicio de salud (jaime0-servicio).
+#
+#   jaime0-salud [ahora]   resumen legible en espanol
+#   jaime0-salud --json    {"instante": ..., "estado": ... o null}
+#   jaime0-salud barra     una linea JSON para Waybar (sin red, sin esperar)
+#
+# No mide nada por su cuenta: lee instante.json y estado.json del directorio de ejecucion
+# ($XDG_RUNTIME_DIR/jaime0, o JAIME0_RUNTIME). Si el servicio esta parado, "ahora" y
+# "--json" piden una medicion puntual a "jaime0-servicio medir --json".
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+
+PROGRAMA = "jaime0-salud"
+EDAD_MAXIMA = 30        # segundos: datos frescos para el resumen
+EDAD_MAXIMA_BARRA = 60  # segundos: estado.json aun vale para la barra
+
+ICONOS_PERFIL = {"balanced": "\U000f0f85", "performance": "\U000f04c5", "power-saver": "\U000f0f86"}
+ICONO_DESCONOCIDO = "\U000f0f85"
+ICONO_ALERTA = "\U000f0026"
+
+
+def directorio_ejecucion():
+    d = os.environ.get("JAIME0_RUNTIME")
+    if d:
+        return d
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    return os.path.join(base, "jaime0") if base else None
+
+
+def leer_json(nombre):
+    """Documento JSON del directorio de ejecucion, o None si no existe o esta roto."""
+    d = directorio_ejecucion()
+    if not d:
+        return None
+    try:
+        with open(os.path.join(d, nombre), encoding="utf-8") as f:
+            doc = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def edad(doc):
+    """Segundos desde el campo "t" del documento (infinito si no lo tiene)."""
+    try:
+        return time.time() - float(doc["t"])
+    except (KeyError, TypeError, ValueError):
+        return float("inf")
+
+
+def fresco(doc, maximo):
+    return doc is not None and edad(doc) <= maximo
+
+
+def medicion_puntual():
+    """Ejecuta jaime0-servicio medir --json (junto a este programa o en PATH)."""
+    junto = os.path.join(os.path.dirname(os.path.realpath(__file__)), "jaime0-servicio")
+    programa = junto if os.path.exists(junto) else shutil.which("jaime0-servicio")
+    if not programa:
+        return None
+    try:
+        r = subprocess.run([sys.executable, "-I", programa, "medir", "--json"],
+                           capture_output=True, text=True, timeout=15)
+        doc = json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def obtener():
+    """(instante, estado, parado). Falla con (None, None, True) si ni el servicio ni la medicion puntual sirven."""
+    instante, estado = leer_json("instante.json"), leer_json("estado.json")
+    if fresco(instante, EDAD_MAXIMA):
+        return instante, (estado if fresco(estado, EDAD_MAXIMA) else None), False
+    return medicion_puntual(), None, True
+
+
+def duracion(segundos):
+    if segundos is None:
+        return "N/D"
+    d, resto = divmod(int(segundos), 86400)
+    h, resto = divmod(resto, 3600)
+    m = resto // 60
+    partes = ([f"{d} d"] if d else []) + ([f"{h} h"] if h or d else []) + [f"{m} min"]
+    return " ".join(partes)
+
+
+def resumen(instante, estado, parado=False):
+    """Texto legible en espanol a partir de los documentos del servicio."""
+    nombre_estado = instante.get("estado") or (estado or {}).get("estado") or "N/D"
+    L = [f"Jaime0 · SYSTEM {nombre_estado}"]
+    if parado:
+        L.append("Servicio parado: medición puntual")
+    L.append(f"Tiempo encendido: {duracion(instante.get('uptime'))}")
+    cpu = instante.get("cpu") or {}
+    total = cpu.get("total")
+    temp = cpu.get("temp")
+    L.append(f"CPU: {'N/D' if total is None else f'{total:.1f} %'}"
+             f" · temperatura {'N/D' if temp is None else f'{temp:.0f} °C'}")
+    ram = instante.get("ram")
+    if ram and ram.get("total"):
+        L.append(f"RAM: {ram['usada']} de {ram['total']} MiB ({100 * ram['usada'] / ram['total']:.0f} %)"
+                 f" · swap {ram.get('swap', 0)} de {ram.get('swap_total', 0)} MiB")
+    else:
+        L.append("RAM: N/D")
+    for d in instante.get("disco") or []:
+        pct = f" ({100 * d['usado'] / d['total']:.0f} %)" if d.get("total") else ""
+        L.append(f"Disco {d['punto']}: {d['usado']} de {d['total']} GiB{pct}")
+    bat = instante.get("bateria")
+    if bat:
+        t = f"Batería: {'N/D' if bat.get('nivel') is None else str(bat['nivel']) + ' %'} · {bat.get('estado', 'desconocido')}"
+        if bat.get("vatios") is not None:
+            t += f" · {bat['vatios']:.1f} W"
+        if bat.get("minutos_estimados") is not None:
+            t += f" · autonomía {duracion(bat['minutos_estimados'] * 60)} (estimado)"
+        L.append(t)
+    else:
+        L.append("Batería: N/D")
+    perfil = ((estado or {}).get("perfil") or {}).get("activo")
+    L.append(f"Perfil de energía: {perfil or 'N/D'}")
+    priv = (estado or {}).get("privacidad")
+    L.append(f"Privacidad: {priv['estado'] if priv else 'N/D'}")
+    motivos = (estado or {}).get("motivos")
+    n = instante.get("alertas", 0) or 0
+    L.append(f"Alertas: {n}")
+    for m in (motivos or [])[:6]:
+        L.append(f"  · [{m['gravedad']}] {m['texto']}")
+    return "\n".join(L)
+
+
+def perfil_actual_sin_servicio():
+    try:
+        r = subprocess.run(["powerprofilesctl", "get"], capture_output=True, text=True, timeout=3)
+        valor = r.stdout.strip()
+        return valor if r.returncode == 0 and valor else None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def barra():
+    """Diccionario para Waybar: text, class, tooltip."""
+    estado = leer_json("estado.json")
+    if not fresco(estado, EDAD_MAXIMA_BARRA):
+        perfil = perfil_actual_sin_servicio()
+        icono = ICONOS_PERFIL.get(perfil, ICONO_DESCONOCIDO)
+        return {"text": f"{icono} ", "class": "parado",
+                "tooltip": "Servicio de Jaime0 parado" + (f"\nPerfil: {perfil}" if perfil else "")}
+    nombre = estado.get("estado") if estado.get("estado") in ("ONLINE", "WARNING", "CRITICAL") else "ONLINE"
+    perfil = (estado.get("perfil") or {}).get("activo")
+    icono = ICONOS_PERFIL.get(perfil, ICONO_DESCONOCIDO)
+    alerta = f" {ICONO_ALERTA}" if nombre in ("WARNING", "CRITICAL") else ""
+    lineas = [f"Jaime0 · SYSTEM {nombre}", f"Perfil: {perfil or 'desconocido'}"]
+    for m in (estado.get("motivos") or [])[:4]:
+        lineas.append(f"· {m.get('texto', '')}")
+    lineas.append("Clic: Control Center")
+    return {"text": f"{icono}{alerta} ", "class": nombre.lower(), "tooltip": "\n".join(lineas)}
+
+
+def main(argv=None):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Estado de salud del sistema de Jaime0.")
+    ap.add_argument("orden", nargs="?", default="ahora", choices=["ahora", "barra"],
+                    help="ahora (resumen, por defecto) o barra (una línea JSON para Waybar)")
+    ap.add_argument("--json", action="store_true", help="imprime instante y estado en JSON")
+    args = ap.parse_args(argv)
+    if args.orden == "barra":
+        print(json.dumps(barra(), ensure_ascii=False))
+        return 0
+    instante, estado, parado = obtener()
+    if instante is None:
+        print(f"{PROGRAMA}: no hay datos: el servicio está parado y la medición puntual falló.", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps({"instante": instante, "estado": estado}, ensure_ascii=False))
+    else:
+        print(resumen(instante, estado, parado))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -56,7 +56,7 @@ tooltip label {
 #pulseaudio,
 #network,
 #bluetooth,
-#power-profiles-daemon,
+#custom-jaime0,
 #battery,
 #clock,
 #custom-notificaciones,
@@ -78,9 +78,10 @@ tooltip label {
 #bluetooth.off,
 #bluetooth.disabled { color: @apagado; }
 #bluetooth.connected { color: @medio; }
-#power-profiles-daemon             { color: @medio; }
-#power-profiles-daemon.performance { color: @acento; }
-#power-profiles-daemon.power-saver { color: @gris; }
+#custom-jaime0          { color: @medio; }
+#custom-jaime0.warning  { color: @ambar; }
+#custom-jaime0.critical { color: @rojo; }
+#custom-jaime0.parado   { color: @apagado; }
 #battery            { color: @medio; }
 #battery.charging,
 #battery.plugged    { color: @medio; }
@@ -156,7 +157,7 @@ tooltip label {
 #pulseaudio:hover,
 #network:hover,
 #bluetooth:hover,
-#power-profiles-daemon:hover,
+#custom-jaime0:hover,
 #clock:hover,
 #custom-notificaciones:hover,
 #custom-bandeja:hover {

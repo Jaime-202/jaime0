@@ -32,6 +32,8 @@ mokutil
 # Energia del portatil: perfiles (ahorro, equilibrado, rendimiento) e indicador en la barra;
 # thermald evita que el procesador se caliente de mas.
 power-profiles-daemon
+# Eventos de bateria y cargador para el servicio de Jaime0 (Control Center).
+upower
 thermald
 
 # Visores: video, imagenes, PDF y comprimidos.
