@@ -79,7 +79,23 @@ ESQUEMA = {
     "widgets_tarjetas":    {"tipo": "sino", "grupo": "Widgets", "etiqueta": "Widgets sobre tarjeta"},
     "reloj_formato":       {"tipo": "opcion", "opciones": ["24h", "12h"], "grupo": "Widgets", "etiqueta": "Formato del reloj"},
     "tiempo_ciudad":       {"tipo": "texto", "max": 60, "grupo": "Widgets", "etiqueta": "Ciudad para el tiempo"},
+    # Control Center (jaime0-servicio): umbrales de aviso y duracion del historico.
+    "umbral_temp_aviso":     {"tipo": "entero", "min": 60, "max": 100, "grupo": "Control Center", "etiqueta": "Temperatura de la CPU: aviso (°C)"},
+    "umbral_temp_critico":   {"tipo": "entero", "min": 70, "max": 105, "grupo": "Control Center", "etiqueta": "Temperatura de la CPU: crítico (°C)"},
+    "umbral_disco_aviso":    {"tipo": "entero", "min": 50, "max": 99, "grupo": "Control Center", "etiqueta": "Disco ocupado: aviso (%)"},
+    "umbral_disco_critico":  {"tipo": "entero", "min": 60, "max": 100, "grupo": "Control Center", "etiqueta": "Disco ocupado: crítico (%)"},
+    "umbral_bateria_aviso":  {"tipo": "entero", "min": 5, "max": 50, "grupo": "Control Center", "etiqueta": "Batería: aviso (%)"},
+    "umbral_bateria_critico": {"tipo": "entero", "min": 2, "max": 30, "grupo": "Control Center", "etiqueta": "Batería: crítico (%)"},
+    "historial_dias":        {"tipo": "entero", "min": 7, "max": 365, "grupo": "Control Center", "etiqueta": "Días de historial de salud"},
 }
+
+# Parejas (menor, mayor) que deben cumplir menor < mayor. En la bateria el aviso es el
+# nivel mas alto: el critico debe ser menor que el aviso.
+PAREJAS = (
+    ("umbral_temp_aviso", "umbral_temp_critico", "la temperatura de aviso debe ser menor que la crítica"),
+    ("umbral_disco_aviso", "umbral_disco_critico", "el umbral de disco de aviso debe ser menor que el crítico"),
+    ("umbral_bateria_critico", "umbral_bateria_aviso", "el nivel crítico de batería debe ser menor que el de aviso"),
+)
 POSICIONES_WIDGET = ["no", "arriba-izquierda", "arriba-centro", "arriba-derecha", "centro",
                      "abajo-izquierda", "abajo-centro", "abajo-derecha"]
 for _clave, _e in ESQUEMA.items():
@@ -96,6 +112,9 @@ RESERVA = {
     "widget_reloj": "no", "widget_musica": "no", "widget_tiempo": "no", "widget_sonido": "no",
     "widget_sistema": "no", "widget_calendario": "no", "widgets_tarjetas": "si",
     "reloj_formato": "24h", "tiempo_ciudad": "",
+    "umbral_temp_aviso": "85", "umbral_temp_critico": "95", "umbral_disco_aviso": "85",
+    "umbral_disco_critico": "95", "umbral_bateria_aviso": "15", "umbral_bateria_critico": "5",
+    "historial_dias": "90",
 }
 # Ciudad: letras de cualquier idioma, espacios y signos de nombres de lugar.
 CIUDAD = re.compile(r"^[^\W\d_](?:[^\W_]|[ .,'’()-])*$")
@@ -226,6 +245,17 @@ def efectivos():
         except Error as e:
             avisos.append(f"Se ignora {e} (se usa el valor predeterminado)")
     return valores, propios, temas, avisos
+
+
+def comprobar_parejas(valores):
+    """valores: clave -> texto. Lanza Error si alguna pareja de umbrales no se cumple."""
+    for menor, mayor, motivo in PAREJAS:
+        try:
+            a, b = int(valores[menor]), int(valores[mayor])
+        except (KeyError, ValueError):
+            continue
+        if not a < b:
+            raise Error(f"{menor} = {a} y {mayor} = {b}: {motivo}")
 
 
 def color_acento(valor, temas):
@@ -417,7 +447,7 @@ def orden_ver(args):
             grupo = e["grupo"]
             print(f"\n{grupo}")
         marca = "*" if clave in propios else " "
-        print(f" {marca} {clave:<20} {valores[clave]:<12} {e['etiqueta']}")
+        print(f" {marca} {clave:<24} {valores[clave]:<12} {e['etiqueta']}")
     print(f"\n * = cambiado por ti en {archivo_usuario()}")
     print(f" Temas de acento: {', '.join(temas)}")
     mostrar_avisos(avisos)
@@ -431,6 +461,9 @@ def orden_poner(args):
     cambios = {}
     for clave, texto in zip(args[::2], args[1::2]):
         cambios[clave] = validar(clave, texto, temas)  # todo o nada
+    valores, _, _, _ = efectivos()
+    valores.update(cambios)
+    comprobar_parejas(valores)       # validacion cruzada de umbrales, tambien todo o nada
     # Igual que el predeterminado: no se guarda, asi sigue al predeterminado si cambia.
     guardar({c: (None if v == predet[c] else v) for c, v in cambios.items()})
     _, avisos = aplicar()
@@ -449,6 +482,11 @@ def orden_restablecer(args):
         desconocidas = [c for c in args if c not in ESQUEMA]
         raise Error(f"No existe el ajuste '{desconocidas[0]}'" if desconocidas
                     else f"Uso: {PROGRAMA} restablecer CLAVE [CLAVE ...] | --todo")
+    # Volver al predeterminado tampoco puede dejar los umbrales incoherentes.
+    predet, _ = predeterminados()
+    valores, _, _, _ = efectivos()
+    valores.update({c: predet[c] for c in claves})
+    comprobar_parejas(valores)
     guardar({c: None for c in claves})
     _, avisos = aplicar()
     print("Valores predeterminados en: " + ", ".join(claves))

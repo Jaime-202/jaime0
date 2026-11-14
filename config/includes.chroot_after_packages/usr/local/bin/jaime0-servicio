@@ -1,5 +1,6 @@
 #!/usr/bin/python3 -I
-# jaime0-servicio: servicio de salud del sistema del Control Center (Fase 2).
+# jaime0-servicio: servicio de salud del sistema del Control Center (Fases 2 y 3: historico,
+# incidencias, eventos, SMART y umbrales de jaime0-ajustes).
 #
 #   jaime0-servicio ejecutar        demonio (bucle de GLib): mide, evalua, escribe
 #                                   instante.json y estado.json y atiende control.sock
@@ -11,17 +12,21 @@
 # aviso a Waybar cuando algo cambia). Secciones: medicion, estado, bus, api, servicio.
 #
 # Pruebas: JAIME0_RAIZ apunta a un sistema de mentira para /proc y /sys (solo sin root);
-# JAIME0_RUNTIME sustituye a $XDG_RUNTIME_DIR/jaime0.
+# JAIME0_RUNTIME sustituye a $XDG_RUNTIME_DIR/jaime0 y JAIME0_ESTADO a ~/.local/state/jaime0.
 
 import argparse
 import collections
+import datetime
 import functools
 import glob
 import json
+import math
 import os
+import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 
@@ -33,8 +38,25 @@ INTERVALO_RAPIDO = 2        # segundos mientras la interfaz esta abierta
 DURACION_RAPIDO = 15        # segundos que dura cada peticion "rapido"
 REFRESCO_LENTO = 60         # segundos entre consultas de unidades fallidas y cortafuegos
 TAMANO_ANILLO = 3600        # muestras como maximo (una hora a 1 s; sobra a 2 s y a 10 s)
+DURACION_ANILLO = 3600      # segundos que se conservan las muestras del anillo
+VOLCADO_CADA = 300          # segundos entre volcados del historico a disco
+SMART_CADA = 600            # segundos entre consultas SMART a udisks2
+FACTOR_HUECO = 3            # hueco si entre dos muestras pasa mas de 3 x el intervalo
+RETENCION_MINUTOS = 2 * 86400   # los archivos diarios (agregados de minuto) duran 2 dias
+MAX_PUNTOS = 720            # puntos como maximo en una serie
+MAX_EVENTOS = 200           # eventos de actividad en RAM
+MAX_INCIDENCIAS = 500       # lineas de incidencias.jsonl
+MUESTRAS_INCIDENCIA = 3     # muestras seguidas para abrir o cerrar una incidencia
+MUESTRAS_PICO_CPU = 2
+UMBRAL_PICO_CPU = 85.0
+UMBRAL_PICO_RAM = 90.0
+SALTO_TEMPERATURA = 15.0    # grados entre muestras consecutivas
+RANGOS = {"5m": 300, "1h": 3600, "24h": 86400}      # "historia" no tiene ventana fija
+METRICAS = ("cpu", "ram", "swap", "presion", "temp", "gpu_temp", "bateria", "vatios",
+            "lectura", "escritura", "disco")
 
-# Umbrales unicos del estado global (ver evaluar).
+# Umbrales unicos del estado global (ver evaluar). Por defecto; los de jaime0-ajustes los
+# sustituyen (ver cargar_umbrales).
 UMBRALES = {
     "temp_aviso": 85.0, "temp_critico": 95.0,          # cpu.temp, en grados
     "disco_aviso": 85.0, "disco_critico": 95.0,        # % ocupado
@@ -42,7 +64,20 @@ UMBRALES = {
     "ram_libre_critico": 5.0,                          # % disponible por debajo
     "swap_aviso": 50.0,                                # % de swap usada por encima
     "presion_aviso": 20.0,                             # avg10 de /proc/pressure/memory
+    "historial_dias": 90,                              # duracion del historico de 15 min
 }
+# Ajuste de jaime0-ajustes -> clave de UMBRALES
+AJUSTES_UMBRALES = {
+    "umbral_temp_aviso": "temp_aviso", "umbral_temp_critico": "temp_critico",
+    "umbral_disco_aviso": "disco_aviso", "umbral_disco_critico": "disco_critico",
+    "umbral_bateria_aviso": "bateria_aviso", "umbral_bateria_critico": "bateria_critico",
+    "historial_dias": "historial_dias",
+}
+
+
+def carpeta_config():
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+    return os.path.join(base, "jaime0")
 
 
 def es_root():
@@ -69,6 +104,16 @@ def directorio_ejecucion():
         base = os.environ.get("XDG_RUNTIME_DIR")
         if not base:
             raise RuntimeError("no hay XDG_RUNTIME_DIR ni JAIME0_RUNTIME")
+        d = os.path.join(base, "jaime0")
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    return d
+
+
+def directorio_estado():
+    """JAIME0_ESTADO, o $XDG_STATE_HOME/jaime0, o ~/.local/state/jaime0, creado con 0700."""
+    d = os.environ.get("JAIME0_ESTADO")
+    if not d:
+        base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
         d = os.path.join(base, "jaime0")
     os.makedirs(d, mode=0o700, exist_ok=True)
     return d
@@ -225,19 +270,49 @@ def temperatura_cpu(temps):
     return max(nucleos) if nucleos else None
 
 
-def estado_nvidia():
-    """'activa' | 'suspendida' | 'sin-driver' | None (no hay GPU NVIDIA). Nunca ejecuta
-    nvidia-smi: leer su temperatura despertaria la grafica."""
+def dispositivo_nvidia():
+    """Carpeta de sysfs de la primera GPU NVIDIA (clase 3D o VGA), o None."""
     for dev in sorted(glob.glob(ruta("sys", "bus", "pci", "devices", "*"))):
         if leer_ruta(os.path.join(dev, "vendor")) != "0x10de":
             continue
         clase = (leer_ruta(os.path.join(dev, "class")) or "")[:6]
-        if clase not in ("0x0300", "0x0302"):
-            continue
-        if not os.path.exists(os.path.join(dev, "driver")):
-            return "sin-driver"
-        return "suspendida" if leer_ruta(os.path.join(dev, "power", "runtime_status")) == "suspended" else "activa"
+        if clase in ("0x0300", "0x0302"):
+            return dev
     return None
+
+
+def estado_nvidia():
+    """'activa' | 'suspendida' | 'sin-driver' | None (no hay GPU NVIDIA). Nunca ejecuta
+    nvidia-smi: leer su temperatura despertaria la grafica."""
+    dev = dispositivo_nvidia()
+    if dev is None:
+        return None
+    if not os.path.exists(os.path.join(dev, "driver")):
+        return "sin-driver"
+    return "suspendida" if leer_ruta(os.path.join(dev, "power", "runtime_status")) == "suspended" else "activa"
+
+
+def nvidia_activa():
+    """True solo si power/runtime_status vale exactamente 'active' (y hay driver)."""
+    dev = dispositivo_nvidia()
+    return (dev is not None and os.path.exists(os.path.join(dev, "driver"))
+            and leer_ruta(os.path.join(dev, "power", "runtime_status")) == "active")
+
+
+def temperatura_nvidia(ejecutar=None):
+    """Temperatura de la GPU NVIDIA con nvidia-smi, SOLO si esta activa: con la GPU
+    suspendida devuelve None sin ejecutar nada (nvidia-smi la despertaria)."""
+    if not nvidia_activa():
+        return None
+    ejecutar = ejecutar or subprocess.run
+    try:
+        r = ejecutar(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+                     capture_output=True, text=True, timeout=3)
+        if r.returncode != 0:
+            return None
+        return float((r.stdout or "").strip().splitlines()[0])
+    except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+        return None
 
 
 def uso_disco(punto):
@@ -440,12 +515,14 @@ class Muestreador:
                 "procesos": procesos_top(antes["procs"], ahora["procs"], dt) if antes else None}
 
 
-def armar_instante(med, t, intervalo, fallidas=None):
+def armar_instante(med, t, intervalo, fallidas=None, smart=None):
     """Instante en el formato de docs/control-center.md. 'fallidas' (lista de unidades
-    systemd fallidas o None) es un campo extra para que evaluar() siga siendo puro."""
+    systemd fallidas o None) y 'smart' (lista de discos o None) son campos extra para que
+    evaluar() siga siendo puro."""
     inst = {"v": VERSION_DATOS, "t": int(t), "intervalo": intervalo}
     inst.update(med)
     inst["fallidas"] = fallidas
+    inst["smart"] = smart
     inst["estado"], inst["alertas"] = "ONLINE", 0
     return inst
 
@@ -520,11 +597,731 @@ def resumen_privacidad(unidad_activa=None):
     return {"estado": "WARNING", "detalles": ["El cortafuegos (UFW) está configurado pero su servicio no está activo"]}
 
 
+def muestra_desde_instante(inst):
+    """Muestra reducida para el anillo y el historico: una por metrica, None si no hay dato.
+    ram, swap y disco son % usado; presion es avg10; lectura/escritura en MB/s del disco '/'."""
+    cpu, ram = inst.get("cpu") or {}, inst.get("ram") or {}
+    bat, gpu = inst.get("bateria") or {}, inst.get("gpu") or {}
+    raiz_disco = next((d for d in inst.get("disco") or [] if d.get("punto") == "/"), None) or {}
+
+    def pct(a, b):
+        return round(100.0 * a / b, 1) if a is not None and b else None
+
+    return {"t": int(inst["t"]), "cpu": cpu.get("total"),
+            "ram": pct(ram.get("usada"), ram.get("total")),
+            "swap": pct(ram.get("swap"), ram.get("swap_total")),
+            "presion": ram.get("presion"), "temp": cpu.get("temp"), "gpu_temp": gpu.get("temp"),
+            "bateria": bat.get("nivel"), "vatios": bat.get("vatios"),
+            "lectura": raiz_disco.get("lectura"), "escritura": raiz_disco.get("escritura"),
+            "disco": pct(raiz_disco.get("usado"), raiz_disco.get("total"))}
+
+
 def anillo_agregar(anillo, inst):
-    """Muestra reducida para el anillo en RAM (la ultima hora)."""
-    anillo.append({"t": inst["t"], "cpu": (inst.get("cpu") or {}).get("total"),
-                   "ram": (inst.get("ram") or {}).get("usada"),
-                   "temp": (inst.get("cpu") or {}).get("temp")})
+    """Anade la muestra al anillo en RAM y descarta lo que pase de una hora."""
+    m = muestra_desde_instante(inst)
+    anillo.append(m)
+    while anillo and anillo[0]["t"] < m["t"] - DURACION_ANILLO:
+        anillo.popleft()
+    return m
+
+
+# ---------------------------------------------------------------------------
+# Historico: agregados de minuto y de 15 minutos, huecos, JSONL
+# ---------------------------------------------------------------------------
+
+def leer_jsonl(archivo):
+    """Documentos (dict) de un JSONL. Las lineas rotas o vacias se ignoran."""
+    docs = []
+    try:
+        with open(archivo, encoding="utf-8", errors="replace") as f:
+            for linea in f:
+                linea = linea.strip()
+                if not linea:
+                    continue
+                try:
+                    d = json.loads(linea)
+                except ValueError:
+                    continue
+                if isinstance(d, dict):
+                    docs.append(d)
+    except OSError:
+        pass
+    return docs
+
+
+def anexar_jsonl(archivo, docs):
+    """Anexa lineas completas con una sola escritura. Si el archivo no termina en salto de
+    linea (escritura cortada), empieza por uno para no pegarse a la linea rota."""
+    if not docs:
+        return
+    texto = "".join(json.dumps(d, ensure_ascii=False, separators=(",", ":")) + "\n" for d in docs)
+    prefijo = ""
+    try:
+        with open(archivo, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            if f.tell() > 0:
+                f.seek(-1, os.SEEK_END)
+                if f.read(1) != b"\n":
+                    prefijo = "\n"
+    except OSError:
+        pass
+    with open(archivo, "a", encoding="utf-8", newline="\n") as f:
+        f.write(prefijo + texto)
+
+
+def reescribir_jsonl(archivo, docs):
+    """Reescritura atomica (temporal y os.replace)."""
+    tmp = archivo + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as f:
+        for d in docs:
+            f.write(json.dumps(d, ensure_ascii=False, separators=(",", ":")) + "\n")
+    os.replace(tmp, archivo)
+
+
+def pseudo_agregado(m):
+    """Una muestra como agregado de un solo punto: cada metrica [v, v, v] o None."""
+    p = {"t": m["t"], "n": 1}
+    for k in METRICAS:
+        v = m.get(k)
+        p[k] = None if v is None else [v, v, v]
+    return p
+
+
+def combinar(items, t0):
+    """Agrega agregados (o pseudo-agregados) en uno: minimo de los minimos, media de las
+    medias ponderada por n y maximo de los maximos, ignorando None (todo None -> None)."""
+    out = {"v": VERSION_DATOS, "t": int(t0), "n": sum(int(i.get("n", 1)) for i in items)}
+    for k in METRICAS:
+        con = [i for i in items if i.get(k) is not None]
+        if not con:
+            out[k] = None
+            continue
+        pesos = [max(1, int(i.get("n", 1))) for i in con]
+        media = sum(i[k][1] * p for i, p in zip(con, pesos)) / sum(pesos)
+        out[k] = [round(min(i[k][0] for i in con), 2), round(media, 2), round(max(i[k][2] for i in con), 2)]
+    return out
+
+
+def agregado_valido(d):
+    """Normaliza un agregado leido del disco; None si no sirve."""
+    if not isinstance(d.get("t"), (int, float)) or isinstance(d.get("t"), bool):
+        return None
+    out = {"v": VERSION_DATOS, "t": int(d["t"]), "n": d["n"] if isinstance(d.get("n"), int) and d["n"] > 0 else 1}
+    for k in METRICAS:
+        v = d.get(k)
+        ok = (isinstance(v, list) and len(v) == 3
+              and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v))
+        out[k] = v if ok else None
+    if isinstance(d.get("eventos"), list):
+        out["eventos"] = [e for e in d["eventos"] if isinstance(e, dict) and isinstance(e.get("t"), (int, float))]
+    if isinstance(d.get("u"), (int, float)) and not isinstance(d.get("u"), bool):
+        out["u"] = int(d["u"])
+    return out
+
+
+def hueco_valido(d):
+    h = d.get("hueco")
+    if (isinstance(h, list) and len(h) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in h)
+            and h[0] < h[1]):
+        return [int(h[0]), int(h[1])]
+    return None
+
+
+def fusionar_duplicados(agregados):
+    """Ordena por t y une los que comparten t (un minuto cortado por una suspension)."""
+    salida = []
+    for a in sorted(agregados, key=lambda x: x["t"]):
+        if salida and salida[-1]["t"] == a["t"]:
+            previo = salida[-1]
+            union = combinar([previo, a], a["t"])
+            ultimas = [x["u"] for x in (previo, a) if "u" in x]
+            if ultimas:
+                union["u"] = max(ultimas)
+            evs = previo.get("eventos", []) + a.get("eventos", [])
+            if evs:
+                union["eventos"] = evs
+            salida[-1] = union
+        else:
+            salida.append(a)
+    return salida
+
+
+def reducir(puntos, resolucion, maximo=MAX_PUNTOS):
+    """Si hay mas de `maximo` puntos, los agrupa por tiempo (min de los min, media de las
+    medias, max de los max). Devuelve (puntos, resolucion)."""
+    if len(puntos) <= maximo:
+        return puntos, resolucion
+    t0 = puntos[0]["t"]
+    span = puntos[-1]["t"] - t0 + resolucion
+    k = max(2, int(math.ceil(span / float(resolucion * maximo))))
+    tam = resolucion * k
+    grupos = collections.OrderedDict()
+    for p in puntos:
+        grupos.setdefault(int((p["t"] - t0) // tam), []).append(p)
+    return [combinar(g, t0 + i * tam) for i, g in grupos.items()], tam
+
+
+class Historico:
+    """Minutos y cuartos de hora en RAM y en disco, y la lista de huecos.
+
+    Disco (carpeta salud/): AAAA-MM-DD.jsonl con los minutos y huecos de cada dia (48 h) e
+    historico.jsonl con los cuartos de hora (historial_dias). Siempre por anexado de lineas
+    completas; solo historico.jsonl se reescribe (una vez al dia, para recortarlo)."""
+
+    def __init__(self, carpeta, reloj=time.time, eventos=None, dias=90):
+        self._carpeta = carpeta         # callable -> carpeta (creada si falta)
+        self.reloj = reloj
+        self.eventos = eventos if eventos is not None else collections.deque(maxlen=MAX_EVENTOS)
+        self.dias = dias
+        self.minutos, self.cuartos, self.huecos = [], [], []
+        self.actual_t, self.actual = None, []
+        self.cuarto_t, self.cuarto_items = None, []
+        self.pend, self.pend_hist = [], []
+        self.ultimo_t, self.ultimo_intervalo = None, INTERVALO_NORMAL
+        self.ultimo_recorte = 0
+
+    # -- entrada -------------------------------------------------------------
+    def anadir(self, m, intervalo):
+        t = m["t"]
+        if self.ultimo_t is not None and t - self.ultimo_t > FACTOR_HUECO * max(intervalo, self.ultimo_intervalo):
+            self._hueco(self.ultimo_t, t)
+        b = t - t % 60
+        if self.actual_t is not None and b != self.actual_t:
+            self._cerrar_minuto()
+        self.actual_t = b
+        self.actual.append(m)
+        self.ultimo_t, self.ultimo_intervalo = t, intervalo
+
+    def cerrar_hueco(self, ahora):
+        """Al reanudar tras suspender: cierra el hueco desde la ultima muestra hasta ahora."""
+        if self.ultimo_t is not None and ahora - self.ultimo_t > FACTOR_HUECO * self.ultimo_intervalo:
+            self._hueco(self.ultimo_t, ahora)
+            self.ultimo_t = ahora
+
+    def _hueco(self, ini, fin):
+        h = [int(ini), int(fin)]
+        if h[0] >= h[1] or (self.huecos and self.huecos[-1] == h):
+            return
+        self.huecos.append(h)
+        linea = {"v": VERSION_DATOS, "hueco": h}
+        self.pend.append(linea)
+        self.pend_hist.append(linea)
+
+    def _cerrar_minuto(self):
+        if not self.actual:
+            self.actual_t = None
+            return
+        t0 = self.actual_t
+        agg = combinar([pseudo_agregado(m) for m in self.actual], t0)
+        # Hora de la ultima muestra real del minuto: un minuto cerrado a medias (parada,
+        # suspension) no debe contar como si llegara hasta su final al buscar huecos.
+        agg["u"] = int(max(m["t"] for m in self.actual))
+        evs = [e for e in list(self.eventos) if t0 <= e["t"] < t0 + 60]
+        if evs:
+            agg["eventos"] = evs
+        self.actual, self.actual_t = [], None
+        self.minutos.append(agg)
+        self.pend.append(agg)
+        qt = t0 - t0 % 900
+        if self.cuarto_t is not None and qt != self.cuarto_t:
+            self._cerrar_cuarto()
+        self.cuarto_t = qt
+        self.cuarto_items.append(agg)
+
+    def _cerrar_cuarto(self):
+        if self.cuarto_items:
+            agg = combinar(self.cuarto_items, self.cuarto_t)
+            self.cuartos.append(agg)
+            self.pend_hist.append(agg)
+        self.cuarto_items, self.cuarto_t = [], None
+
+    # -- disco ---------------------------------------------------------------
+    @staticmethod
+    def _nombre_dia(t):
+        return time.strftime("%Y-%m-%d", time.localtime(t))
+
+    def volcar(self, cerrar_parcial=False):
+        """Escribe lo pendiente. cerrar_parcial (suspension, parada): cierra tambien el minuto
+        y el cuarto de hora en curso. Lo que no se pueda escribir se reintenta luego."""
+        if cerrar_parcial:
+            self._cerrar_minuto()
+            self._cerrar_cuarto()
+        carpeta = self._carpeta()
+        por_dia, pendiente = {}, []
+        for d in self.pend:
+            fin = d["hueco"][1] if "hueco" in d else d["t"]
+            por_dia.setdefault(self._nombre_dia(fin), []).append(d)
+        for dia, docs in por_dia.items():
+            try:
+                anexar_jsonl(os.path.join(carpeta, dia + ".jsonl"), docs)
+            except OSError:
+                pendiente += docs
+                registrar("no se pudo escribir el historico de " + dia)
+        self.pend = pendiente
+        try:
+            anexar_jsonl(os.path.join(carpeta, "historico.jsonl"), self.pend_hist)
+            self.pend_hist = []
+        except OSError:
+            registrar("no se pudo escribir historico.jsonl")
+        self._retencion(carpeta)
+        return not self.pend and not self.pend_hist
+
+    def _retencion(self, carpeta):
+        ahora = self.reloj()
+        limite_dia = (datetime.date.fromtimestamp(ahora) - datetime.timedelta(days=2)).isoformat()
+        for nombre in os.listdir(carpeta):
+            m = re.fullmatch(r"(\d{4}-\d{2}-\d{2})\.jsonl", nombre)
+            if m and m.group(1) < limite_dia:
+                try:
+                    os.remove(os.path.join(carpeta, nombre))
+                except OSError:
+                    pass
+        self.minutos = [a for a in self.minutos if a["t"] >= ahora - RETENCION_MINUTOS]
+        if ahora - self.ultimo_recorte >= 86400:
+            self.recortar_historico(carpeta, ahora)
+
+    def recortar_historico(self, carpeta, ahora):
+        """Quita de historico.jsonl lo anterior a historial_dias (y las lineas rotas):
+        reescritura atomica, solo si hay algo que quitar."""
+        limite = ahora - int(self.dias) * 86400
+        archivo = os.path.join(carpeta, "historico.jsonl")
+        docs = leer_jsonl(archivo)
+
+        def vigente(d):
+            h = hueco_valido(d)
+            if h:
+                return h[1] >= limite
+            a = agregado_valido(d)
+            return a is not None and a["t"] >= limite
+
+        quedan = [d for d in docs if vigente(d)]
+        if len(quedan) != len(docs) or self._lineas(archivo) != len(docs):
+            reescribir_jsonl(archivo, quedan)
+        self.cuartos = [a for a in self.cuartos if a["t"] >= limite]
+        self.huecos = [h for h in self.huecos if h[1] >= limite]
+        self.ultimo_recorte = ahora
+
+    @staticmethod
+    def _lineas(archivo):
+        try:
+            with open(archivo, "rb") as f:
+                return sum(1 for l in f if l.strip())
+        except OSError:
+            return 0
+
+    def cargar(self):
+        """Lee lo que hay en disco y, si el ultimo dato es antiguo, anota el hueco hasta ahora."""
+        ahora = self.reloj()
+        carpeta = self._carpeta()
+        minutos, cuartos, huecos = [], [], set()
+        limite_h = ahora - int(self.dias) * 86400
+        for nombre in sorted(os.listdir(carpeta)):
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.jsonl", nombre):
+                continue
+            for d in leer_jsonl(os.path.join(carpeta, nombre)):
+                h = hueco_valido(d)
+                if h:
+                    if h[1] >= limite_h:
+                        huecos.add(tuple(h))
+                    continue
+                a = agregado_valido(d)
+                if a and a["t"] >= ahora - RETENCION_MINUTOS:
+                    minutos.append(a)
+        for d in leer_jsonl(os.path.join(carpeta, "historico.jsonl")):
+            h = hueco_valido(d)
+            if h:
+                if h[1] >= limite_h:
+                    huecos.add(tuple(h))
+                continue
+            a = agregado_valido(d)
+            if a and a["t"] >= limite_h:
+                a.pop("eventos", None)
+                cuartos.append(a)
+        self.minutos = fusionar_duplicados(minutos)
+        self.cuartos = fusionar_duplicados(cuartos)
+        self.huecos = [list(h) for h in sorted(huecos)]
+        ultimo = None
+        if self.minutos:
+            # La ultima muestra real si se conoce; si no (datos antiguos), el final del minuto.
+            ultimo = max(m.get("u", m["t"] + 60) for m in self.minutos[-2:])
+        elif self.cuartos:
+            ultimo = self.cuartos[-1]["t"] + 900
+        if ultimo is not None and ahora - ultimo > FACTOR_HUECO * INTERVALO_NORMAL:
+            self._hueco(ultimo, ahora)
+
+    # -- consulta ------------------------------------------------------------
+    def _minuto_en_curso(self):
+        return combinar([pseudo_agregado(m) for m in self.actual], self.actual_t) if self.actual else None
+
+    def disponibilidad(self, anillo, ahora):
+        def cubre(ventana, minimo):
+            ts = [m["t"] for m in anillo if m["t"] >= ahora - ventana]
+            return bool(ts) and max(ts) - min(ts) >= minimo
+
+        return {"5m": cubre(300, 60), "1h": cubre(3600, 300),
+                "24h": sum(1 for a in self.minutos if a["t"] >= ahora - 86400) >= 60,
+                "historia": len(self.cuartos) >= 2 and self.cuartos[-1]["t"] - self.cuartos[0]["t"] >= 86400}
+
+    def serie(self, rango, anillo, ahora):
+        """Respuesta de la orden 'serie' (ver docs/control-center.md)."""
+        disp = self.disponibilidad(anillo, ahora)
+        if rango not in disp:
+            return {"ok": False, "error": "rango no válido", "disponible": disp}
+        if not disp[rango]:
+            return {"ok": False, "error": "sin datos suficientes", "disponible": disp}
+        solo_med = rango in ("5m", "1h")
+        if solo_med:
+            desde = ahora - RANGOS[rango]
+            puntos = [pseudo_agregado(m) for m in anillo if m["t"] >= desde]
+            difs = sorted(b["t"] - a["t"] for a, b in zip(puntos, puntos[1:]) if b["t"] > a["t"])
+            resolucion = max(1, int(round(difs[len(difs) // 2]))) if difs else INTERVALO_NORMAL
+        elif rango == "24h":
+            desde, resolucion = ahora - 86400, 60
+            puntos = [a for a in self.minutos if a["t"] >= desde]
+            actual = self._minuto_en_curso()
+            if actual:
+                if puntos and puntos[-1]["t"] == actual["t"]:
+                    puntos[-1] = combinar([puntos[-1], actual], actual["t"])
+                else:
+                    puntos.append(actual)
+        else:
+            puntos, resolucion = list(self.cuartos), 900
+            desde = puntos[0]["t"]
+        puntos, resolucion = reducir(puntos, resolucion)
+        metricas = {}
+        for k in METRICAS:
+            col = [p.get(k) for p in puntos]
+            if solo_med:
+                metricas[k] = {"med": [c[1] if c else None for c in col]}
+            else:
+                metricas[k] = {"min": [c[0] if c else None for c in col],
+                               "med": [c[1] if c else None for c in col],
+                               "max": [c[2] if c else None for c in col]}
+        huecos = [[max(a, int(desde)), min(b, int(ahora))] for a, b in self.huecos
+                  if b > desde and a < ahora]
+        vistos = {}
+        fuentes = list(self.eventos) + [e for a in (self.minutos if rango != "historia" else [])
+                                        for e in a.get("eventos", [])]
+        for e in fuentes:
+            if desde <= e["t"] <= ahora:
+                vistos[(e["t"], e.get("tipo"), e.get("texto"))] = e
+        eventos = [vistos[k] for k in sorted(vistos, key=lambda k: (k[0], str(k[1]), str(k[2])))]
+        return {"ok": True, "v": VERSION_DATOS, "rango": rango, "resolucion": resolucion,
+                "desde": int(desde), "hasta": int(ahora), "metricas": metricas,
+                "t": [p["t"] for p in puntos], "huecos": huecos, "eventos": eventos, "disponible": disp}
+
+
+# ---------------------------------------------------------------------------
+# Eventos de actividad (marcadores de las graficas)
+# ---------------------------------------------------------------------------
+
+def nuevo_evento(t, tipo, gravedad, texto, proceso=None):
+    return {"t": int(t), "tipo": tipo, "gravedad": gravedad, "texto": texto, "proceso": proceso}
+
+
+class Detector:
+    """Detecta picos de CPU y RAM y saltos de temperatura entre muestras consecutivas."""
+
+    def __init__(self):
+        self.cpu_altas, self.pico_cpu, self.pico_ram = 0, False, False
+        self.temp_previa, self.t_previa = None, None
+
+    def procesar(self, inst):
+        eventos = []
+        t = int(inst["t"])
+        cpu = (inst.get("cpu") or {}).get("total")
+        if cpu is not None:
+            if cpu >= UMBRAL_PICO_CPU:
+                self.cpu_altas += 1
+                if self.cpu_altas >= MUESTRAS_PICO_CPU and not self.pico_cpu:
+                    self.pico_cpu = True
+                    top = next(iter(inst.get("procesos") or []), None)
+                    proceso = {"nombre": top["nombre"], "cpu": top["cpu"]} if top else None
+                    texto = f"Pico de CPU al {cpu:.0f} %" + (f" ({top['nombre']}, {top['cpu']:.0f} %)" if top else "")
+                    eventos.append(nuevo_evento(t, "pico_cpu", "WARNING", texto, proceso))
+            else:
+                self.cpu_altas, self.pico_cpu = 0, False
+        ram = inst.get("ram") or {}
+        if ram.get("total"):
+            pct = 100.0 * ram["usada"] / ram["total"]
+            if pct >= UMBRAL_PICO_RAM:
+                if not self.pico_ram:
+                    self.pico_ram = True
+                    eventos.append(nuevo_evento(t, "pico_ram", "WARNING", f"Pico de RAM al {pct:.0f} %"))
+            elif pct < UMBRAL_PICO_RAM - 5:
+                self.pico_ram = False
+        temp = (inst.get("cpu") or {}).get("temp")
+        if temp is not None:
+            if (self.temp_previa is not None and temp - self.temp_previa >= SALTO_TEMPERATURA
+                    and t - self.t_previa <= 10):
+                eventos.append(nuevo_evento(
+                    t, "salto_temp", "WARNING",
+                    f"Salto de temperatura: {self.temp_previa:.0f} → {temp:.0f} °C"))
+            self.temp_previa, self.t_previa = temp, t
+        return eventos
+
+
+# ---------------------------------------------------------------------------
+# Incidencias: condicion sostenida durante varias muestras
+# ---------------------------------------------------------------------------
+
+LENTOS = ("systemd", "smart")       # vienen del refresco lento: una muestra basta
+NOMBRES_COMPONENTE = {
+    "cpu-temp": "temperatura de la CPU", "gpu": "temperatura de la GPU", "disco": "espacio en disco",
+    "bateria": "nivel de batería", "ram": "memoria disponible", "swap": "uso de swap",
+    "presion": "presión de memoria", "systemd": "unidades de systemd", "smart": "salud del disco (SMART)",
+}
+
+
+def condiciones(inst, u):
+    """{componente: (gravedad, valor, detalle)} de un instante; solo lo que tiene dato. La
+    gravedad es NORMAL, WARNING o CRITICAL. Distinta de evaluar(): separa cpu-temp, gpu y
+    presion, que son componentes de incidencia propios."""
+    def grav(v, aviso, critico):
+        return "CRITICAL" if v >= critico else ("WARNING" if v >= aviso else "NORMAL")
+
+    c = {}
+    temp = (inst.get("cpu") or {}).get("temp")
+    if temp is not None:
+        c["cpu-temp"] = (grav(temp, u["temp_aviso"], u["temp_critico"]), temp, None)
+    gtemp = (inst.get("gpu") or {}).get("temp")
+    if gtemp is not None:
+        c["gpu"] = (grav(gtemp, u["temp_aviso"], u["temp_critico"]), gtemp, None)
+    discos = [d for d in inst.get("disco") or [] if d.get("total")]
+    if discos:
+        peor = max(discos, key=lambda d: d["usado"] / d["total"])
+        pct = 100.0 * peor["usado"] / peor["total"]
+        c["disco"] = (grav(pct, u["disco_aviso"], u["disco_critico"]), round(pct, 1), peor["punto"])
+    bat = inst.get("bateria")
+    if bat and bat.get("nivel") is not None:
+        if bat.get("estado") == "descargando":
+            g = ("CRITICAL" if bat["nivel"] <= u["bateria_critico"]
+                 else "WARNING" if bat["nivel"] <= u["bateria_aviso"] else "NORMAL")
+        else:
+            g = "NORMAL"
+        c["bateria"] = (g, bat["nivel"], None)
+    ram = inst.get("ram")
+    if ram:
+        if ram.get("total"):
+            libre = 100.0 * (ram["total"] - ram["usada"]) / ram["total"]
+            c["ram"] = ("CRITICAL" if libre < u["ram_libre_critico"] else "NORMAL", round(libre, 1), None)
+        if ram.get("swap_total", 0) > 0:
+            pct = 100.0 * ram["swap"] / ram["swap_total"]
+            c["swap"] = ("WARNING" if pct > u["swap_aviso"] else "NORMAL", round(pct, 1), None)
+        if ram.get("presion") is not None:
+            c["presion"] = ("WARNING" if ram["presion"] > u["presion_aviso"] else "NORMAL", ram["presion"], None)
+    if inst.get("fallidas") is not None:
+        c["systemd"] = ("WARNING" if inst["fallidas"] else "NORMAL", list(inst["fallidas"]), None)
+    if inst.get("smart") is not None:
+        malos = [s["disco"] for s in inst["smart"] if s.get("estado") == "FALLO"]
+        c["smart"] = ("CRITICAL" if malos else "NORMAL", malos, None)
+    return c
+
+
+def texto_incidencia(componente, gravedad, valor, detalle, u):
+    """(descripcion, diagnostico, recomendacion) en espanol; prudentes y sin acciones automaticas."""
+    critico = gravedad == "CRITICAL"
+    if componente in ("cpu-temp", "gpu"):
+        que = "la CPU" if componente == "cpu-temp" else "la GPU"
+        umbral = u["temp_critico"] if critico else u["temp_aviso"]
+        return (f"Temperatura de {que} a {valor:.0f} °C (umbral {umbral:.0f} °C)",
+                "Temperatura sostenida por encima del umbral" + (
+                    ": cerca del límite térmico, el equipo puede reducir su rendimiento" if critico else ""),
+                "Comprueba qué proceso consume CPU (TOP PROCESSES) y que las rejillas de ventilación no estén tapadas"
+                + ("; si sigue subiendo, guarda tu trabajo y apaga el equipo" if critico else ""))
+    if componente == "disco":
+        return (f"Disco {detalle} al {valor:.0f} %",
+                "El espacio libre es muy escaso: algunas aplicaciones pueden fallar al guardar" if critico
+                else "El espacio libre es escaso",
+                "Libera espacio: revisa descargas, papelera y cachés, o mueve archivos grandes a otro disco")
+    if componente == "bateria":
+        return (f"Batería al {valor} %",
+                "La batería se está agotando y el cargador no está conectado" + (
+                    ": el equipo puede apagarse en breve" if critico else ""),
+                "Conecta el cargador o activa el perfil de ahorro de energía" + (
+                    "; guarda tu trabajo" if critico else ""))
+    if componente == "ram":
+        return (f"Memoria disponible al {valor:.0f} %",
+                "Queda muy poca memoria libre: el sistema puede ir lento o cerrar procesos",
+                "Cierra las aplicaciones que más memoria usan (TOP PROCESSES) o reinicia las que acumulan memoria")
+    if componente == "swap":
+        return (f"Swap usada al {valor:.0f} %",
+                "El sistema está usando mucho el espacio de intercambio: suele indicar poca RAM para la carga actual",
+                "Cierra aplicaciones pesadas (TOP PROCESSES); si es habitual, considera ampliar la RAM")
+    if componente == "presion":
+        return (f"Presión de memoria alta ({valor:.1f})",
+                "Los procesos están esperando por memoria: el sistema puede notarse lento",
+                "Cierra aplicaciones pesadas (TOP PROCESSES)")
+    if componente == "systemd":
+        lista = list(valor)
+        return ("Unidades de systemd fallidas: " + ", ".join(lista[:3]) + ("…" if len(lista) > 3 else ""),
+                "Hay servicios que han terminado con error",
+                "Revisa el motivo con: systemctl --failed y journalctl -u UNIDAD")
+    if componente == "smart":
+        return ("El disco informa de un fallo SMART: " + ", ".join(valor),
+                "El propio disco avisa de que podría fallar",
+                "Haz una copia de seguridad de tus datos cuanto antes y valora sustituir el disco")
+    return (f"{componente}: {gravedad}", "", "")
+
+
+class Incidencias:
+    """Abre, escala y cierra incidencias con histeresis: una condicion debe mantenerse
+    MUESTRAS_INCIDENCIA muestras seguidas para abrirse y otras tantas en NORMAL para cerrarse
+    (una sola para systemd y smart). Una muestra suelta no dispara nada."""
+
+    def __init__(self):
+        self.comp = {}
+
+    def observar(self, inst, u, t):
+        """Devuelve las lineas de incidencia nuevas (abrir, escalar, cerrar)."""
+        lineas = []
+        for nombre, (grav, valor, detalle) in condiciones(inst, u).items():
+            c = self.comp.setdefault(nombre, {"abierta": "NORMAL", "ventana": []})
+            n = 1 if nombre in LENTOS else MUESTRAS_INCIDENCIA
+            c["ventana"].append(grav)
+            del c["ventana"][:-n]
+            v = c["ventana"]
+            if len(v) < n:
+                continue
+            nueva = None
+            if c["abierta"] == "NORMAL":
+                if all(g != "NORMAL" for g in v):
+                    nueva = "CRITICAL" if all(g == "CRITICAL" for g in v) else "WARNING"
+            elif all(g == "NORMAL" for g in v):
+                nueva = "NORMAL"
+            elif c["abierta"] == "WARNING" and all(g == "CRITICAL" for g in v):
+                nueva = "CRITICAL"
+            elif c["abierta"] == "CRITICAL" and all(g != "CRITICAL" for g in v):
+                c["abierta"], c["ventana"] = "WARNING", []      # baja de gravedad sin linea nueva
+            if nueva is None:
+                continue
+            if nueva == "NORMAL":
+                desc = "Recuperado: " + NOMBRES_COMPONENTE.get(nombre, nombre) + (f" ({detalle})" if detalle else "")
+                diag = recom = ""
+            else:
+                desc, diag, recom = texto_incidencia(nombre, nueva, valor, detalle, u)
+            lineas.append({"v": VERSION_DATOS, "t": int(t), "gravedad": nueva, "componente": nombre,
+                           "descripcion": desc, "diagnostico": diag, "recomendacion": recom, "valor": valor})
+            c["abierta"], c["ventana"] = nueva, []
+        return lineas
+
+    def abiertas(self):
+        return [{"componente": k, "gravedad": c["abierta"]} for k, c in sorted(self.comp.items())
+                if c["abierta"] != "NORMAL"]
+
+    def restaurar(self, docs):
+        """Al arrancar, recupera de incidencias.jsonl las que siguen abiertas (la ultima
+        linea de cada componente). Asi un reinicio del servicio no vuelve a abrir, duplicada,
+        una incidencia que ya estaba registrada."""
+        for d in docs or []:
+            nombre, grav = d.get("componente"), d.get("gravedad")
+            if nombre and grav in ("NORMAL", "WARNING", "CRITICAL"):
+                self.comp[nombre] = {"abierta": grav, "ventana": []}
+
+
+# ---------------------------------------------------------------------------
+# SMART (udisks2) y umbrales (jaime0-ajustes)
+# ---------------------------------------------------------------------------
+
+UDISKS = ("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2")
+IFACE_DRIVE = "org.freedesktop.UDisks2.Drive"
+IFACE_ATA = "org.freedesktop.UDisks2.Drive.Ata"
+IFACE_NVME = "org.freedesktop.UDisks2.NVMe.Controller"
+AVISOS_NVME = {"spare": "Espacio de reserva por debajo del umbral",
+               "temperature": "Temperatura fuera del rango seguro",
+               "degraded": "Fiabilidad del disco degradada",
+               "readonly": "El disco ha pasado a solo lectura",
+               "volatile_memory": "Fallo de la memoria volátil del disco"}
+
+
+def kelvin_a_celsius(k):
+    try:
+        k = float(k)
+    except (TypeError, ValueError):
+        return None
+    return round(k - 273.15, 1) if k > 0 else None
+
+
+def parsear_smart(objetos):
+    """Lista de {"disco","tipo","estado","temperatura","horas","avisos"} a partir del
+    resultado de GetManagedObjects ({ruta: {interfaz: {propiedad: valor}}}). Solo propiedades
+    ya publicadas por udisks2: no se llama a SmartUpdate (necesitaria permisos)."""
+    discos = []
+    for ifaces in (objetos or {}).values():
+        drive = ifaces.get(IFACE_DRIVE)
+        nvme, ata = ifaces.get(IFACE_NVME), ifaces.get(IFACE_ATA)
+        if drive is None or (nvme is None and ata is None):
+            continue
+        # Lectores de CD/DVD: udisks2 los publica como Drive.Ata, pero no son discos.
+        compat = [str(c) for c in (drive.get("MediaCompatibility") or [])]
+        if drive.get("Optical") or any(c.startswith("optical") for c in compat):
+            continue
+        modelo = str(drive.get("Model") or "").strip() or str(drive.get("Id") or "disco")
+        if nvme is not None:
+            avisos = [AVISOS_NVME.get(a, str(a)) for a in (nvme.get("SmartCriticalWarning") or [])]
+            leido = bool(nvme.get("SmartUpdated"))
+            estado = "FALLO" if avisos else ("OK" if leido else "N/D")
+            horas = nvme.get("SmartPowerOnHours")
+            discos.append({"disco": modelo, "tipo": "nvme", "estado": estado,
+                           "temperatura": kelvin_a_celsius(nvme.get("SmartTemperature")) if leido else None,
+                           "horas": int(horas) if leido and horas is not None else None, "avisos": avisos})
+        else:
+            leido = bool(ata.get("SmartUpdated"))
+            avisos = []
+            if ata.get("SmartFailing"):
+                estado = "FALLO"
+                avisos.append("El disco informa de un fallo inminente (SMART)")
+            elif not ata.get("SmartSupported") or not ata.get("SmartEnabled"):
+                estado = "N/D"
+            else:
+                estado = "OK" if leido else "N/D"
+            segundos = ata.get("SmartPowerOnSeconds")
+            discos.append({"disco": modelo, "tipo": "ata", "estado": estado,
+                           "temperatura": kelvin_a_celsius(ata.get("SmartTemperature")) if leido else None,
+                           "horas": int(segundos // 3600) if leido and segundos else None, "avisos": avisos})
+    return sorted(discos, key=lambda d: d["disco"])
+
+
+def programa_hermano(nombre):
+    """Otro programa de Jaime0: junto a este archivo o en PATH."""
+    junto = os.path.join(os.path.dirname(os.path.realpath(__file__)), nombre)
+    return junto if os.path.exists(junto) else shutil.which(nombre)
+
+
+def umbrales_desde_ajustes(doc):
+    """UMBRALES con los valores de 'jaime0-ajustes ver --json'. Si algun par es incoherente
+    (editado a mano) se queda con los de fabrica de ese par."""
+    u = dict(UMBRALES)
+    if not isinstance(doc, dict):
+        return u
+    leidos = {}
+    for a in doc.get("ajustes") or []:
+        if isinstance(a, dict) and a.get("clave") in AJUSTES_UMBRALES:
+            try:
+                leidos[AJUSTES_UMBRALES[a["clave"]]] = int(a["valor"])
+            except (KeyError, TypeError, ValueError):
+                pass
+    for menor, mayor in (("temp_aviso", "temp_critico"), ("disco_aviso", "disco_critico"),
+                         ("bateria_critico", "bateria_aviso")):
+        if menor in leidos and mayor in leidos and not leidos[menor] < leidos[mayor]:
+            del leidos[menor], leidos[mayor]
+    for k, v in leidos.items():
+        u[k] = float(v) if k.startswith(("temp", "disco")) else v
+    return u
+
+
+def cargar_umbrales(ejecutar=None):
+    """Umbrales de jaime0-ajustes (subproceso con timeout de 5 s) o los de fabrica si falla."""
+    ejecutar = ejecutar or subprocess.run
+    try:
+        programa = programa_hermano("jaime0-ajustes")
+        if not programa:
+            return dict(UMBRALES)
+        r = ejecutar([sys.executable, "-I", programa, "ver", "--json"],
+                     capture_output=True, text=True, timeout=5)
+        return umbrales_desde_ajustes(json.loads(r.stdout) if r.returncode == 0 else None)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return dict(UMBRALES)
 
 
 # ---------------------------------------------------------------------------
@@ -625,6 +1422,61 @@ def vigilar_perfil(cb):
     return con, suscripcion
 
 
+def consultar_smart(cb):
+    """SMART de todos los discos por udisks2 (asincrono, solo lectura): cb(lista | None).
+    None si udisks2 no responde."""
+    GLib, Gio = _gi()
+    try:
+        con = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    except Exception:
+        cb(None)
+        return
+
+    def respuesta(valor):
+        try:
+            cb(None if valor is None else parsear_smart(valor[0]))
+        except Exception:
+            registrar("error al leer SMART:\n" + traceback.format_exc())
+            cb(None)
+
+    _llamar(con, UDISKS[0], UDISKS[1], "org.freedesktop.DBus.ObjectManager", "GetManagedObjects",
+            None, respuesta)
+
+
+def vigilar_suspension(cb):
+    """PrepareForSleep de logind: cb(True) antes de suspender, cb(False) al reanudar."""
+    GLib, Gio = _gi()
+    try:
+        con = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+    except Exception:
+        return None
+
+    def senal(_con, _emisor, _objeto, _iface, _senal, params, _datos):
+        try:
+            cb(bool(params.unpack()[0]))
+        except Exception:
+            registrar("error en PrepareForSleep:\n" + traceback.format_exc())
+
+    return con, con.signal_subscribe("org.freedesktop.login1", "org.freedesktop.login1.Manager",
+                                     "PrepareForSleep", "/org/freedesktop/login1", None,
+                                     Gio.DBusSignalFlags.NONE, senal, None)
+
+
+def vigilar_archivos(rutas, cb):
+    """Llama a cb() cuando cambia alguno de los archivos (Gio.FileMonitor). Devuelve los
+    monitores, que hay que conservar vivos."""
+    GLib, Gio = _gi()
+    monitores = []
+    for r in rutas:
+        try:
+            m = Gio.File.new_for_path(r).monitor_file(Gio.FileMonitorFlags.WATCH_MOVES, None)
+            m.connect("changed", lambda *_a: cb())
+            monitores.append(m)
+        except Exception:
+            registrar(f"no se pudo vigilar {r}:\n" + traceback.format_exc())
+    return monitores
+
+
 def avisar_barra():
     """Pide a Waybar que relea el indicador (RTMIN+11). Solo si lleva unos segundos en
     marcha: al arrancar aun no atiende la senal y una senal RTMIN sin atender la cerraria."""
@@ -652,7 +1504,8 @@ def avisar_barra():
 
 def procesar_linea(linea, ctx):
     """Procesa una peticion y devuelve la respuesta como texto JSON (sin salto de linea).
-    ctx ofrece rapido() -> (intervalo, hasta), estado_doc() e instante_doc()."""
+    ctx ofrece rapido() -> (intervalo, hasta), estado_doc(), instante_doc(), serie(rango),
+    incidencias(limite) y eventos_lista()."""
     try:
         peticion = json.loads(linea)
     except ValueError:
@@ -669,6 +1522,18 @@ def procesar_linea(linea, ctx):
             if doc is None:
                 return json.dumps({"ok": False, "error": "sin datos todavía"})
             return json.dumps(doc, ensure_ascii=False)
+        if orden == "serie":
+            return json.dumps(ctx.serie(peticion.get("rango")), ensure_ascii=False)
+        if orden == "incidencias":
+            limite = peticion.get("limite", 50)
+            if not isinstance(limite, int) or isinstance(limite, bool) or limite < 1:
+                limite = 50
+            return json.dumps({"ok": True, "v": VERSION_DATOS,
+                               "incidencias": ctx.incidencias(min(limite, MAX_INCIDENCIAS))},
+                              ensure_ascii=False)
+        if orden == "eventos":
+            return json.dumps({"ok": True, "v": VERSION_DATOS, "eventos": ctx.eventos_lista()},
+                              ensure_ascii=False)
         return json.dumps({"ok": False, "error": "orden desconocida"})
     except Exception:
         registrar("error al atender una orden:\n" + traceback.format_exc())
@@ -680,11 +1545,29 @@ def procesar_linea(linea, ctx):
 # ---------------------------------------------------------------------------
 
 class Servicio:
-    def __init__(self, directorio=None):
+    def __init__(self, directorio=None, estado=None, leer_umbrales=None, reloj=time.time):
+        """directorio: de ejecucion (tmpfs); estado: de ~/.local/state/jaime0 (se crea al
+        usarlo); leer_umbrales: funcion que devuelve los umbrales (por defecto
+        cargar_umbrales, que llama a jaime0-ajustes)."""
         self.dir = directorio or directorio_ejecucion()
+        self._estado = estado
+        self._leer_umbrales = leer_umbrales or cargar_umbrales
+        self.reloj = reloj
+        self.umbrales = dict(UMBRALES)
         self.muestreador = Muestreador()
         self.anillo = collections.deque(maxlen=TAMANO_ANILLO)
         self.actividad = collections.deque(maxlen=20)
+        self.eventos = collections.deque(maxlen=MAX_EVENTOS)
+        self.historico = Historico(self.carpeta_salud, reloj=reloj, eventos=self.eventos)
+        self.detector = Detector()
+        self.incidencias_estado = Incidencias()
+        try:
+            self.incidencias_estado.restaurar(leer_jsonl(self.archivo_incidencias()))
+        except Exception:
+            registrar("no se pudieron recuperar las incidencias abiertas:\n" + traceback.format_exc())
+        self.n_incidencias = None
+        self.smart = None
+        self.gpu_temp = None
         self.instante = None
         self.estado = None
         self.motivos = []
@@ -701,10 +1584,63 @@ class Servicio:
         self._intervalo_programado = None
         self._servidor = None
         self._bucle = None
+        self._monitores = []
+        self._recarga_pendiente = False
 
     # -- estado y registro ---------------------------------------------------
-    def evento(self, texto):
-        self.actividad.append({"t": int(time.time()), "texto": texto})
+    def dir_estado(self):
+        if self._estado is None:
+            self._estado = directorio_estado()
+        os.makedirs(self._estado, mode=0o700, exist_ok=True)
+        return self._estado
+
+    def carpeta_salud(self):
+        d = os.path.join(self.dir_estado(), "salud")
+        os.makedirs(d, mode=0o700, exist_ok=True)
+        return d
+
+    def evento(self, texto, tipo=None, gravedad="INFO", proceso=None):
+        """Anota en la actividad y, si lleva tipo, tambien como evento para las graficas."""
+        t = int(time.time())
+        self.actividad.append({"t": t, "texto": texto})
+        if tipo:
+            self.eventos.append(nuevo_evento(t, tipo, gravedad, texto, proceso))
+
+    def recargar_umbrales(self):
+        u = dict(UMBRALES)
+        u.update(self._leer_umbrales() or {})
+        self.umbrales = u
+        self.historico.dias = int(u["historial_dias"])
+
+    # -- incidencias (archivo) -------------------------------------------------
+    def archivo_incidencias(self):
+        return os.path.join(self.dir_estado(), "incidencias.jsonl")
+
+    def anotar_incidencias(self, lineas):
+        """Anexa las lineas a incidencias.jsonl y lo recorta a MAX_INCIDENCIAS."""
+        if not lineas:
+            return
+        archivo = self.archivo_incidencias()
+        anexar_jsonl(archivo, lineas)
+        if self.n_incidencias is None:
+            self.n_incidencias = len(leer_jsonl(archivo))
+        else:
+            self.n_incidencias += len(lineas)
+        if self.n_incidencias > MAX_INCIDENCIAS:
+            docs = leer_jsonl(archivo)[-MAX_INCIDENCIAS:]
+            reescribir_jsonl(archivo, docs)
+            self.n_incidencias = len(docs)
+
+    # -- consultas de la API ---------------------------------------------------
+    def serie(self, rango):
+        return self.historico.serie(rango, self.anillo, self.reloj())
+
+    def incidencias(self, limite):
+        docs = [d for d in leer_jsonl(self.archivo_incidencias()) if "componente" in d]
+        return docs[-limite:][::-1]
+
+    def eventos_lista(self):
+        return list(self.eventos)[::-1]
 
     def intervalo_actual(self):
         return INTERVALO_RAPIDO if time.time() < self.rapido_hasta else INTERVALO_NORMAL
@@ -724,27 +1660,40 @@ class Servicio:
         return {"v": VERSION_DATOS, "t": int(time.time()), "estado": self.estado, "motivos": self.motivos,
                 "perfil": {"activo": self.perfil, "fuente": "power-profiles-daemon"},
                 "privacidad": self.privacidad, "actividad": list(self.actividad),
+                "incidencias_abiertas": self.incidencias_estado.abiertas(),
+                "disponible": self.historico.disponibilidad(self.anillo, self.reloj()),
                 "servicio": {"pid": os.getpid(), "desde": self.desde, "intervalo": self.intervalo_actual()}}
 
     # -- ciclo de medicion ---------------------------------------------------
     def muestrear(self):
         med = self.muestreador.muestrear()
-        inst = armar_instante(med, time.time(), self.intervalo_actual(), self.fallidas)
-        estado, motivos = evaluar(inst, UMBRALES)
+        if med["gpu"]["nvidia"] != "activa":
+            self.gpu_temp = None            # suspendida o sin GPU: sin temperatura, jamas se despierta
+        med["gpu"]["temp"] = self.gpu_temp
+        inst = armar_instante(med, time.time(), self.intervalo_actual(), self.fallidas, self.smart)
+        estado, motivos = evaluar(inst, self.umbrales)
         inst["estado"], inst["alertas"] = estado, len(motivos)
         self.instante = inst
-        anillo_agregar(self.anillo, inst)
+        muestra = anillo_agregar(self.anillo, inst)
         escribir_json(os.path.join(self.dir, "instante.json"), inst)
         self.publicar(estado, motivos)
+        for ev in self.detector.procesar(inst):
+            self.eventos.append(ev)
+        self.historico.anadir(muestra, inst["intervalo"])
+        try:
+            self.anotar_incidencias(self.incidencias_estado.observar(inst, self.umbrales, inst["t"]))
+        except OSError:
+            registrar("no se pudo escribir incidencias.jsonl:\n" + traceback.format_exc())
 
     def publicar(self, estado, motivos):
         """Anota los cambios, reescribe estado.json y avisa a Waybar si algo visible cambio."""
         if self.estado is not None and estado != self.estado:
-            self.evento(f"Estado: {self.estado} → {estado}")
+            self.evento(f"Estado: {self.estado} → {estado}", "estado",
+                        "INFO" if estado == "ONLINE" else estado)
         self.estado, self.motivos = estado, motivos
         cargador = (self.instante or {}).get("cargador")
         if self.previo_cargador is not None and cargador is not None and cargador != self.previo_cargador:
-            self.evento("Cargador conectado" if cargador else "Cargador desconectado")
+            self.evento("Cargador conectado" if cargador else "Cargador desconectado", "cargador")
         if cargador is not None:
             self.previo_cargador = cargador
         escribir_json(os.path.join(self.dir, "estado.json"), self.estado_doc())
@@ -761,7 +1710,7 @@ class Servicio:
         if valor == self.perfil:
             return
         if self.perfil is not None or valor is not None:
-            self.evento(f"Perfil de energía: {valor or 'N/D'}")
+            self.evento(f"Perfil de energía: {valor or 'N/D'}", "perfil")
         self.perfil = valor
         if self.instante is not None:
             self.publicar(self.estado, self.motivos)
@@ -779,6 +1728,57 @@ class Servicio:
             consultar_unidad_activa("ufw.service", con_ufw)
         else:
             self.privacidad = resumen_privacidad(None)
+        # Temperatura de la NVIDIA: solo con la GPU activa, en un hilo (nvidia-smi tarda).
+        if nvidia_activa():
+            threading.Thread(target=self._leer_gpu, daemon=True).start()
+        else:
+            self.gpu_temp = None
+
+    def _leer_gpu(self):
+        try:
+            self.gpu_temp = temperatura_nvidia()
+        except Exception:
+            registrar("error al leer la temperatura de la GPU:\n" + traceback.format_exc())
+
+    def refrescar_smart(self):
+        def con_smart(lista):
+            self.smart = lista
+
+        consultar_smart(con_smart)
+
+    # -- historico, suspension y ajustes -----------------------------------------
+    @protegido(None)
+    def al_suspender(self, suspendiendo):
+        """PrepareForSleep: al suspender se vuelca todo; al reanudar se cierra el hueco."""
+        if suspendiendo:
+            self.historico.volcar(cerrar_parcial=True)
+        else:
+            self.historico.cerrar_hueco(int(self.reloj()))
+
+    @protegido(True)
+    def _volcado_periodico(self):
+        self.historico.volcar()
+        return True
+
+    @protegido(True)
+    def _smart_periodico(self):
+        self.refrescar_smart()
+        return True
+
+    @protegido(False)
+    def _recarga_diferida(self):
+        self._recarga_pendiente = False
+        self.recargar_umbrales()
+        return False
+
+    def pedir_recarga(self):
+        """Cambio en los ajustes: recarga los umbrales medio segundo despues (agrupa los
+        varios eventos que produce una escritura)."""
+        if self._recarga_pendiente:
+            return
+        GLib, _Gio = _gi()
+        self._recarga_pendiente = True
+        GLib.timeout_add(500, self._recarga_diferida)
 
     # -- bucle ---------------------------------------------------------------
     def _programar(self):
@@ -857,7 +1857,7 @@ class Servicio:
                     break
                 respuesta = procesar_linea(linea.decode("utf-8", "replace"), self)
                 try:
-                    con.settimeout(1.0)
+                    con.settimeout(5.0)     # respuestas grandes (series): sendall espera al cliente
                     con.sendall(respuesta.encode("utf-8") + b"\n")
                     con.setblocking(False)
                 except OSError:
@@ -880,8 +1880,20 @@ class Servicio:
             self._iniciar_api(GLib)
             self.muestreador.base()
             self._perfil_bus = vigilar_perfil(self.poner_perfil)
+            self.recargar_umbrales()
+            try:
+                self.historico.cargar()
+            except Exception:
+                registrar("no se pudo leer el historico:\n" + traceback.format_exc())
+            self._monitores = vigilar_archivos(
+                [os.path.join(carpeta_config(), "ajustes"), ruta("usr", "share", "jaime0", "ajustes.predeterminados")],
+                self.pedir_recarga)
+            self._suspension = vigilar_suspension(self.al_suspender)
             self.refrescar_lento()
+            self.refrescar_smart()
             GLib.timeout_add_seconds(REFRESCO_LENTO, self._lento)
+            GLib.timeout_add_seconds(SMART_CADA, self._smart_periodico)
+            GLib.timeout_add_seconds(VOLCADO_CADA, self._volcado_periodico)
             self._fuente = GLib.timeout_add(1000, self._tick)   # primera muestra con 1 s de deltas
             self._intervalo_programado = 1
             salir = lambda *_: (self._bucle.quit(), GLib.SOURCE_REMOVE)[1]
@@ -898,6 +1910,10 @@ class Servicio:
             self.limpiar()
 
     def limpiar(self):
+        try:
+            self.historico.volcar(cerrar_parcial=True)      # al parar (SIGTERM): no se pierde nada
+        except Exception:
+            registrar("no se pudo volcar el historico al parar:\n" + traceback.format_exc())
         try:
             if self._servidor is not None:
                 self._servidor.close()

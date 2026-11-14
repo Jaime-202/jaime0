@@ -38,6 +38,19 @@ reloj_formato = 24h
 # usa tu IP ni tu ubicacion. Vacia: el widget del tiempo lo pide.
 tiempo_ciudad =
 
+# Control Center (jaime0-servicio): umbrales de aviso y critico del estado del sistema y de
+# las incidencias. Temperatura de la CPU en °C (aviso 60-100, critico 70-105), disco ocupado
+# en % (aviso 50-99, critico 60-100), bateria en % (aviso 5-50, critico 2-30; en la bateria
+# el critico es el nivel mas bajo). El aviso debe ser menor que el critico (en la bateria,
+# al reves). historial_dias: dias que se conserva el historial de 15 minutos (7-365).
+umbral_temp_aviso = 85
+umbral_temp_critico = 95
+umbral_disco_aviso = 85
+umbral_disco_critico = 95
+umbral_bateria_aviso = 15
+umbral_bateria_critico = 5
+historial_dias = 90
+
 # Temas de acento: tema.NOMBRE = #rrggbb. "acento" acepta un nombre o un color #rrggbb.
 tema.verde = #54e58a
 tema.cian = #55cde0

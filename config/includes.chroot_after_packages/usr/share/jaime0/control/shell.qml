@@ -24,7 +24,7 @@ ShellRoot {
 
     readonly property var secciones: [
         { id: "SYSTEM", titulo: "OVERVIEW" },
-        { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES", fase: "Fase 3",
+        { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES", fase: "Fase 4",
           contenido: ["Uso por núcleo y frecuencias", "Procesos que más consumen, con su historial", "Presión de memoria y swap"] },
         { id: "PROFILES", titulo: "SMART PROFILES", fase: "Fase 4",
           contenido: ["BALANCED, PERFORMANCE, POWER SAVER, FOCUS, MULTIMEDIA y CUSTOM", "Qué cambia cada perfil y solo lo que admite este equipo", "Volver al perfil anterior"] },
@@ -32,8 +32,7 @@ ShellRoot {
           contenido: ["Reglas CUANDO → SI → HACER por eventos reales", "Activar, editar y borrar reglas", "Historial de ejecuciones: correctas y fallidas"] },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER", fase: "Fase 5",
           contenido: ["Cortafuegos UFW: estado, reglas y puertos", "Conexiones activas y sus procesos", "Micrófono, cámara y pantalla en uso"] },
-        { id: "HEALTH", titulo: "SYSTEM HEALTH", fase: "Fase 3",
-          contenido: ["Gráficas en tiempo real e históricas (5 min, 1 h, 24 h)", "Temperaturas, almacenamiento con SMART y batería", "Incidencias y DIAGNOSTIC MODE"] },
+        { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS", fase: "Fase 7",
           contenido: ["Animaciones OFF, SUBTLE y SMOOTH", "Frecuencia de actualización y umbrales de alerta", "Historial, atajo y notificaciones"] }
     ]
@@ -355,7 +354,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: raiz.seccion === 0 ? vistaSistema : vistaPendiente
+                    sourceComponent: raiz.seccion === 0 ? vistaSistema : raiz.seccion === 5 ? vistaSalud : vistaPendiente
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -375,6 +374,13 @@ ShellRoot {
                         estado: raiz.estado
                         historiaCpu: raiz.historiaCpu
                         historiaRam: raiz.historiaRam
+                    }
+                }
+                Component {
+                    id: vistaSalud
+                    Salud {
+                        instante: raiz.instante
+                        estado: raiz.estado
                     }
                 }
                 Component {

@@ -1,6 +1,39 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1 y 2 terminadas.** Funcionan el servicio, `jaime0-salud`, la ventana con SYSTEM OVERVIEW, el atajo y el indicador de la barra. Las demás secciones dicen en qué fase llegarán y no muestran datos inventados.
+Estado: **Fases 1, 2 y 3 terminadas.** Funcionan el servicio, `jaime0-salud`, la ventana con SYSTEM OVERVIEW y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. Las demás secciones dicen en qué fase llegarán y no muestran datos inventados.
+
+## HEALTH (fase 3)
+
+| Zona | Qué muestra |
+|---|---|
+| SYSTEM HEALTH | Estado global, CPU, RAM, temperatura y alertas activas; selector de intervalo (`REAL TIME`, `LAST 5 MIN`, `LAST HOUR`, `LAST 24 HOURS`, `HISTORY`: los que aún no tienen datos suficientes salen apagados) y `DIAGNOSTIC MODE` |
+| LIVE MONITORING | Las dos gráficas grandes, CPU y RAM: valor actual, media y pico del intervalo, diferencia con la media, línea de referencia y marcas de eventos (▼) |
+| HARDWARE DIAGNOSTICS | Temperaturas (CPU y GPU, con los umbrales de aviso y crítico), almacenamiento (ocupación, lectura/escritura y SMART) y batería (nivel, consumo, autonomía marcada como *estimada* y salud) |
+| SYSTEM EVENTS | Incidencias: fecha, gravedad, componente, descripción y recomendación; también la recuperación |
+| DIAGNOSTIC MODE | Sustituye la zona de hardware por el detalle: cada núcleo con su uso y frecuencia, todos los sensores, memoria desglosada, procesos y eventos del intervalo |
+
+Las gráficas solo dibujan datos medidos. Al pasar el cursor muestran el valor exacto con fecha y hora (y el mínimo y máximo en los intervalos agregados); arrastrar amplía un tramo y el doble clic vuelve a la vista completa. Los tramos sin datos (suspensión, servicio parado) se rayan y se rotulan `SIN DATOS`, nunca se rellenan.
+
+**Umbrales** (en `jaime0-ajustes`, grupo *Control Center*, también en la aplicación de ajustes): `umbral_temp_aviso`/`critico` (85/95 °C), `umbral_disco_aviso`/`critico` (85/95 %), `umbral_bateria_aviso`/`critico` (15/5 %) e `historial_dias` (90). El servicio los aplica al momento y rechaza combinaciones incoherentes (un aviso por encima del crítico).
+
+**Incidencias:** una condición debe mantenerse 3 muestras para abrirse y otras 3 para cerrarse (evita falsas alarmas por un pico suelto); las de systemd y SMART vienen del refresco de cada minuto y se abren a la primera. Nada se repara solo: cada incidencia trae su diagnóstico y una recomendación. Un reinicio del servicio recupera las abiertas sin duplicarlas. `jaime0-salud incidencias` las lista en la terminal.
+
+**Límite conocido:** el anillo de la última hora vive en memoria; si el servicio se reinicia, `LAST 5 MIN` y `LAST HOUR` empiezan de nuevo (lo anterior sigue en `LAST 24 HOURS` y `HISTORY`).
+
+### Resultados de la fase 3 (14-11-2026, misma VM)
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas | 194 correctas (89 nuevas: histórico, huecos, reducción, disponibilidad, incidencias con histéresis, eventos, SMART, umbrales y `jaime0-salud`) |
+| D-Bus real | SMART por udisks2 sin root (los discos de VirtualBox no dan SMART: `N/D`, como corresponde); vigilancia del archivo de ajustes; el perfil y las unidades fallidas siguen funcionando |
+| Series | `5m` se ofrece al tener un minuto de datos, con las 11 métricas; antes, «sin datos suficientes» |
+| Incidencias | Una unidad que falla a propósito abrió WARNING (systemd) y, al retirarla, quedó «Recuperado» (NORMAL) |
+| Huecos | Paradas reales de 37 s y 46 s del servicio quedaron registradas con su duración exacta |
+| Ventana | Lectura bajo el cursor, gráficas compactas en los paneles pequeños, DIAGNOSTIC MODE, umbrales en la aplicación de ajustes; 0 avisos de QML |
+| Consumo | Con HEALTH abierto: 6,7 % de un núcleo y 152 MiB (VM, dibujo por software) |
+| No probado | Temperaturas, frecuencias, batería, SMART de un NVMe real, NVIDIA y la suspensión real: necesitan el portátil |
+
+Arreglos encontrados al probar: el lector de CD de la VM salía como disco en STORAGE (ahora se descartan las unidades ópticas); un reinicio del servicio duplicaba una incidencia ya abierta (ahora la recupera); y una parada a mitad de minuto no se registraba como hueco porque se contaba hasta el final del minuto (ahora se guarda la hora de la última muestra real).
 
 ## Uso (fase 2)
 
@@ -147,6 +180,8 @@ Todos los archivos llevan `"v": 1`. Los valores que no existen se escriben `null
 `~/.local/state/jaime0/incidencias.jsonl`: `{"v":1,"t":…,"gravedad":"WARNING","componente":"thermal","descripcion":…,"diagnostico":…,"recomendacion":…}`
 
 `~/.config/jaime0/reglas.json`: `{"v":1,"reglas":[{"id":…,"nombre":…,"activa":true,"cuando":{"evento":"bateria","debajo":20,"rearme":25},"si":[…],"hacer":[{"accion":"perfil","valor":"power-saver"}]}]}`
+
+Órdenes del socket (una línea JSON por petición): `estado`, `instante`, `rapido` (muestreo a 2 s durante 15 s), `serie` con `rango` `5m`/`1h`/`24h`/`historia` (como mucho 720 puntos; en 24 h e historia, mínimo/media/máximo de cada agregado; con `huecos`, `eventos` y `disponible`), `incidencias` (con `limite`) y `eventos`. Los agregados de minuto llevan `u`, la hora de su última muestra real.
 
 `~/.local/state/jaime0/ejecuciones.jsonl`: `{"v":1,"t":…,"regla":…,"evento":…,"resultado":"ok"|"fallo"|"omitida","detalle":…}`
 

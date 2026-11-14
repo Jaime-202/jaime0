@@ -210,6 +210,52 @@ class PruebasAjustes(unittest.TestCase):
         for a in ajustes.values():
             self.assertEqual(a["valor"], a["predeterminado"])
 
+    def test_umbrales_predeterminados_y_limites(self):
+        ajustes, _ = self.e.ver()
+        esperado = {"umbral_temp_aviso": ("85", 60, 100), "umbral_temp_critico": ("95", 70, 105),
+                    "umbral_disco_aviso": ("85", 50, 99), "umbral_disco_critico": ("95", 60, 100),
+                    "umbral_bateria_aviso": ("15", 5, 50), "umbral_bateria_critico": ("5", 2, 30),
+                    "historial_dias": ("90", 7, 365)}
+        for clave, (valor, minimo, maximo) in esperado.items():
+            a = ajustes[clave]
+            self.assertEqual((a["valor"], a["tipo"], a["min"], a["max"], a["grupo"]),
+                             (valor, "entero", minimo, maximo, "Control Center"), clave)
+            self.assertEqual(self.e.ejecutar("poner", clave, str(minimo - 1))[0], 1, clave)
+            self.assertEqual(self.e.ejecutar("poner", clave, str(maximo + 1))[0], 1, clave)
+
+    def test_umbrales_validos_se_guardan(self):
+        rc, _, err = self.e.ejecutar("poner", "umbral_temp_aviso", "80", "umbral_temp_critico", "90",
+                                     "historial_dias", "30")
+        self.assertEqual(rc, 0, err)
+        ajustes, _ = self.e.ver()
+        self.assertEqual(ajustes["umbral_temp_aviso"]["valor"], "80")
+        self.assertEqual(ajustes["historial_dias"]["valor"], "30")
+        self.assertTrue(ajustes["historial_dias"]["propio"])
+
+    def test_validacion_cruzada_de_umbrales(self):
+        casos = (("umbral_temp_aviso", "96"),                           # aviso >= critico (95)
+                 ("umbral_temp_critico", "80"),                         # critico <= aviso (85)
+                 ("umbral_temp_aviso", "90", "umbral_temp_critico", "90"),
+                 ("umbral_disco_aviso", "95"), ("umbral_disco_critico", "85"),
+                 ("umbral_bateria_critico", "15"),                      # critico >= aviso (15)
+                 ("umbral_bateria_aviso", "5"))
+        for args in casos:
+            rc, _, err = self.e.ejecutar("poner", *args)
+            self.assertEqual(rc, 1, args)
+            self.assertIn("debe ser menor", err, args)
+        self.assertFalse(self.e.archivo.exists(), "rechazado: no se guarda nada")
+        # En la misma orden se comprueba el conjunto: subir los dos a la vez si vale.
+        self.assertEqual(self.e.ejecutar("poner", "umbral_temp_aviso", "97", "umbral_temp_critico", "100")[0], 0)
+        # En la bateria el critico es el mas bajo.
+        self.assertEqual(self.e.ejecutar("poner", "umbral_bateria_aviso", "20", "umbral_bateria_critico", "10")[0], 0)
+
+    def test_restablecer_no_deja_umbrales_incoherentes(self):
+        self.assertEqual(self.e.ejecutar("poner", "umbral_temp_aviso", "98", "umbral_temp_critico", "100")[0], 0)
+        rc, _, err = self.e.ejecutar("restablecer", "umbral_temp_critico")    # 95 < 98
+        self.assertEqual(rc, 1)
+        self.assertIn("debe ser menor", err)
+        self.assertEqual(self.e.ejecutar("restablecer", "--todo")[0], 0)
+
     def test_orden_desconocida(self):
         self.assertEqual(self.e.ejecutar("inventada")[0], 2)
         self.assertEqual(self.e.ejecutar("--help")[0], 0)

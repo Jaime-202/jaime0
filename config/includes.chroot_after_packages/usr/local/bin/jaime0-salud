@@ -4,6 +4,10 @@
 #   jaime0-salud [ahora]   resumen legible en espanol
 #   jaime0-salud --json    {"instante": ..., "estado": ... o null}
 #   jaime0-salud barra     una linea JSON para Waybar (sin red, sin esperar)
+#   jaime0-salud incidencias [--json] [-n N]   ultimas incidencias (del servicio o, si esta
+#                          parado, de ~/.local/state/jaime0/incidencias.jsonl)
+#   jaime0-salud serie RANGO [--json]          serie historica (5m, 1h, 24h o historia):
+#                          la pide al servicio por su socket; sin servicio, error claro
 #
 # No mide nada por su cuenta: lee instante.json y estado.json del directorio de ejecucion
 # ($XDG_RUNTIME_DIR/jaime0, o JAIME0_RUNTIME). Si el servicio esta parado, "ahora" y
@@ -32,6 +36,15 @@ def directorio_ejecucion():
         return d
     base = os.environ.get("XDG_RUNTIME_DIR")
     return os.path.join(base, "jaime0") if base else None
+
+
+def directorio_estado():
+    """JAIME0_ESTADO, o $XDG_STATE_HOME/jaime0, o ~/.local/state/jaime0 (solo lectura)."""
+    d = os.environ.get("JAIME0_ESTADO")
+    if d:
+        return d
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "jaime0")
 
 
 def leer_json(nombre):
@@ -163,12 +176,140 @@ def barra():
     return {"text": f"{icono}{alerta} ", "class": nombre.lower(), "tooltip": "\n".join(lineas)}
 
 
+def pedir_socket(peticion, timeout=5.0):
+    """Una peticion al socket del servicio; devuelve el dict de la respuesta. Lanza OSError
+    si el servicio no esta (o no hay sockets Unix) y ValueError si la respuesta esta rota."""
+    import socket
+    d = directorio_ejecucion()
+    if not d or not hasattr(socket, "AF_UNIX"):
+        raise OSError("sin socket del servicio")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(os.path.join(d, "control.sock"))
+        s.sendall((json.dumps(peticion) + "\n").encode("utf-8"))
+        buf = bytearray()
+        while b"\n" not in buf:
+            datos = s.recv(65536)
+            if not datos:
+                break
+            buf.extend(datos)
+    finally:
+        s.close()
+    doc = json.loads(buf.decode("utf-8"))
+    if not isinstance(doc, dict):
+        raise ValueError("respuesta no válida")
+    return doc
+
+
+def incidencias_de_archivo(n):
+    """Las ultimas n incidencias de incidencias.jsonl, las mas recientes primero. Ignora
+    las lineas rotas."""
+    docs = []
+    try:
+        with open(os.path.join(directorio_estado(), "incidencias.jsonl"), encoding="utf-8", errors="replace") as f:
+            for linea in f:
+                try:
+                    d = json.loads(linea)
+                except ValueError:
+                    continue
+                if isinstance(d, dict) and "componente" in d:
+                    docs.append(d)
+    except OSError:
+        pass
+    return docs[-n:][::-1]
+
+
+def obtener_incidencias(n):
+    """(lista, de_servicio): del servicio si responde; si no, directamente del archivo."""
+    try:
+        r = pedir_socket({"orden": "incidencias", "limite": n})
+        if r.get("ok") and isinstance(r.get("incidencias"), list):
+            return r["incidencias"], True
+    except (OSError, ValueError):
+        pass
+    return incidencias_de_archivo(n), False
+
+
+def texto_incidencias(lista):
+    if not lista:
+        return "No hay incidencias registradas."
+    L = []
+    for d in lista:
+        try:
+            fecha = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(d["t"]))
+        except (KeyError, TypeError, ValueError, OverflowError, OSError):
+            fecha = "fecha desconocida"
+        L.append(f"{fecha}  {d.get('gravedad', '?'):<8}  {d.get('componente', '?')}  {d.get('descripcion', '')}")
+        if d.get("recomendacion"):
+            L.append(f"    Recomendación: {d['recomendacion']}")
+    return "\n".join(L)
+
+
+ETIQUETAS_SERIE = {"cpu": ("CPU", "%"), "ram": ("RAM usada", "%"), "swap": ("Swap usada", "%"),
+                   "presion": ("Presión de memoria", ""), "temp": ("Temperatura CPU", "°C"),
+                   "gpu_temp": ("Temperatura GPU", "°C"), "bateria": ("Batería", "%"),
+                   "vatios": ("Consumo", "W"), "lectura": ("Lectura de disco", "MB/s"),
+                   "escritura": ("Escritura de disco", "MB/s"), "disco": ("Disco usado", "%")}
+
+
+def texto_serie(s):
+    """Resumen legible de una serie: por metrica, minimo, media y maximo del rango."""
+    L = [f"Serie {s.get('rango')}: {len(s.get('t', []))} puntos, {s.get('resolucion')} s por punto"]
+    for k, (nombre, unidad) in ETIQUETAS_SERIE.items():
+        m = (s.get("metricas") or {}).get(k) or {}
+        med = [v for v in m.get("med", []) if v is not None]
+        if not med:
+            L.append(f"  {nombre}: N/D")
+            continue
+        bajo = min([v for v in m.get("min", []) if v is not None] or med)
+        alto = max([v for v in m.get("max", []) if v is not None] or med)
+        L.append(f"  {nombre}: mín {bajo:g} · media {sum(med) / len(med):.1f} · máx {alto:g} {unidad}".rstrip())
+    L.append(f"Huecos (sin datos): {len(s.get('huecos') or [])}")
+    L.append(f"Eventos: {len(s.get('eventos') or [])}")
+    return "\n".join(L)
+
+
+def cmd_incidencias(argv):
+    ap = argparse.ArgumentParser(prog=f"{PROGRAMA} incidencias", description="Últimas incidencias del sistema.")
+    ap.add_argument("--json", action="store_true", help="imprime la lista en JSON")
+    ap.add_argument("-n", type=int, default=20, help="cuántas (por defecto 20, máximo 500)")
+    args = ap.parse_args(argv)
+    lista, _servicio = obtener_incidencias(max(1, min(args.n, 500)))
+    print(json.dumps(lista, ensure_ascii=False) if args.json else texto_incidencias(lista))
+    return 0
+
+
+def cmd_serie(argv):
+    ap = argparse.ArgumentParser(prog=f"{PROGRAMA} serie", description="Serie histórica del servicio.")
+    ap.add_argument("rango", choices=["5m", "1h", "24h", "historia"])
+    ap.add_argument("--json", action="store_true", help="imprime la serie completa en JSON")
+    args = ap.parse_args(argv)
+    try:
+        s = pedir_socket({"orden": "serie", "rango": args.rango})
+    except (OSError, ValueError):
+        print(f"{PROGRAMA}: el servicio de Jaime0 no está en marcha: no hay series sin él "
+              "(systemctl --user status jaime0-servicio).", file=sys.stderr)
+        return 1
+    if not s.get("ok"):
+        print(f"{PROGRAMA}: {s.get('error', 'error desconocido')} para el rango {args.rango}.", file=sys.stderr)
+        return 1
+    print(json.dumps(s, ensure_ascii=False) if args.json else texto_serie(s))
+    return 0
+
+
 def main(argv=None):
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, OSError):
         pass
-    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Estado de salud del sistema de Jaime0.")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv[:1] == ["incidencias"]:
+        return cmd_incidencias(argv[1:])
+    if argv[:1] == ["serie"]:
+        return cmd_serie(argv[1:])
+    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Estado de salud del sistema de Jaime0. "
+                                 "Otras órdenes: incidencias [--json] [-n N], serie RANGO [--json].")
     ap.add_argument("orden", nargs="?", default="ahora", choices=["ahora", "barra"],
                     help="ahora (resumen, por defecto) o barra (una línea JSON para Waybar)")
     ap.add_argument("--json", action="store_true", help="imprime instante y estado en JSON")
