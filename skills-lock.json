@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "skills": {
+    "claude-router": {
+      "source": "vimoxshah/skills",
+      "sourceType": "github",
+      "skillPath": "skills/claude-router/SKILL.md",
+      "computedHash": "2475c180fba86aff40c43feb8bde267eda6e4e0b36de1c74e358935032cf8065",
+      "installMode": "copy"
+    }
+  }
+}
