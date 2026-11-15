@@ -425,7 +425,8 @@ class PruebasInstanteYServicio(Base):
         self.assertEqual(est["v"], 1)
         self.assertEqual(est["estado"], "ONLINE")
         self.assertEqual(est["servicio"]["pid"], os.getpid())
-        self.assertEqual(est["perfil"], {"activo": None, "fuente": "power-profiles-daemon"})
+        self.assertEqual(est["perfil"], {"activo": None, "nombre": None, "anterior": None, "origen": None,
+                                         "energia": None, "retencion": None, "degradado": None, "fallos": []})
         self.assertEqual(est["privacidad"]["estado"], "UNAVAILABLE")
         self.assertEqual(est["actividad"][0]["texto"], "Servicio iniciado")
         self.assertEqual(len(sv.anillo), 1)
@@ -437,7 +438,7 @@ class PruebasInstanteYServicio(Base):
         sv.instante = instante_base()
         sv.publicar("ONLINE", [])
         sv.publicar("WARNING", [{"gravedad": "WARNING", "componente": "cpu", "texto": "x"}])
-        sv.poner_perfil("performance")
+        sv.poner_energia("performance")
         textos = [e["texto"] for e in sv.actividad]
         self.assertIn("Estado: ONLINE → WARNING", textos)
         self.assertIn("Perfil de energía: performance", textos)
@@ -520,10 +521,16 @@ class PruebasApi(unittest.TestCase):
         self.assertTrue(self.pedir('{"orden":"rapido"}', sv)["ok"])
 
 
+def PERFIL_ESTADO(activo, nombre, energia, retencion=None):
+    return {"activo": activo, "nombre": nombre, "anterior": None, "origen": "usuario", "energia": energia,
+            "retencion": retencion, "degradado": None, "fallos": []}
+
+
 class PruebasSalud(Base):
     def estado_json(self, **cambios):
         e = {"v": 1, "t": int(time.time()), "estado": "ONLINE", "motivos": [],
-             "perfil": {"activo": "balanced", "fuente": "power-profiles-daemon"},
+             "perfil": {"activo": "balanced", "nombre": "BALANCED", "anterior": None, "origen": "inicio",
+                        "energia": "balanced", "retencion": None, "degradado": None, "fallos": []},
              "privacidad": {"estado": "SECURE", "detalles": []}, "actividad": [],
              "servicio": {"pid": 1, "desde": 0, "intervalo": 10}}
         e.update(cambios)
@@ -539,13 +546,13 @@ class PruebasSalud(Base):
         self.assertEqual(r["class"], "online")
         self.assertEqual(r["text"], "\U000f0f85 ")
         self.assertEqual(r["tooltip"].splitlines()[0], "Jaime0 · SYSTEM ONLINE")
-        self.assertIn("Perfil: balanced", r["tooltip"])
+        self.assertIn("Perfil: BALANCED · energía balanced", r["tooltip"])
         self.assertTrue(r["tooltip"].endswith("Clic: Control Center"))
 
     def test_barra_warning_con_icono_de_alerta_y_motivos_maximo_4(self):
         motivos = [{"gravedad": "WARNING", "componente": "x", "texto": f"motivo {i}"} for i in range(6)]
         self.estado_json(estado="WARNING", motivos=motivos,
-                         perfil={"activo": "performance", "fuente": "power-profiles-daemon"})
+                         perfil=PERFIL_ESTADO("performance", "PERFORMANCE", "performance"))
         r = H.barra()
         self.assertEqual(r["class"], "warning")
         self.assertEqual(r["text"], "\U000f04c5 \U000f0026 ")
@@ -553,14 +560,14 @@ class PruebasSalud(Base):
         self.assertNotIn("motivo 4", r["tooltip"])
 
     def test_barra_critical_y_perfil_desconocido(self):
-        self.estado_json(estado="CRITICAL", perfil={"activo": None, "fuente": "power-profiles-daemon"})
+        self.estado_json(estado="CRITICAL", perfil={"activo": None, "energia": None})
         r = H.barra()
         self.assertEqual(r["class"], "critical")
         self.assertTrue(r["text"].startswith("\U000f0f85"))
         self.assertIn("SYSTEM CRITICAL", r["tooltip"])
 
     def test_barra_power_saver(self):
-        self.estado_json(perfil={"activo": "power-saver", "fuente": "power-profiles-daemon"})
+        self.estado_json(perfil=PERFIL_ESTADO("power-saver", "POWER SAVER", "power-saver"))
         self.assertEqual(H.barra()["text"], "\U000f0f86 ")
 
     def test_barra_parado_con_estado_viejo(self):
@@ -1170,7 +1177,7 @@ class PruebasServicioFase3(Base):
         sv.publicar("ONLINE", [])
         sv.instante = instante_base(cargador=True)
         sv.publicar("CRITICAL", [{"gravedad": "CRITICAL", "componente": "cpu", "texto": "x"}])
-        sv.poner_perfil("power-saver")
+        sv.poner_energia("power-saver")
         tipos = [(e["tipo"], e["gravedad"]) for e in sv.eventos]
         self.assertIn(("estado", "CRITICAL"), tipos)
         self.assertIn(("cargador", "INFO"), tipos)

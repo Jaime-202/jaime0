@@ -1,6 +1,46 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1, 2 y 3 terminadas.** Funcionan el servicio, `jaime0-salud`, la ventana con SYSTEM OVERVIEW y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. Las demás secciones dicen en qué fase llegarán y no muestran datos inventados.
+Estado: **Fases 1 a 4 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, la ventana con SYSTEM OVERVIEW, PERFORMANCE, PROFILES y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. AUTOMATION, PRIVACY & SECURITY y SETTINGS dicen en qué fase llegarán y no muestran datos inventados.
+
+## PROFILES (fase 4)
+
+| Perfil | Qué cambia |
+|---|---|
+| BALANCED | Nada: tu configuración tal cual (predeterminado) |
+| PERFORMANCE | Energía en alto rendimiento (solo si el equipo lo ofrece) |
+| POWER SAVER | Energía en ahorro, sin animaciones ni desenfoque |
+| FOCUS | No molestar (las notificaciones se guardan en el centro) |
+| MULTIMEDIA | No molestar y sin bloqueo ni apagado de pantalla |
+| CUSTOM | Lo que elijas en el editor (`✎ EDITAR CUSTOM`) o con `jaime0-perfil personalizado clave=valor` |
+
+**Cómo se aplica.** El servicio es el único que cambia el perfil; la ventana, `jaime0-perfil` y (en la fase 6) las reglas se lo piden. Cada perfil declara todo lo que gestiona y nada más, y se aplica sin reiniciar (unas décimas de segundo):
+
+- **Energía:** con una *retención* de power-profiles-daemon (`HoldProfile`), nunca escribiendo tu preferencia; si el servicio se para, la retención se suelta sola.
+- **Animaciones y desenfoque:** una capa de sesión en `$XDG_RUNTIME_DIR/jaime0/perfil.ajustes` que `hyprland.lua` lee encima de tus ajustes (solo esas dos claves) seguida de `hyprctl reload`. Tus ajustes de `~/.config/jaime0/ajustes` no se tocan.
+- **No molestar:** swaync. **Sin bloqueo:** un inhibidor de logind (hypridle lo respeta). **Modo noche:** `modo-noche encender|apagar`.
+- **Volver atrás:** antes de cambiar algo se guarda su valor real y, al dejar de gestionarlo, se restaura (si tenías el no molestar puesto a mano, sigue puesto al salir de FOCUS). `↶ VOLVER A …` o `jaime0-perfil anterior` aplica el perfil anterior.
+- **Persistencia:** el perfil elegido se guarda en `~/.local/state/jaime0/perfil.json` y se vuelve a aplicar al arrancar el servicio.
+- **Lo que no se toca nunca:** governors, EPP, sysctl, servicios del sistema, brillo ni radios.
+
+Un perfil que el equipo no admite sale como `UNAVAILABLE` con el motivo (en la VM, PERFORMANCE: VirtualBox no ofrece el perfil de energía de alto rendimiento) y no se puede aplicar.
+
+`jaime0-perfil` (lista), `jaime0-perfil poner FOCUS`, `jaime0-perfil anterior`, `jaime0-perfil personalizado energia=power-saver no_molestar=si`. Claves de CUSTOM: `energia` (balanced, performance, power-saver), `animaciones`, `desenfoque`, `no_molestar`, `modo_noche` (si, no, base = como esté) e `inhibir_inactividad` (si, no).
+
+**PERFORMANCE** (sección): cada núcleo con su uso y frecuencia, la carga de los últimos 5 minutos, RAM, swap y presión de memoria, el perfil y el estado real de la energía (y si el rendimiento está degradado) y los procesos que más consumen.
+
+### Resultados de la fase 4 (14/15-11-2026, misma VM)
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas | 286 correctas (94 nuevas de perfiles y de `jaime0-perfil`) |
+| Efecto real de cada perfil | POWER SAVER: power-profiles-daemon en *power-saver* por retención y capa con animaciones y desenfoque desactivados; FOCUS: no molestar; MULTIMEDIA: no molestar más inhibidor de logind; BALANCED: todo liberado. Cada cambio, unos 0,1 s |
+| Vuelta atrás | El no molestar puesto a mano sigue puesto al pasar por FOCUS y volver; `anterior` restaura el perfil previo |
+| CUSTOM | Modo noche, ahorro y sin animaciones aplicados y deshechos al volver a BALANCED; valores no válidos rechazados con un mensaje claro; editado y guardado desde la ventana |
+| Persistencia | Tras reiniciar el servicio se reaplica el perfil guardado |
+| Ventana | PROFILES y PERFORMANCE con datos reales; aplicar con un clic; 0 avisos de QML; Hyprland acepta la configuración con la capa (`--verify-config`) |
+| No probado | PERFORMANCE con energía real, el efecto visual de animaciones y desenfoque (en una VM Jaime0 los apaga siempre) y que hypridle respete el inhibidor durante 10 minutos reales: necesitan el portátil o una espera larga |
+
+Arreglos encontrados al probar: el enlace para editar CUSTOM estaba dentro de su tarjeta y el clic también aplicaba el perfil (ahora es un botón aparte); el editor no cargaba lo guardado; el botón de volver se salía de la cabecera con textos largos; la descripción de CUSTOM decía «sin definir» aunque estuviera definido; y la gráfica de PERFORMANCE no avisaba mientras recogía el primer minuto de datos.
 
 ## HEALTH (fase 3)
 

@@ -25,7 +25,8 @@ PROGRAMA = "jaime0-salud"
 EDAD_MAXIMA = 30        # segundos: datos frescos para el resumen
 EDAD_MAXIMA_BARRA = 60  # segundos: estado.json aun vale para la barra
 
-ICONOS_PERFIL = {"balanced": "\U000f0f85", "performance": "\U000f04c5", "power-saver": "\U000f0f86"}
+ICONOS_PERFIL = {"balanced": "\U000f0f85", "performance": "\U000f04c5", "power-saver": "\U000f0f86",
+                 "focus": "\U000f0ef0", "multimedia": "\U000f075a", "custom": "\U000f0493"}
 ICONO_DESCONOCIDO = "\U000f0f85"
 ICONO_ALERTA = "\U000f0026"
 
@@ -136,8 +137,7 @@ def resumen(instante, estado, parado=False):
         L.append(t)
     else:
         L.append("Batería: N/D")
-    perfil = ((estado or {}).get("perfil") or {}).get("activo")
-    L.append(f"Perfil de energía: {perfil or 'N/D'}")
+    L.append(f"Perfil: {texto_perfil((estado or {}).get('perfil'))}")
     priv = (estado or {}).get("privacidad")
     L.append(f"Privacidad: {priv['estado'] if priv else 'N/D'}")
     motivos = (estado or {}).get("motivos")
@@ -146,6 +146,14 @@ def resumen(instante, estado, parado=False):
     for m in (motivos or [])[:6]:
         L.append(f"  · [{m['gravedad']}] {m['texto']}")
     return "\n".join(L)
+
+
+def texto_perfil(perfil):
+    """'FOCUS · energía balanced (retenido)' a partir de estado.json -> perfil."""
+    perfil = perfil or {}
+    nombre = perfil.get("nombre") or (perfil.get("activo") or "").upper() or "desconocido"
+    texto = f"{nombre} · energía {perfil.get('energia') or 'N/D'}"
+    return texto + (" (retenido)" if perfil.get("retencion") else "")
 
 
 def perfil_actual_sin_servicio():
@@ -166,10 +174,10 @@ def barra():
         return {"text": f"{icono} ", "class": "parado",
                 "tooltip": "Servicio de Jaime0 parado" + (f"\nPerfil: {perfil}" if perfil else "")}
     nombre = estado.get("estado") if estado.get("estado") in ("ONLINE", "WARNING", "CRITICAL") else "ONLINE"
-    perfil = (estado.get("perfil") or {}).get("activo")
-    icono = ICONOS_PERFIL.get(perfil, ICONO_DESCONOCIDO)
+    perfil = estado.get("perfil") or {}
+    icono = ICONOS_PERFIL.get(perfil.get("activo"), ICONO_DESCONOCIDO)
     alerta = f" {ICONO_ALERTA}" if nombre in ("WARNING", "CRITICAL") else ""
-    lineas = [f"Jaime0 · SYSTEM {nombre}", f"Perfil: {perfil or 'desconocido'}"]
+    lineas = [f"Jaime0 · SYSTEM {nombre}", f"Perfil: {texto_perfil(perfil)}"]
     for m in (estado.get("motivos") or [])[:4]:
         lineas.append(f"· {m.get('texto', '')}")
     lineas.append("Clic: Control Center")

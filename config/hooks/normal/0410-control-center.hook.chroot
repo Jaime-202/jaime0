@@ -3,7 +3,7 @@
 # arranca la sesion de Hyprland (hyprland.lua); no hace falta habilitarlo.
 set -e
 
-chmod 755 /usr/local/bin/jaime0-servicio /usr/local/bin/jaime0-salud /usr/local/bin/jaime0-control
+chmod 755 /usr/local/bin/jaime0-servicio /usr/local/bin/jaime0-salud /usr/local/bin/jaime0-control /usr/local/bin/jaime0-perfil /usr/local/bin/modo-noche
 chmod 644 /usr/lib/systemd/user/jaime0-servicio.service
 chmod 755 /usr/share/jaime0/control
 chmod 644 /usr/share/jaime0/control/*.qml

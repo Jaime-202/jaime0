@@ -24,10 +24,8 @@ ShellRoot {
 
     readonly property var secciones: [
         { id: "SYSTEM", titulo: "OVERVIEW" },
-        { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES", fase: "Fase 4",
-          contenido: ["Uso por núcleo y frecuencias", "Procesos que más consumen, con su historial", "Presión de memoria y swap"] },
-        { id: "PROFILES", titulo: "SMART PROFILES", fase: "Fase 4",
-          contenido: ["BALANCED, PERFORMANCE, POWER SAVER, FOCUS, MULTIMEDIA y CUSTOM", "Qué cambia cada perfil y solo lo que admite este equipo", "Volver al perfil anterior"] },
+        { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES" },
+        { id: "PROFILES", titulo: "SMART PROFILES" },
         { id: "AUTOMATION", titulo: "JAIME0 RULES", fase: "Fase 6",
           contenido: ["Reglas CUANDO → SI → HACER por eventos reales", "Activar, editar y borrar reglas", "Historial de ejecuciones: correctas y fallidas"] },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER", fase: "Fase 5",
@@ -354,7 +352,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: raiz.seccion === 0 ? vistaSistema : raiz.seccion === 5 ? vistaSalud : vistaPendiente
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaPendiente, vistaPendiente, vistaSalud, vistaPendiente][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -375,6 +373,17 @@ ShellRoot {
                         historiaCpu: raiz.historiaCpu
                         historiaRam: raiz.historiaRam
                     }
+                }
+                Component {
+                    id: vistaRendimiento
+                    Rendimiento {
+                        instante: raiz.instante
+                        estado: raiz.estado
+                    }
+                }
+                Component {
+                    id: vistaPerfiles
+                    Perfiles { estado: raiz.estado }
                 }
                 Component {
                     id: vistaSalud

@@ -1,13 +1,29 @@
 #!/bin/sh
-# Modo noche: tonos calidos en la pantalla con hyprsunset (4500 K). Alterna encendido y
-# apagado; apagado no queda ningun proceso.
+# Modo noche: tonos calidos en la pantalla con hyprsunset (4500 K). Apagado no queda
+# ningun proceso.
+#   modo-noche            alterna (lo que hace SUPER + F2)
+#   modo-noche encender   lo enciende si estaba apagado (perfiles del Control Center)
+#   modo-noche apagar     lo apaga si estaba encendido
+#   modo-noche estado     imprime "encendido" o "apagado"
 TEMPERATURA=4500
 
-if pgrep -x -u "$(id -u)" hyprsunset >/dev/null 2>&1; then
-    pkill -x -u "$(id -u)" hyprsunset
-    notify-send -a "Modo noche" -t 2000 "Modo noche desactivado" 2>/dev/null
-else
+encendido() { pgrep -x -u "$(id -u)" hyprsunset >/dev/null 2>&1; }
+
+encender() {
     command -v hyprsunset >/dev/null 2>&1 || { notify-send "Modo noche" "Falta hyprsunset: sudo apt install hyprsunset"; exit 1; }
     setsid hyprsunset --temperature "$TEMPERATURA" >/dev/null 2>&1 &
     notify-send -a "Modo noche" -t 2000 "Modo noche activado" "Pantalla en tonos cálidos (${TEMPERATURA} K)" 2>/dev/null
-fi
+}
+
+apagar() {
+    pkill -x -u "$(id -u)" hyprsunset
+    notify-send -a "Modo noche" -t 2000 "Modo noche desactivado" 2>/dev/null
+}
+
+case "${1:-alternar}" in
+    alternar) if encendido; then apagar; else encender; fi ;;
+    encender) encendido || encender ;;
+    apagar)   if encendido; then apagar; fi ;;
+    estado)   if encendido; then echo encendido; else echo apagado; fi ;;
+    *)        echo "Uso: modo-noche [alternar|encender|apagar|estado]" >&2; exit 2 ;;
+esac

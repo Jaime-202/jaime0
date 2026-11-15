@@ -1,0 +1,175 @@
+#!/usr/bin/python3 -I
+# jaime0-perfil: cliente de los perfiles del Control Center (los aplica jaime0-servicio).
+#
+#   jaime0-perfil [--json]                 perfil activo y lista de perfiles
+#   jaime0-perfil poner ID                 aplica un perfil (balanced, performance, power-saver,
+#                                          focus, multimedia, custom; tambien "POWER SAVER")
+#   jaime0-perfil anterior                 vuelve al perfil anterior
+#   jaime0-perfil personalizado [clave=valor ...] [--json]
+#                                          sin argumentos muestra CUSTOM; con ellos lo guarda
+#                                          (claves: energia, animaciones, desenfoque,
+#                                          no_molestar, inhibir_inactividad, modo_noche)
+#
+# No cambia nada por su cuenta: pide al servicio por su socket ($XDG_RUNTIME_DIR/jaime0/
+# control.sock, o JAIME0_RUNTIME). Sin servicio, error claro y codigo 1.
+
+import json
+import os
+import sys
+
+PROGRAMA = "jaime0-perfil"
+SIN_SERVICIO = "el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio"
+
+
+def directorio_ejecucion():
+    d = os.environ.get("JAIME0_RUNTIME")
+    if d:
+        return d
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    return os.path.join(base, "jaime0") if base else None
+
+
+def pedir_socket(peticion, timeout=15.0):
+    """Una peticion al socket del servicio. OSError si no esta; ValueError si la respuesta
+    esta rota. El timeout cubre que aplicar un perfil llama a swaync, hyprctl y ppd."""
+    import socket
+    d = directorio_ejecucion()
+    if not d or not hasattr(socket, "AF_UNIX"):
+        raise OSError("sin socket del servicio")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(os.path.join(d, "control.sock"))
+        s.sendall((json.dumps(peticion) + "\n").encode("utf-8"))
+        buf = bytearray()
+        while b"\n" not in buf:
+            datos = s.recv(65536)
+            if not datos:
+                break
+            buf.extend(datos)
+    finally:
+        s.close()
+    doc = json.loads(buf.decode("utf-8"))
+    if not isinstance(doc, dict):
+        raise ValueError("respuesta no válida")
+    return doc
+
+
+def error(texto):
+    print(f"{PROGRAMA}: {texto}", file=sys.stderr)
+    return 1
+
+
+def consultar(peticion, enviar):
+    """(respuesta, None) o (None, codigo de salida) si el servicio no contesta bien."""
+    try:
+        return enviar(peticion), None
+    except (OSError, ValueError):
+        return None, error(SIN_SERVICIO)
+
+
+def texto_perfiles(doc):
+    L = []
+    activo = next((p for p in doc.get("perfiles", []) if p["id"] == doc.get("activo")), None)
+    L.append(f"Perfil activo: {activo['nombre'] if activo else 'ninguno'}")
+    for p in doc.get("perfiles", []):
+        marca = "*" if p["id"] == doc.get("activo") else " "
+        L.append(f"{marca} {p['id']:<12} {p['nombre']}")
+        L.append(f"    {p['descripcion']}")
+        for c in p.get("cambios") or []:
+            L.append(f"    - {c}")
+        if not p.get("disponible"):
+            L.append(f"    No disponible: {p.get('motivo')}")
+    pers = doc.get("personalizado") or {}
+    if pers.get("error"):
+        L.append(f"Aviso: {pers['error']}")
+    return "\n".join(L)
+
+
+def cmd_listar(args, enviar):
+    r, codigo = consultar({"orden": "perfiles"}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(json.dumps(r, ensure_ascii=False) if "--json" in args else texto_perfiles(r))
+    return 0
+
+
+def mostrar_resultado(r, nombre_defecto):
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(f"Perfil aplicado: {r.get('nombre') or r.get('activo') or nombre_defecto}")
+    for f in r.get("fallos") or []:
+        print(f"Aviso: {f}", file=sys.stderr)
+    return 0
+
+
+def cmd_poner(args, enviar):
+    valor = " ".join(args).strip()
+    if not valor:
+        return error("falta el perfil: jaime0-perfil poner ID")
+    r, codigo = consultar({"orden": "perfil", "valor": valor, "origen": "usuario"}, enviar)
+    return codigo if r is None else mostrar_resultado(r, valor)
+
+
+def cmd_anterior(args, enviar):
+    r, codigo = consultar({"orden": "perfil_anterior", "origen": "usuario"}, enviar)
+    return codigo if r is None else mostrar_resultado(r, "anterior")
+
+
+def cmd_personalizado(args, enviar):
+    json_ = "--json" in args
+    pares = [a for a in args if a != "--json"]
+    if not pares:
+        r, codigo = consultar({"orden": "perfiles"}, enviar)
+        if r is None:
+            return codigo
+        pers = r.get("personalizado") or {}
+        if json_:
+            print(json.dumps(pers, ensure_ascii=False))
+        else:
+            for clave, valor in sorted((pers.get("ajustes") or {}).items()):
+                print(f"{clave} = {valor}")
+            if not pers.get("ajustes"):
+                print("CUSTOM sin ajustes: todo como lo tienes configurado.")
+            if pers.get("error"):
+                print(f"Aviso: {pers['error']}", file=sys.stderr)
+        return 0
+    ajustes = {}
+    for par in pares:
+        clave, igual, valor = par.partition("=")
+        if not igual or not clave.strip():
+            return error(f"se esperaba clave=valor y llegó {par!r}")
+        ajustes[clave.strip()] = valor.strip()
+    r, codigo = consultar({"orden": "personalizado", "ajustes": ajustes}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print("Perfil CUSTOM guardado.")
+    for f in r.get("fallos") or []:
+        print(f"Aviso: {f}", file=sys.stderr)
+    return 0
+
+
+def main(argv=None, enviar=None):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+    argv = list(sys.argv[1:] if argv is None else argv)
+    enviar = enviar or pedir_socket
+    if argv[:1] in (["-h"], ["--help"]):
+        print("Uso: jaime0-perfil [--json] | poner ID | anterior | personalizado [clave=valor ...] [--json]")
+        return 0
+    acciones = {"poner": cmd_poner, "anterior": cmd_anterior, "personalizado": cmd_personalizado}
+    if argv and not argv[0].startswith("-"):
+        if argv[0] not in acciones:
+            return error(f"orden desconocida: {argv[0]}")
+        return acciones[argv[0]](argv[1:], enviar)
+    return cmd_listar(argv, enviar)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

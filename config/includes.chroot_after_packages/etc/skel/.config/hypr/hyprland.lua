@@ -103,12 +103,24 @@ do
     end
     leerClaves(xdg .. "/jaime0/ajustes", usuario)
     ajustes.predet, ajustes.usuario = predet, usuario
+
+    -- Capa del perfil activo (Control Center, jaime0-servicio): vive en memoria
+    -- ($XDG_RUNTIME_DIR), nunca en tus ajustes, y solo puede cambiar estas claves.
+    local capa, perfil = {}, {}
+    local runtime = os.getenv("XDG_RUNTIME_DIR")
+    if runtime and runtime ~= "" then
+        leerClaves(runtime .. "/jaime0/perfil.ajustes", capa)
+    end
+    for _, clave in ipairs({ "animaciones", "desenfoque" }) do
+        perfil[clave] = capa[clave]
+    end
+    ajustes.perfil = perfil
 end
 
--- Valor de un ajuste ya comprobado: primero el del usuario, luego el predeterminado y,
--- si ninguno sirve, el de reserva.
+-- Valor de un ajuste ya comprobado: primero el del perfil activo, luego el del usuario,
+-- luego el predeterminado y, si ninguno sirve, el de reserva.
 local function ajuste(clave, comprobar, reserva)
-    for _, origen in ipairs({ ajustes.usuario, ajustes.predet }) do
+    for _, origen in ipairs({ ajustes.perfil, ajustes.usuario, ajustes.predet }) do
         local v = origen[clave]
         if v ~= nil then
             local ok = comprobar(v)

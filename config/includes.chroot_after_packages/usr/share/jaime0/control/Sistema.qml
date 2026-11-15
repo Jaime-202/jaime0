@@ -110,7 +110,7 @@ Item {
                 Repeater {
                     model: [
                         ["UPTIME", vista.duracion(vista.instante ? vista.instante.uptime : null), Tema.texto],
-                        ["PROFILE", vista.perfil ? vista.nombrePerfil(vista.perfil.activo) : "N/D", Tema.cian],
+                        ["PROFILE", vista.perfil ? (vista.perfil.nombre || vista.nombrePerfil(vista.perfil.activo)) : "N/D", Tema.cian],
                         ["PRIVACY", vista.privacidad ? vista.privacidad.estado : "N/D", Tema.colorEstado(vista.privacidad ? vista.privacidad.estado : "")]
                     ]
                     Row {
