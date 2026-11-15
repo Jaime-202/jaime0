@@ -1,0 +1,239 @@
+#!/usr/bin/python3 -I
+# jaime0-privacidad: cliente de PRIVACY & SECURITY del Control Center (lo calcula jaime0-servicio).
+#
+#   jaime0-privacidad [--json]          resumen por apartados: cortafuegos, puertos, conexiones,
+#                                       dispositivos en uso, aplicaciones, privilegios, servicios,
+#                                       telemetria e historial
+#   jaime0-privacidad reglas [--json]   reglas del cortafuegos (pide tu contraseña: solo lectura)
+#   jaime0-privacidad historial [-n N] [--json]
+#                                       acciones relevantes (por defecto las 20 ultimas)
+#
+# No mide ni cambia nada por su cuenta: pide al servicio por su socket ($XDG_RUNTIME_DIR/jaime0/
+# control.sock, o JAIME0_RUNTIME). Sin servicio, error claro y codigo 1.
+
+import datetime
+import json
+import os
+import sys
+
+PROGRAMA = "jaime0-privacidad"
+SIN_SERVICIO = "el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio"
+AVISO_REGLAS = "Se pedirá tu contraseña para leer las reglas (solo lectura)"
+ND = "N/D"
+
+
+def directorio_ejecucion():
+    d = os.environ.get("JAIME0_RUNTIME")
+    if d:
+        return d
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    return os.path.join(base, "jaime0") if base else None
+
+
+def pedir_socket(peticion, timeout=60.0):
+    """Una peticion al socket del servicio. OSError si no esta; ValueError si la respuesta esta
+    rota. El timeout cubre el calculo del detalle (varios subprocesos) y, para las reglas, el
+    tiempo que el usuario tarda en escribir su contraseña."""
+    import socket
+    d = directorio_ejecucion()
+    if not d or not hasattr(socket, "AF_UNIX"):
+        raise OSError("sin socket del servicio")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(os.path.join(d, "control.sock"))
+        s.sendall((json.dumps(peticion) + "\n").encode("utf-8"))
+        buf = bytearray()
+        while b"\n" not in buf:
+            datos = s.recv(65536)
+            if not datos:
+                break
+            buf.extend(datos)
+    finally:
+        s.close()
+    doc = json.loads(buf.decode("utf-8"))
+    if not isinstance(doc, dict):
+        raise ValueError("respuesta no válida")
+    return doc
+
+
+def error(texto):
+    print(f"{PROGRAMA}: {texto}", file=sys.stderr)
+    return 1
+
+
+def consultar(peticion, enviar, timeout=None):
+    """(respuesta, None) o (None, codigo de salida) si el servicio no contesta bien."""
+    try:
+        return (enviar(peticion) if timeout is None else enviar(peticion, timeout)), None
+    except (OSError, ValueError):
+        return None, error(SIN_SERVICIO)
+
+
+def hora(t):
+    try:
+        return datetime.datetime.fromtimestamp(int(t)).strftime("%d-%m-%Y %H:%M:%S")
+    except (TypeError, ValueError, OverflowError, OSError):
+        return ND
+
+
+def titulo(texto):
+    return ["", texto.upper(), "-" * len(texto)]
+
+
+def texto_cortafuegos(fw):
+    if not fw.get("instalado"):
+        return ["El cortafuegos (UFW) no está instalado"]
+    p = fw.get("politicas") or {}
+    unidad = {True: "activa", False: "parada", None: "desconocida"}[fw.get("unidad_activa")]
+    return [f"Estado: {'activo' if fw.get('activo') else 'inactivo'} (servicio ufw: {unidad})",
+            f"Políticas por defecto: entrante {p.get('entrante') or ND}, saliente {p.get('saliente') or ND}, "
+            f"enrutado {p.get('enrutado') or ND}",
+            f"Registro: {fw.get('registro') or ND}",
+            "Las reglas necesitan autorización: jaime0-privacidad reglas"]
+
+
+def texto_privacidad(doc):
+    est = doc.get("estado") or {}
+    L = [f"PRIVACY & SECURITY: {est.get('estado', ND)}"]
+    L += [f"  · {t}" for t in est.get("detalles") or []]
+    L += [f"  ! {t}" for t in est.get("motivos") or []]
+    L += titulo("Cortafuegos") + texto_cortafuegos(doc.get("cortafuegos") or {})
+    L += titulo("Puertos en escucha")
+    puertos = doc.get("puertos")
+    if puertos is None:
+        L.append("No se pudo consultar (ss)")
+    for p in puertos or []:
+        L.append(f"{p['protocolo']:<4} {p['direccion']}:{p['puerto']}  "
+                 f"{'EXPUESTO' if p.get('expuesto') else 'local'}  "
+                 f"{p['proceso'] + ' (pid ' + str(p['pid']) + ')' if p.get('proceso') else 'proceso no visible'}")
+    L += titulo("Conexiones por programa")
+    conexiones = doc.get("conexiones")
+    if conexiones is None:
+        L.append("No se pudo consultar (ss)")
+    for c in conexiones or []:
+        L.append(f"{c['proceso'] or 'procesos no visibles'}: {c['conexiones']} conexión(es)")
+        L.append("    " + ", ".join(c.get("destinos") or []))
+    d = doc.get("dispositivos") or {}
+    L += titulo("Dispositivos en uso")
+    for clave, nombre in (("microfono", "Micrófono"), ("camara", "Cámara"), ("pantalla", "Captura de pantalla")):
+        lista = d.get(clave)
+        if lista is None:
+            L.append(f"{nombre}: {ND} (herramienta no disponible)")
+        elif not lista:
+            L.append(f"{nombre}: nadie lo usa")
+        else:
+            L.append(f"{nombre}: " + ", ".join(
+                x["aplicacion"] + (f" (pid {x['pid']})" if x.get("pid") else "") for x in lista))
+    fp = doc.get("flatpak") or {}
+    L += titulo("Aplicaciones")
+    if fp.get("estado") == "AVAILABLE":
+        for a in fp.get("aplicaciones") or []:
+            L.append(a["aplicacion"])
+            L += ["    " + x for x in a.get("permisos") or []]
+        if not fp.get("aplicaciones"):
+            L.append("Flatpak instalado, sin aplicaciones")
+    else:
+        L.append(fp.get("texto") or ND)
+    L += titulo("Privilegios del usuario")
+    grupos = (doc.get("privilegios") or {}).get("grupos") or []
+    L += [g["texto"] for g in grupos] or ["Sin grupos con poder especial"]
+    L += titulo("Servicios")
+    L += [f"{s['nombre']:<15} {s['estado']:<12} {s['texto']}" for s in doc.get("servicios") or []]
+    L += titulo("Telemetría")
+    L += [f"{t['elemento']}: {t['texto']}" for t in doc.get("telemetria") or []]
+    L += titulo("Historial reciente")
+    L += [f"{hora(h.get('t'))}  {h.get('texto')}" for h in doc.get("historial") or []] or ["Sin acciones registradas"]
+    return "\n".join(L)
+
+
+def texto_reglas(doc):
+    p = doc.get("politicas") or {}
+    L = [f"Cortafuegos: {'activo' if doc.get('activo') else 'inactivo'}",
+         f"Registro: {doc.get('registro') or ND}",
+         f"Políticas: entrante {p.get('entrante') or ND}, saliente {p.get('saliente') or ND}, "
+         f"enrutado {p.get('enrutado') or ND}"]
+    reglas = doc.get("reglas") or []
+    L.append("")
+    if not reglas:
+        L.append("Sin reglas")
+    for r in reglas:
+        linea = f"{r['destino']:<24} {r['accion']:<12} {r['origen']}" + (" (IPv6)" if r.get("ipv6") else "")
+        L.append(linea + (f"  # {r['comentario']}" if r.get("comentario") else ""))
+    if doc.get("puertos_permitidos"):
+        L.append("")
+        L.append("Puertos permitidos: " + ", ".join(doc["puertos_permitidos"]))
+    if doc.get("puertos_bloqueados"):
+        L.append("Puertos bloqueados: " + ", ".join(doc["puertos_bloqueados"]))
+    return "\n".join(L)
+
+
+def texto_historial(lista):
+    return "\n".join(f"{hora(h.get('t'))}  {h.get('texto')}" for h in lista) or "Sin acciones registradas"
+
+
+def cmd_resumen(args, enviar):
+    r, codigo = consultar({"orden": "privacidad"}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(json.dumps(r, ensure_ascii=False) if "--json" in args else texto_privacidad(r))
+    return 0
+
+
+def cmd_reglas(args, enviar):
+    print(AVISO_REGLAS, file=sys.stderr, flush=True)
+    r, codigo = consultar({"orden": "ufw_reglas"}, enviar, 150.0)
+    if r is None:
+        return codigo
+    if "--json" in args:
+        print(json.dumps(r, ensure_ascii=False))
+        return 0 if r.get("ok") else 1
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(texto_reglas(r))
+    return 0
+
+
+def cmd_historial(args, enviar):
+    limite = 20
+    resto = list(args)
+    if "-n" in resto:
+        i = resto.index("-n")
+        try:
+            limite = int(resto[i + 1])
+            if limite < 1:
+                raise ValueError
+        except (IndexError, ValueError):
+            return error("-n necesita un número entero mayor que 0")
+        del resto[i:i + 2]
+    r, codigo = consultar({"orden": "privacidad_historial", "limite": limite}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(json.dumps(r, ensure_ascii=False) if "--json" in resto else texto_historial(r.get("historial") or []))
+    return 0
+
+
+def main(argv=None, enviar=None):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+    argv = list(sys.argv[1:] if argv is None else argv)
+    enviar = enviar or pedir_socket
+    if argv[:1] in (["-h"], ["--help"]):
+        print("Uso: jaime0-privacidad [--json] | reglas [--json] | historial [-n N] [--json]")
+        return 0
+    acciones = {"reglas": cmd_reglas, "historial": cmd_historial}
+    if argv and not argv[0].startswith("-"):
+        if argv[0] not in acciones:
+            return error(f"orden desconocida: {argv[0]}")
+        return acciones[argv[0]](argv[1:], enviar)
+    return cmd_resumen(argv, enviar)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

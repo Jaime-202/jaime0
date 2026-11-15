@@ -20,6 +20,8 @@ gvfs-backends
 gvfs-fuse
 polkitd
 lxpolkit
+# pkexec: el Control Center pide la contraseña para leer las reglas del cortafuegos.
+pkexec
 libnotify-bin
 xdg-user-dirs
 network-manager-tui

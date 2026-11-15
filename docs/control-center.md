@@ -1,6 +1,37 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1 a 4 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, la ventana con SYSTEM OVERVIEW, PERFORMANCE, PROFILES y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. AUTOMATION, PRIVACY & SECURITY y SETTINGS dicen en qué fase llegarán y no muestran datos inventados.
+Estado: **Fases 1 a 5 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, la ventana con SYSTEM OVERVIEW, PERFORMANCE, PROFILES, PRIVACY & SECURITY y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. AUTOMATION y SETTINGS dicen en qué fase llegarán y no muestran datos inventados.
+
+## PRIVACY & SECURITY (fase 5)
+
+Una sección más del Control Center, no una aplicación aparte. Muestra comprobaciones concretas, no una garantía: nunca dice que el equipo esté «totalmente protegido».
+
+| Panel | Qué muestra | Cómo se obtiene (sin root salvo donde se indica) |
+|---|---|---|
+| PRIVACY STATUS | `SECURE` (UFW activo con entrante denegado), `WARNING` (UFW inactivo, entrante permitido o puertos abiertos a la red, con el motivo) o `UNAVAILABLE` (sin UFW) | Todo lo de abajo |
+| FIREWALL · UFW | Activo o no, políticas por defecto y registro; **las reglas, solo si pulsas «VER REGLAS»**: aparece la ventana de contraseña y un ayudante de solo lectura ejecuta `ufw status verbose` | `/etc/ufw/ufw.conf`, `/etc/default/ufw`, systemd; reglas con `pkexec /usr/local/libexec/jaime0-ufw-estado` (acción de polkit `es.jaime0.ufw-estado`, contraseña de administrador recordada unos minutos) |
+| OPEN PORTS | Programas que escuchan conexiones; ◆ = abierto a la red (no solo al propio equipo) | `ss -tulnp` |
+| DEVICES IN USE | Micrófono, cámara y pantalla compartida, con la aplicación; el punto parpadea mientras se usan | PipeWire (`pw-dump`) y `/proc/*/fd` → `/dev/video*` |
+| ACTIVE CONNECTIONS | Conexiones establecidas agrupadas por programa, con sus destinos (sin resolver nombres: no genera tráfico) | `ss -tunp` (de otros usuarios no se ve el programa) |
+| APPS · PRIVILEGES · SERVICES | Flatpak (`UNAVAILABLE`: no está en Jaime0, así que no hay permisos por aplicación), tus grupos con privilegios y qué permiten, y servicios con efecto en la privacidad (SSH, avahi, CUPS, Bluetooth, NetworkManager) | `os.getgrouplist`, systemd |
+| TELEMETRY · HISTORY | Jaime0 sin telemetría; popularity-contest; qué consulta debsecan; si el widget del tiempo conecta con Open-Meteo; Brave y sus opciones (P3A). Historial de cambios relevantes | `dpkg-query`, archivos de configuración |
+
+El historial (`~/.local/state/jaime0/privacidad.jsonl`, 300 líneas como mucho) guarda cambios del cortafuegos, puertos que se abren o se cierran, el uso de micrófono, cámara o pantalla (nombre de la aplicación) y las consultas de reglas con autorización. **No guarda direcciones ni la salida de las reglas.** Cortafuegos y puertos se revisan cada minuto; los dispositivos, cada 10 s con la ventana abierta y cada minuto si no.
+
+`jaime0-privacidad` (resumen por apartados, `--json`), `jaime0-privacidad reglas` (pide la contraseña) y `jaime0-privacidad historial -n N`.
+
+### Resultados de la fase 5 (14-11-2026, misma VM)
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas | 376 correctas (90 nuevas: UFW, `ss`, `pw-dump`, cámara, flatpak, grupos, telemetría, estado, historial, API, cliente y ayudante) |
+| Estado real | WARNING por el puerto 22 (SSH) abierto a la red: es el servidor SSH instalado en la VM para manejarla en las pruebas, y el motivo lo dice |
+| Micrófono | Una grabación con `pw-record` se detectó mientras duraba y quedó en el historial al empezar y al terminar |
+| Reglas con autorización | El botón abrió la ventana de contraseña de polkit con el mensaje de Jaime0; con la contraseña se vieron las reglas reales (22/tcp ALLOW IN, IPv4 e IPv6) y la consulta quedó en el historial |
+| Ventana | Seis paneles con datos reales, 0 avisos de QML |
+| No probado | Cámara real y pantalla compartida real (la VM no tiene cámara ni se compartió pantalla), y Flatpak instalado (no está en Jaime0) |
+
+Encontrado al probar: **faltaba el paquete `pkexec`** (solo estaban `polkitd` y el agente), sin el cual el botón de reglas no podía pedir la contraseña; está añadido a la lista de paquetes. También se corrigieron dos nombres de campo entre el servicio y la ventana, la fila central que aplastaba a la de abajo y un texto de grupos duplicado.
 
 ## PROFILES (fase 4)
 

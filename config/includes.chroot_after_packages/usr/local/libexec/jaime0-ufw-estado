@@ -1,0 +1,19 @@
+#!/bin/sh
+# jaime0-ufw-estado: ayudante de SOLO LECTURA para el Control Center (PRIVACY & SECURITY).
+#
+# Lo ejecuta jaime0-servicio con pkexec, y solo cuando el usuario pide ver las reglas del
+# cortafuegos (accion de polkit es.jaime0.ufw-estado). Imprime "ufw status verbose" y sale
+# con su codigo; no cambia nada, no acepta argumentos y no lee la entrada. Corre como root:
+# por eso es corto, con PATH fijo y sin ninguna orden mas.
+
+set -eu
+
+if [ "$#" -ne 0 ]; then
+    echo "jaime0-ufw-estado: no admite argumentos" >&2
+    exit 2
+fi
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+exec ufw status verbose

@@ -28,8 +28,7 @@ ShellRoot {
         { id: "PROFILES", titulo: "SMART PROFILES" },
         { id: "AUTOMATION", titulo: "JAIME0 RULES", fase: "Fase 6",
           contenido: ["Reglas CUANDO → SI → HACER por eventos reales", "Activar, editar y borrar reglas", "Historial de ejecuciones: correctas y fallidas"] },
-        { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER", fase: "Fase 5",
-          contenido: ["Cortafuegos UFW: estado, reglas y puertos", "Conexiones activas y sus procesos", "Micrófono, cámara y pantalla en uso"] },
+        { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS", fase: "Fase 7",
           contenido: ["Animaciones OFF, SUBTLE y SMOOTH", "Frecuencia de actualización y umbrales de alerta", "Historial, atajo y notificaciones"] }
@@ -352,7 +351,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaPendiente, vistaPendiente, vistaSalud, vistaPendiente][raiz.seccion]
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaPendiente, vistaPrivacidad, vistaSalud, vistaPendiente][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -384,6 +383,10 @@ ShellRoot {
                 Component {
                     id: vistaPerfiles
                     Perfiles { estado: raiz.estado }
+                }
+                Component {
+                    id: vistaPrivacidad
+                    Privacidad {}
                 }
                 Component {
                     id: vistaSalud
