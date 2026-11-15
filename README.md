@@ -4,7 +4,7 @@
 
 ![Mosaico con btop, Neovim y Fastfetch](capturas/mosaico.png)
 
-> **Estado:** en desarrollo. La última versión publicada es la **0.3.0-beta.1**. El Control Center (más abajo) está terminado en el repositorio y llegará con la próxima ISO. Todo se ha probado en máquinas virtuales; **todavía no en el portátil** (ver [docs/pruebas.md](docs/pruebas.md)).
+> **Estado:** en desarrollo. La última versión publicada es la **0.4.0-beta.1**, la primera con el Control Center. Se ha probado en máquinas virtuales; **todavía no en el portátil** (ver [docs/pruebas.md](docs/pruebas.md)).
 
 ## Qué lleva y por qué
 
