@@ -555,9 +555,15 @@ class PruebasSalud(Base):
                          perfil=PERFIL_ESTADO("performance", "PERFORMANCE", "performance"))
         r = H.barra()
         self.assertEqual(r["class"], "warning")
-        self.assertEqual(r["text"], "\U000f04c5 \U000f0026 ")
+        self.assertEqual(r["text"], "\U000f04c5 \U000f0026 6 ", "el numero cuenta todos los motivos")
         self.assertIn("motivo 3", r["tooltip"])
         self.assertNotIn("motivo 4", r["tooltip"])
+
+    def test_barra_sin_motivos_no_pone_numero(self):
+        self.estado_json(estado="WARNING", motivos=[])
+        self.assertEqual(H.barra()["text"], "\U000f0f85 \U000f0026 ")
+        self.estado_json(estado="CRITICAL", motivos=[{"gravedad": "CRITICAL", "componente": "x", "texto": "m"}])
+        self.assertEqual(H.barra()["text"], "\U000f0f85 \U000f0026 1 ")
 
     def test_barra_critical_y_perfil_desconocido(self):
         self.estado_json(estado="CRITICAL", perfil={"activo": None, "energia": None})
@@ -1347,6 +1353,91 @@ class PruebasUmbrales(Base):
         sv2 = S.Servicio(directorio=self.rt, estado=self.estado, leer_umbrales=lambda: None)
         sv2.recargar_umbrales()
         self.assertEqual(sv2.umbrales, S.UMBRALES)
+
+
+class PruebasIntervalosYAvisos(Base):
+    def doc(self, **v):
+        d = {"cc_intervalo": "10", "cc_intervalo_rapido": "2", "cc_notificar": "criticas"}
+        d.update({k: str(x) for k, x in v.items()})
+        return {"ajustes": [{"clave": k, "valor": x} for k, x in d.items()]}
+
+    def servicio(self, **v):
+        sv = S.Servicio(directorio=self.rt, estado=self.estado,
+                        leer_umbrales=lambda: S.umbrales_desde_ajustes(self.doc(**v)))
+        sv.recargar_umbrales()
+        self.avisos = []
+        sv.aviso_lanzar = self.avisos.append
+        return sv
+
+    def linea(self, grav, comp="disco"):
+        return {"gravedad": grav, "componente": comp, "descripcion": "Disco / al 90 %",
+                "recomendacion": "Libera espacio"}
+
+    def test_valores_de_fabrica_sin_los_ajustes_nuevos(self):
+        u = S.umbrales_desde_ajustes({"ajustes": []})
+        self.assertEqual((u["intervalo_normal"], u["intervalo_rapido"], u["notificar"]), (10, 2, "criticas"))
+
+    def test_intervalos_leidos_sustituyen_a_los_de_fabrica(self):
+        sv = self.servicio(cc_intervalo=30, cc_intervalo_rapido=5)
+        self.assertEqual((sv.intervalo_normal(), sv.intervalo_rapido(), sv.intervalo_actual()), (30, 5, 30))
+        self.assertEqual(sv.historico.intervalo, 30)
+        self.assertEqual(sv.rapido(), (5, int(sv.rapido_hasta)))
+        self.assertEqual(sv.intervalo_actual(), 5)
+
+    def test_intervalo_invalido_se_ignora(self):
+        sv = self.servicio(cc_intervalo="mucho", cc_notificar="siempre")
+        self.assertEqual((sv.intervalo_normal(), sv.umbrales["notificar"]), (10, "criticas"))
+
+    def test_cambio_de_intervalo_reprograma_el_temporizador(self):
+        cambia = {"v": self.doc(cc_intervalo=10)}
+        sv = S.Servicio(directorio=self.rt, estado=self.estado,
+                        leer_umbrales=lambda: S.umbrales_desde_ajustes(cambia["v"]))
+        sv.recargar_umbrales()
+        sv._fuente = object()
+        with mock.patch.object(sv, "_programar") as prog:
+            sv.recargar_umbrales()
+            prog.assert_not_called()
+            cambia["v"] = self.doc(cc_intervalo=5)
+            sv.recargar_umbrales()
+            prog.assert_called_once()
+
+    def test_el_hueco_usa_el_intervalo_efectivo(self):
+        sv = self.servicio(cc_intervalo=30)
+        h = sv.historico
+        h.anadir({"t": 1000}, 30)
+        h.anadir({"t": 1080}, 30)       # 80 s < 3 x 30: no hay hueco
+        self.assertEqual(h.huecos, [])
+        h.anadir({"t": 1200}, 30)       # 120 s > 90: hueco
+        self.assertEqual(h.huecos, [[1080, 1200]])
+
+    def test_criticas_solo_avisa_de_las_criticas(self):
+        sv = self.servicio(cc_notificar="criticas")
+        sv.avisar_incidencias([self.linea("WARNING"), self.linea("NORMAL"), self.linea("CRITICAL")])
+        self.assertEqual(len(self.avisos), 1)
+        orden = self.avisos[0]
+        self.assertEqual(orden[:3], ["notify-send", "--app-name=Jaime0", "--urgency=critical"])
+        self.assertEqual(orden[-2:], ["ESPACIO EN DISCO · CRITICAL", "Disco / al 90 %. Libera espacio"])
+
+    def test_todas_avisa_de_warning_y_critical_pero_no_de_recuperaciones(self):
+        sv = self.servicio(cc_notificar="todas")
+        sv.avisar_incidencias([self.linea("WARNING"), self.linea("NORMAL"), self.linea("CRITICAL")])
+        self.assertEqual([o[2] for o in self.avisos], ["--urgency=normal", "--urgency=critical"])
+
+    def test_ninguna_no_avisa(self):
+        sv = self.servicio(cc_notificar="ninguna")
+        sv.avisar_incidencias([self.linea("WARNING"), self.linea("CRITICAL")])
+        self.assertEqual(self.avisos, [])
+
+    def test_muestrear_avisa_al_abrir_la_incidencia(self):
+        self.escribir("sys/class/hwmon/hwmon0/name", "coretemp\n")
+        self.escribir("sys/class/hwmon/hwmon0/temp1_input", "99000\n")
+        self.escribir("sys/class/hwmon/hwmon0/temp1_label", "Package id 0\n")
+        sv = self.servicio(cc_notificar="criticas")
+        sv.muestreador.base()
+        for _ in range(S.MUESTRAS_INCIDENCIA + 2):
+            sv.muestrear()
+        self.assertEqual(len(self.avisos), 1, "una sola vez, no en cada muestra")
+        self.assertIn("CRITICAL", self.avisos[0][-2])
 
 
 class PruebasSmart(Base):

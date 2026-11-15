@@ -65,7 +65,7 @@ ESQUEMA = {
     "esquinas":            {"tipo": "entero", "min": 0, "max": 20, "grupo": "Ventanas", "etiqueta": "Redondeo de esquinas"},
     "opacidad_inactiva":   {"tipo": "decimal", "min": 0.6, "max": 1.0, "grupo": "Ventanas", "etiqueta": "Opacidad de las ventanas inactivas"},
     "desenfoque":          {"tipo": "sino", "grupo": "Efectos", "etiqueta": "Desenfoque (blur)"},
-    "animaciones":         {"tipo": "sino", "grupo": "Efectos", "etiqueta": "Animaciones"},
+    "animaciones":         {"tipo": "opcion", "opciones": ["no", "sutil", "suave"], "grupo": "Efectos", "etiqueta": "Animaciones (no, sutil, suave)"},
     "barra_altura":        {"tipo": "entero", "min": 20, "max": 48, "grupo": "Barra", "etiqueta": "Altura de la barra"},
     "barra_posicion":      {"tipo": "opcion", "opciones": ["arriba", "abajo"], "grupo": "Barra", "etiqueta": "Posición de la barra"},
     "anclas":              {"tipo": "anclas", "max": 6, "grupo": "Barra", "etiqueta": "Aplicaciones ancladas"},
@@ -87,6 +87,10 @@ ESQUEMA = {
     "umbral_bateria_aviso":  {"tipo": "entero", "min": 5, "max": 50, "grupo": "Control Center", "etiqueta": "Batería: aviso (%)"},
     "umbral_bateria_critico": {"tipo": "entero", "min": 2, "max": 30, "grupo": "Control Center", "etiqueta": "Batería: crítico (%)"},
     "historial_dias":        {"tipo": "entero", "min": 7, "max": 365, "grupo": "Control Center", "etiqueta": "Días de historial de salud"},
+    "cc_intervalo":          {"tipo": "opcion", "opciones": ["5", "10", "30"], "grupo": "Control Center", "etiqueta": "Frecuencia de medición en segundo plano (s)"},
+    "cc_intervalo_rapido":   {"tipo": "opcion", "opciones": ["1", "2", "5"], "grupo": "Control Center", "etiqueta": "Frecuencia con el Control Center abierto (s)"},
+    "cc_notificar":          {"tipo": "opcion", "opciones": ["todas", "criticas", "ninguna"], "grupo": "Control Center", "etiqueta": "Avisos de incidencias en el escritorio"},
+    "control_atajo":         {"tipo": "atajo", "grupo": "Control Center", "etiqueta": "Atajo del Control Center"},
 }
 
 # Parejas (menor, mayor) que deben cumplir menor < mayor. En la bateria el aviso es el
@@ -107,14 +111,15 @@ WIDGETS = [c[len("widget_"):] for c in ESQUEMA if c.startswith("widget_")]
 RESERVA = {
     "acento": "#54e58a", "fondo": "/usr/share/backgrounds/jaime0/jaime0.png",
     "separacion_interior": "4", "separacion_exterior": "8", "borde": "2", "esquinas": "8",
-    "opacidad_inactiva": "1.0", "desenfoque": "si", "animaciones": "si",
+    "opacidad_inactiva": "1.0", "desenfoque": "si", "animaciones": "sutil",
     "barra_altura": "26", "barra_posicion": "arriba", "anclas": "kitty thunar",
     "widget_reloj": "no", "widget_musica": "no", "widget_tiempo": "no", "widget_sonido": "no",
     "widget_sistema": "no", "widget_calendario": "no", "widgets_tarjetas": "si",
     "reloj_formato": "24h", "tiempo_ciudad": "",
     "umbral_temp_aviso": "85", "umbral_temp_critico": "95", "umbral_disco_aviso": "85",
     "umbral_disco_critico": "95", "umbral_bateria_aviso": "15", "umbral_bateria_critico": "5",
-    "historial_dias": "90",
+    "historial_dias": "90", "cc_intervalo": "10", "cc_intervalo_rapido": "2",
+    "cc_notificar": "criticas", "control_atajo": "SUPER+I",
 }
 # Ciudad: letras de cualquier idioma, espacios y signos de nombres de lugar.
 CIUDAD = re.compile(r"^[^\W\d_](?:[^\W_]|[ .,'’()-])*$")
@@ -124,6 +129,10 @@ COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 ID_APLICACION = re.compile(r"^[A-Za-z0-9._+-]+$")
 SI = ("si", "sí", "s", "yes", "true", "1", "on")
 NO = ("no", "n", "false", "0", "off")
+MODIFICADORES = ("SUPER", "SHIFT", "CTRL", "ALT")
+TECLAS_NOMBRE = ("Escape", "Return", "space", "Tab", "BackSpace", "Delete", "Insert", "Home", "End",
+                 "Prior", "Next", "Print", "Pause")
+TECLAS_FUNCION = tuple(f"F{n}" for n in range(1, 13))
 
 
 class Error(Exception):
@@ -160,6 +169,33 @@ def predeterminados():
     return valores, temas
 
 
+def validar_atajo(clave, t):
+    """SUPER+I, CTRL+ALT+F5...: al menos un modificador y una tecla final. Devuelve el
+    atajo normalizado (modificadores y letras en mayusculas, nombres de tecla de Hyprland)."""
+    uso = (f"{clave}: escribe modificadores y una tecla separados por +, por ejemplo SUPER+I o "
+           f"CTRL+ALT+F5 (modificadores: {', '.join(MODIFICADORES)}; teclas: una letra, un dígito, "
+           f"F1-F12 o {', '.join(TECLAS_NOMBRE)})")
+    partes = [p.strip() for p in t.split("+")]
+    if len(partes) < 2 or any(not p for p in partes):
+        raise Error(uso)
+    *mods, tecla = partes
+    mods = [m.upper() for m in mods]
+    if any(m not in MODIFICADORES for m in mods):
+        raise Error(uso)
+    if len(set(mods)) != len(mods):
+        raise Error(f"{clave}: modificador repetido")
+    if len(tecla) == 1 and tecla.isascii() and tecla.isalnum():
+        tecla = tecla.upper()
+    elif tecla.upper() in TECLAS_FUNCION:
+        tecla = tecla.upper()
+    else:
+        por_nombre = {n.lower(): n for n in TECLAS_NOMBRE}
+        if tecla.lower() not in por_nombre:
+            raise Error(uso)
+        tecla = por_nombre[tecla.lower()]
+    return "+".join(mods + [tecla])
+
+
 def validar(clave, texto, temas):
     """Devuelve el valor normalizado o lanza Error con el motivo."""
     if clave not in ESQUEMA:
@@ -189,9 +225,17 @@ def validar(clave, texto, temas):
             return "no"
         raise Error(f"{clave}: usa si o no")
     if e["tipo"] == "opcion":
+        if clave == "animaciones":
+            # Antes era si/no: "si" equivale a sutil y "no" sigue siendo no.
+            if t.lower() in SI:
+                return "sutil"
+            if t.lower() in NO:
+                return "no"
         if t.lower() in e["opciones"]:
             return t.lower()
         raise Error(f"{clave}: opciones válidas: {', '.join(e['opciones'])}")
+    if e["tipo"] == "atajo":
+        return validar_atajo(clave, t)
     if e["tipo"] == "acento":
         if t.lower() in temas:
             return t.lower()
@@ -322,6 +366,17 @@ def guardar(cambios):
     escribir_atomico(ruta, "\n".join(resultado) + "\n")
 
 
+def css_animaciones(nivel):
+    """Reglas de swaync.css segun el nivel de animaciones."""
+    if nivel == "no":
+        return ("/* Animaciones: no. Se desactivan las transiciones y animaciones. */\n"
+                "* { transition: none; animation: none; }\n")
+    if nivel == "suave":
+        return ("/* Animaciones: suave. Transiciones algo mas largas y visibles. */\n"
+                ".notification-row, .notification, .control-center { transition-duration: 280ms; }\n")
+    return "/* Animaciones: sutil. Se queda con las transiciones discretas del tema. */\n"
+
+
 def generar():
     """Rehace ~/.config/jaime0/generado. Devuelve los nombres de lo que ha cambiado."""
     valores, _, temas, avisos = efectivos()
@@ -336,14 +391,24 @@ def generar():
         "rofi.rasi": f"/* Generado por {PROGRAMA}: no lo edites. */\n* {{\n    acento: {acento};\n}}\n",
         "fondo": valores["fondo"] + "\n",
         "anclas": valores["anclas"] + "\n",
-        "swaync.css": f"/* Generado por {PROGRAMA}: no lo edites. */\n@define-color acento {acento};\n",
+        "swaync.css": (f"/* Generado por {PROGRAMA}: no lo edites. */\n@define-color acento {acento};\n"
+                       + css_animaciones(valores["animaciones"])),
         # Widgets de escritorio (jaime0-widgets): solo los activados, con su posicion.
         "widgets.json": json.dumps({
             "acento": acento,
             "tarjetas": valores["widgets_tarjetas"] == "si",
             "reloj_formato": valores["reloj_formato"],
+            "animaciones": valores["animaciones"],
             "ciudad": valores["tiempo_ciudad"],
             "widgets": {w: valores[f"widget_{w}"] for w in WIDGETS if valores[f"widget_{w}"] != "no"},
+        }, ensure_ascii=False, indent=4) + "\n",
+        # Control Center: atajo (hyprland.lua) y ajustes de la ventana.
+        "control.json": json.dumps({
+            "atajo": valores["control_atajo"],
+            "animaciones": valores["animaciones"],
+            "intervalo": int(valores["cc_intervalo"]),
+            "intervalo_rapido": int(valores["cc_intervalo_rapido"]),
+            "notificar": valores["cc_notificar"],
         }, ensure_ascii=False, indent=4) + "\n",
         # Indicador de volumen y brillo (wob, via jaime0-osd).
         "wob.ini": (f"# Generado por {PROGRAMA}: no lo edites.\n"

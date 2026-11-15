@@ -25,9 +25,13 @@ Singleton {
     readonly property int letraDato: 22
     readonly property int letraGrande: 30
 
-    // Duracion de las transiciones (ms). Se ajustara con el nivel de animacion (fase 7).
-    readonly property int rapido: 140
-    readonly property int medio: 220
+    // Nivel de animacion de Jaime0 (ajuste "animaciones": no, sutil, suave). Lo pone
+    // shell.qml desde ~/.config/jaime0/generado/control.json. Con "no" no hay transiciones
+    // ni movimientos decorativos (barrido de la cabecera, luces que laten).
+    property string nivel: "sutil"
+    readonly property bool animar: nivel !== "no"
+    readonly property int rapido: nivel === "no" ? 0 : nivel === "suave" ? 220 : 140
+    readonly property int medio: nivel === "no" ? 0 : nivel === "suave" ? 340 : 220
 
     function colorEstado(e) {
         if (e === "CRITICAL") return rojo;

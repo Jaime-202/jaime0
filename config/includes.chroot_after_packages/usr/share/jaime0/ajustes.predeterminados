@@ -14,7 +14,9 @@ borde = 2
 esquinas = 8
 opacidad_inactiva = 1.0
 desenfoque = si
-animaciones = si
+# Animaciones: no = desactivadas; sutil = discretas y rapidas (predeterminado); suave = mas
+# fluidas y visibles. (Los antiguos si/no siguen valiendo: si = sutil.)
+animaciones = sutil
 
 # Barra (Waybar)
 barra_altura = 26
@@ -50,6 +52,13 @@ umbral_disco_critico = 95
 umbral_bateria_aviso = 15
 umbral_bateria_critico = 5
 historial_dias = 90
+# Frecuencia de medicion en segundo plano (5, 10 o 30 s) y con el Control Center abierto (1, 2
+# o 5 s). cc_notificar: avisos de incidencias en el escritorio (todas, criticas o ninguna).
+# control_atajo: atajo de teclado del Control Center (modificadores SUPER, SHIFT, CTRL, ALT).
+cc_intervalo = 10
+cc_intervalo_rapido = 2
+cc_notificar = criticas
+control_atajo = SUPER+I
 
 # Temas de acento: tema.NOMBRE = #rrggbb. "acento" acepta un nombre o un color #rrggbb.
 tema.verde = #54e58a

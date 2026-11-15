@@ -41,7 +41,7 @@ grep -q 'exec_cmd(polkitAgent)' "$LUA" && grep -q '"/usr/bin/lxpolkit"' "$LUA" &
 grep -q 'enabled = false' "$LUA" && ok "sombras desactivadas" || fallo "sombras"
 # 0.2: blur y animaciones salen de jaime0-ajustes (desenfoque, animaciones), pero en VM se
 # apagan siempre, digan lo que digan los ajustes.
-grep -qE '^\s*enabled\s*= ajuste\("desenfoque", sino, (true|false)\) and not esVirtual,' "$LUA" && grep -qE '^\s*enabled\s*= ajuste\("animaciones", sino, (true|false)\) and not esVirtual,' "$LUA" && ok "blur y animaciones apagados en VM (aunque los ajustes digan si)" || fallo "blur o animaciones en VM"
+grep -qE '^\s*enabled\s*= ajuste\("desenfoque", sino, (true|false)\) and not esVirtual,' "$LUA" && grep -qE '^\s*enabled\s*= ajuste\("animaciones", nivelAnimacion, "sutil"\) ~= "no" and not esVirtual,' "$LUA" && ok "blur y animaciones apagados en VM (aunque los ajustes digan si)" || fallo "blur o animaciones en VM"
 grep -q 'no_hardware_cursors = esVirtual' "$LUA" && ok "cursor por software en VM" || fallo "cursor en VM"
 
 echo "== Medidas del sistema =="

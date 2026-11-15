@@ -177,6 +177,8 @@ def barra():
     perfil = estado.get("perfil") or {}
     icono = ICONOS_PERFIL.get(perfil.get("activo"), ICONO_DESCONOCIDO)
     alerta = f" {ICONO_ALERTA}" if nombre in ("WARNING", "CRITICAL") else ""
+    if alerta and len(estado.get("motivos") or []) > 0:
+        alerta += f" {len(estado['motivos'])}"
     lineas = [f"Jaime0 · SYSTEM {nombre}", f"Perfil: {texto_perfil(perfil)}"]
     for m in (estado.get("motivos") or [])[:4]:
         lineas.append(f"· {m.get('texto', '')}")

@@ -55,7 +55,11 @@ Al aplicar, se recarga Hyprland (`hyprctl reload`), Waybar relee su configuraci�
 | `esquinas` | 0-20 | `8` | Redondeo de las ventanas |
 | `opacidad_inactiva` | 0.6-1.0 | `1.0` | Opacidad de las ventanas sin foco. Pantalla completa y vídeo siempre opacos |
 | `desenfoque` | `si` / `no` | `si` | Blur detrás de lo translúcido: kitty, rofi y notificaciones (en una máquina virtual, siempre apagado) |
-| `animaciones` | `si` / `no` | `si` | Animaciones de Hyprland (en una máquina virtual, siempre apagadas) |
+| `animaciones` | `no` / `sutil` / `suave` | `sutil` | Animaciones de Hyprland, notificaciones, widgets y Control Center (`si` se lee como `sutil`; en una máquina virtual Hyprland las apaga siempre) |
+| `cc_intervalo` | `5` / `10` / `30` | `10` | Segundos entre medidas del Control Center en segundo plano |
+| `cc_intervalo_rapido` | `1` / `2` / `5` | `2` | Segundos entre medidas con la ventana del Control Center abierta |
+| `cc_notificar` | `todas` / `criticas` / `ninguna` | `criticas` | Avisos de escritorio de incidencias nuevas |
+| `control_atajo` | atajo | `SUPER+I` | Atajo que abre el Control Center (modificadores y una tecla) |
 | `barra_altura` | 20-48 | `26` | Altura de Waybar |
 | `barra_posicion` | `arriba` / `abajo` | `arriba` | Posición de Waybar |
 | `anclas` | Hasta 6 identificadores de aplicación (nombre del `.desktop`) | `kitty thunar` | Aplicaciones ancladas en el centro de la barra. Mejor con `jaime0-anclar` |

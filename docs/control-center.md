@@ -1,6 +1,44 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1 a 6 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. SETTINGS dice en qué fase llegará y no muestra datos inventados.
+Estado: **Fases 1 a 7 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con sus 7 secciones (SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH y SETTINGS), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Queda la fase 8 (pruebas de conjunto).
+
+## SETTINGS, animaciones e integración (fase 7)
+
+**Animaciones** (ajuste `animaciones`): `no`, `sutil` (predeterminado) y `suave`. El valor antiguo `si` se lee como `sutil` y `no` sigue siendo `no`; el archivo del usuario no se reescribe.
+
+| Dónde | no | sutil | suave |
+|---|---|---|---|
+| Hyprland (ventanas, capas, escritorios) | Desactivadas | Velocidades de siempre; capas con fundido, escritorios con desplazamiento | Más lentas y con la curva `fluida`; capas deslizándose, escritorios con `slidefade 20%` |
+| swaync (`generado/swaync.css`) | `transition: none; animation: none` | Las del tema | Transiciones de 280 ms |
+| Widgets del escritorio | Aparecen sin más | Fundido y 8 px de subida en 220 ms | Lo mismo en 420 ms |
+| Control Center | Sin entrada, sin barrido de la cabecera ni luces que laten | Entrada y cambios de sección de 140–220 ms | 220–340 ms |
+
+En una máquina virtual Hyprland apaga las animaciones siempre, sea cual sea el nivel.
+
+**Ajustes nuevos** (`jaime0-ajustes`; ver [ajustes.md](ajustes.md)): `cc_intervalo` (5, 10 o 30 s, medición en segundo plano), `cc_intervalo_rapido` (1, 2 o 5 s, con la ventana abierta), `cc_notificar` (`todas`, `criticas` o `ninguna`) y `control_atajo` (p. ej. `SUPER+I`, `SUPER+SHIFT+C`, `ALT+F5`; se rechazan modificadores repetidos y teclas desconocidas). `jaime0-ajustes aplicar` escribe además `generado/control.json` (lo lee la ventana) y el nivel en `widgets.json` y `swaync.css`. Hyprland lee el atajo y el nivel de los ajustes al recargar, que `jaime0-ajustes` hace solo.
+
+**Servicio:** usa los intervalos elegidos (un cambio reprograma el temporizador al momento) y avisa en el escritorio de cada incidencia nueva o que empeora, según `cc_notificar`: `notify-send` con el componente, la gravedad, la descripción y la recomendación, lanzado en un hilo con 5 s de límite para no frenar las medidas. Las recuperaciones no avisan.
+
+**Barra:** el indicador añade el número de motivos después del icono de alerta (`󰀦 2`) cuando el sistema no está en ONLINE.
+
+**SETTINGS** (sección 07): animaciones, frecuencias, umbrales de alerta, días de historial, avisos y atajo. Las opciones se eligen con chips, los números con −5/−1/+1/+5 (sin salirse del rango) y el atajo se escribe y se confirma con APLICAR. Todo pasa por `jaime0-ajustes poner`, con la misma validación que la terminal; si algo no vale, sale el motivo. Cada ajuste cambiado muestra ↺ con el valor de fábrica para restablecerlo.
+
+### Resultados de la fase 7 (14-11-2026, misma VM)
+
+La VM tiene la 0.3.0-beta.1 instalada y `sudo` pide contraseña, así que la versión nueva se probó para el usuario `prueba`: los tres programas en `~/.local/bin`, el servicio con un `ExecStart` de usuario (`~/.config/systemd/user/jaime0-servicio.service.d/fase7.conf`) y la ventana lanzada desde `~/fase7`.
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas | 548 correctas (23 nuevas: migración de `animaciones`, atajos válidos y no válidos, `control.json`, CSS por nivel, intervalos, avisos por gravedad y número de la barra) |
+| Niveles | `no`, `sutil` y `suave` aceptados por Hyprland sin errores de configuración (`hyprctl configerrors` vacío); `swaync.css`, `widgets.json` y `control.json` cambian con cada nivel; la ventana se abre con el nivel elegido |
+| Atajo | SUPER+I → SUPER+SHIFT+C → ALT+F5 → SUPER+I en `hyprctl binds`, desde la terminal y escribiéndolo en SETTINGS; `SUPER+SUPER+C` y `SUPER+ñ` rechazados con el motivo |
+| SETTINGS | Cambiar el nivel, un umbral, la frecuencia rápida y el atajo desde la ventana se guarda en `~/.config/jaime0/ajustes` y se aplica; un umbral incoherente (aviso = crítico = 95) se rechaza con el motivo; restablecer deja el archivo vacío |
+| Frecuencia | Frecuencia rápida 5 s → el servicio publica `intervalo: 5` en unos segundos, sin reiniciarlo |
+| Avisos | Unidad de usuario fallida a propósito: con `todas`, aviso «UNIDADES DE SYSTEMD · WARNING» a los 33 s; con `criticas`, ninguno; la barra muestra `󰀦 1` |
+| Consumo | Ventana con SETTINGS abierta: 4,4 % de CPU y 158 MiB; servicio midiendo cada 2 s: 2,0 % y 55 MiB |
+| No probado | El efecto visual de las animaciones de Hyprland (en la VM están siempre apagadas) y la entrada animada de los widgets: necesitan el portátil |
+
+Encontrado al probar: el mensaje de error se salía de la tarjeta de SETTINGS (ahora salta de línea), y al recargar la ventana en caliente con las animaciones activas se quedaba en blanco (la opacidad inicial dependía de un enlace; ahora la pone la animación).
 
 ## AUTOMATION · Jaime0 Rules (fase 6)
 
@@ -295,7 +333,7 @@ Todos los archivos llevan `"v": 1`. Los valores que no existen se escriben `null
 | 4 · PROFILES | Los 6 perfiles con capacidades, capa de sesión, vuelta atrás, CUSTOM | VM y portátil (PERFORMANCE solo allí) |
 | 5 · PRIVACY & SECURITY | UFW (estado y reglas con polkit), conexiones, dispositivos en uso, servicios, historial | VM |
 | 6 · AUTOMATION | Motor de reglas por eventos, lista blanca de acciones, editor sencillo, historial de ejecuciones | VM (Bluetooth y batería reales, en el portátil) |
-| 7 · ANIMATIONS & INTEGRATION | Animaciones OFF/SUBTLE/SMOOTH (migrando el ajuste `animaciones` de sí/no), transiciones del Control Center, Waybar, atajos | VM |
+| 7 · ANIMATIONS & INTEGRATION | Animaciones OFF/SUBTLE/SMOOTH (migrando el ajuste `animaciones` de sí/no), transiciones del Control Center, Waybar, atajos, SETTINGS — **hecha** | VM |
 | 8 · TESTING | Todo, persistencia, reinicios, consumo, funciones no disponibles bien indicadas | VM y portátil |
 
 ## Riesgos

@@ -260,6 +260,140 @@ class PruebasAjustes(unittest.TestCase):
         self.assertEqual(self.e.ejecutar("inventada")[0], 2)
         self.assertEqual(self.e.ejecutar("--help")[0], 0)
 
+    # -- Fase 7: animaciones en tres niveles y ajustes del Control Center ----------
+    def usuario(self, texto):
+        self.e.archivo.parent.mkdir(parents=True, exist_ok=True)
+        self.e.archivo.write_text(texto, encoding="utf-8")
+
+    def test_animaciones_tres_niveles_en_el_esquema(self):
+        a = self.e.ver()[0]["animaciones"]
+        self.assertEqual((a["tipo"], a["opciones"], a["grupo"], a["valor"], a["predeterminado"]),
+                         ("opcion", ["no", "sutil", "suave"], "Efectos", "sutil", "sutil"))
+        self.assertEqual(a["etiqueta"], "Animaciones (no, sutil, suave)")
+
+    def test_animaciones_migra_si_y_no_antiguos_del_usuario_sin_reescribir(self):
+        for antiguo, nuevo in (("si", "sutil"), ("sí", "sutil"), ("yes", "sutil"), ("1", "sutil"),
+                               ("on", "sutil"), ("true", "sutil"), ("s", "sutil"),
+                               ("no", "no"), ("n", "no"), ("off", "no"), ("0", "no"), ("false", "no")):
+            texto = f"# mio\nanimaciones = {antiguo}\n"
+            self.usuario(texto)
+            a = self.e.ver()[0]["animaciones"]
+            self.assertEqual(a["valor"], nuevo, antiguo)
+            self.assertEqual(self.e.archivo.read_text(encoding="utf-8"), texto, "no se reescribe")
+
+    def test_animaciones_migra_si_y_no_antiguos_de_los_predeterminados(self):
+        destino = self.e.raiz / "usr/share/jaime0/ajustes.predeterminados"
+        base = destino.read_text(encoding="utf-8")
+        for antiguo, nuevo in (("si", "sutil"), ("no", "no")):
+            destino.write_text(base.replace("animaciones = sutil", f"animaciones = {antiguo}"), encoding="utf-8")
+            a = self.e.ver()[0]["animaciones"]
+            self.assertEqual((a["valor"], a["predeterminado"]), (nuevo, nuevo))
+
+    def test_poner_animaciones_si_guarda_sutil_y_valida(self):
+        self.assertEqual(self.e.ejecutar("poner", "animaciones", "suave")[0], 0)
+        self.assertEqual(self.e.ver()[0]["animaciones"]["valor"], "suave")
+        rc, out, _ = self.e.ejecutar("poner", "animaciones", "si")
+        self.assertEqual(rc, 0)
+        self.assertIn("animaciones = sutil", out)
+        self.assertNotIn("animaciones", self.e.archivo.read_text(encoding="utf-8"), "sutil = predeterminado")
+        self.assertEqual(self.e.ejecutar("poner", "animaciones", "no")[0], 0)
+        self.assertIn("animaciones = no", self.e.archivo.read_text(encoding="utf-8"))
+        antes = self.e.archivo.read_text(encoding="utf-8")
+        for malo in ("mucho", "", "2", "sutiles"):
+            self.assertEqual(self.e.ejecutar("poner", "animaciones", malo)[0], 1, malo)
+        self.assertEqual(self.e.archivo.read_text(encoding="utf-8"), antes)
+
+    def test_animaciones_invalida_en_el_archivo_del_usuario_se_ignora(self):
+        self.usuario("animaciones = mucho\n")
+        ajustes, d = self.e.ver()
+        self.assertEqual(ajustes["animaciones"]["valor"], "sutil")
+        self.assertTrue(any("animaciones" in a for a in d["avisos"]))
+
+    def test_ajustes_del_control_center_en_el_esquema(self):
+        ajustes, _ = self.e.ver()
+        esperado = {"cc_intervalo": (["5", "10", "30"], "10"), "cc_intervalo_rapido": (["1", "2", "5"], "2"),
+                    "cc_notificar": (["todas", "criticas", "ninguna"], "criticas")}
+        for clave, (opciones, valor) in esperado.items():
+            a = ajustes[clave]
+            self.assertEqual((a["tipo"], a["opciones"], a["grupo"], a["valor"]),
+                             ("opcion", opciones, "Control Center", valor), clave)
+        a = ajustes["control_atajo"]
+        self.assertEqual((a["tipo"], a["grupo"], a["valor"], a["etiqueta"]),
+                         ("atajo", "Control Center", "SUPER+I", "Atajo del Control Center"))
+        self.assertEqual(ajustes["cc_intervalo"]["etiqueta"], "Frecuencia de medición en segundo plano (s)")
+
+    def test_opciones_del_control_center(self):
+        for clave, valor in (("cc_intervalo", "30"), ("cc_intervalo_rapido", "5"), ("cc_notificar", "ninguna")):
+            self.assertEqual(self.e.ejecutar("poner", clave, valor)[0], 0, clave)
+            self.assertEqual(self.e.ver()[0][clave]["valor"], valor)
+        for clave, valor in (("cc_intervalo", "7"), ("cc_intervalo", "0"), ("cc_intervalo_rapido", "10"),
+                             ("cc_notificar", "siempre")):
+            self.assertEqual(self.e.ejecutar("poner", clave, valor)[0], 1, (clave, valor))
+
+    def test_atajos_validos_se_normalizan(self):
+        for escrito, normal in (("SUPER+I", "SUPER+I"), ("super + i", "SUPER+I"), ("ctrl+alt+f5", "CTRL+ALT+F5"),
+                                ("Super+Shift+7", "SUPER+SHIFT+7"), ("alt+escape", "ALT+Escape"),
+                                ("super+SPACE", "SUPER+space"), ("ctrl+backspace", "CTRL+BackSpace"),
+                                ("super+prior", "SUPER+Prior"), ("shift+f12", "SHIFT+F12")):
+            self.assertEqual(self.e.ejecutar("poner", "control_atajo", escrito)[0], 0, escrito)
+            self.assertEqual(self.e.ver()[0]["control_atajo"]["valor"], normal, escrito)
+        self.assertEqual(json.loads(self.e.generado("control.json"))["atajo"], "SHIFT+F12")
+
+    def test_atajos_invalidos_se_rechazan_con_mensaje_claro(self):
+        self.e.ejecutar("poner", "control_atajo", "ALT+X")
+        antes = self.e.archivo.read_text(encoding="utf-8")
+        for malo in ("I", "SUPER", "SUPER+", "+I", "SUPER++I", "WIN+I", "SUPER+AB", "SUPER+F13", "SUPER+F0",
+                     "SUPER+Intro", "SUPER+I+SHIFT", "SUPER+ñ", "SUPER+-", "", "SUPER I"):
+            rc, _, err = self.e.ejecutar("poner", "control_atajo", malo)
+            self.assertEqual(rc, 1, malo)
+            self.assertIn("control_atajo: escribe modificadores y una tecla", err, malo)
+        rc, _, err = self.e.ejecutar("poner", "control_atajo", "SUPER+SUPER+I")
+        self.assertEqual(rc, 1)
+        self.assertIn("modificador repetido", err)
+        self.assertEqual(self.e.archivo.read_text(encoding="utf-8"), antes)
+
+    def test_atajo_invalido_en_el_archivo_usa_el_predeterminado(self):
+        self.usuario("control_atajo = I\n")
+        ajustes, d = self.e.ver()
+        self.assertEqual(ajustes["control_atajo"]["valor"], "SUPER+I")
+        self.assertTrue(any("control_atajo" in a for a in d["avisos"]))
+
+    def test_generar_animaciones_en_widgets_swaync_y_control(self):
+        self.e.ejecutar("generar")
+        self.assertEqual(json.loads(self.e.generado("widgets.json"))["animaciones"], "sutil")
+        css = self.e.generado("swaync.css")
+        self.assertIn("@define-color acento #54e58a;", css)
+        self.assertNotIn("transition:", css)
+        self.assertNotIn("transition-duration", css)
+        self.assertIn("Animaciones: sutil", css)
+        self.assertEqual(json.loads(self.e.generado("control.json")),
+                         {"atajo": "SUPER+I", "animaciones": "sutil", "intervalo": 10,
+                          "intervalo_rapido": 2, "notificar": "criticas"})
+        self.assertEqual(self.e.ejecutar("poner", "animaciones", "no")[0], 0)
+        css = self.e.generado("swaync.css")
+        self.assertIn("* { transition: none; animation: none; }", css)
+        self.assertTrue(css.index("@define-color acento") < css.index("transition: none"))
+        self.assertEqual(json.loads(self.e.generado("widgets.json"))["animaciones"], "no")
+        self.assertEqual(json.loads(self.e.generado("control.json"))["animaciones"], "no")
+        self.assertEqual(self.e.ejecutar("poner", "animaciones", "suave")[0], 0)
+        css = self.e.generado("swaync.css")
+        self.assertIn(".notification-row, .notification, .control-center { transition-duration: 280ms; }", css)
+        self.assertNotIn("transition: none", css)
+        self.assertEqual(json.loads(self.e.generado("widgets.json"))["animaciones"], "suave")
+
+    def test_generar_control_json_con_los_ajustes_del_usuario(self):
+        self.assertEqual(self.e.ejecutar("poner", "control_atajo", "ctrl+alt+c", "cc_intervalo", "30",
+                                         "cc_intervalo_rapido", "1", "cc_notificar", "todas")[0], 0)
+        self.assertEqual(json.loads(self.e.generado("control.json")),
+                         {"atajo": "CTRL+ALT+C", "animaciones": "sutil", "intervalo": 30,
+                          "intervalo_rapido": 1, "notificar": "todas"})
+
+    def test_animaciones_antiguas_tambien_generan_bien(self):
+        self.usuario("animaciones = no\n")
+        self.e.ejecutar("generar")
+        self.assertEqual(json.loads(self.e.generado("control.json"))["animaciones"], "no")
+        self.assertIn("transition: none", self.e.generado("swaync.css"))
+
 
 if __name__ == "__main__":
     unittest.main()

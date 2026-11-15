@@ -68,13 +68,20 @@ UMBRALES = {
     "swap_aviso": 50.0,                                # % de swap usada por encima
     "presion_aviso": 20.0,                             # avg10 de /proc/pressure/memory
     "historial_dias": 90,                              # duracion del historico de 15 min
+    "intervalo_normal": INTERVALO_NORMAL,              # s entre muestras (cc_intervalo)
+    "intervalo_rapido": INTERVALO_RAPIDO,              # s con la ventana abierta (cc_intervalo_rapido)
+    "notificar": "criticas",                           # avisos de incidencias (cc_notificar)
 }
+OPCIONES_NOTIFICAR = ("todas", "criticas", "ninguna")
+# Gravedades de incidencia que avisan en el escritorio segun cc_notificar
+GRAVEDADES_AVISO = {"todas": ("WARNING", "CRITICAL"), "criticas": ("CRITICAL",), "ninguna": ()}
 # Ajuste de jaime0-ajustes -> clave de UMBRALES
 AJUSTES_UMBRALES = {
     "umbral_temp_aviso": "temp_aviso", "umbral_temp_critico": "temp_critico",
     "umbral_disco_aviso": "disco_aviso", "umbral_disco_critico": "disco_critico",
     "umbral_bateria_aviso": "bateria_aviso", "umbral_bateria_critico": "bateria_critico",
     "historial_dias": "historial_dias",
+    "cc_intervalo": "intervalo_normal", "cc_intervalo_rapido": "intervalo_rapido",
 }
 
 
@@ -808,6 +815,7 @@ class Historico:
         self.cuarto_t, self.cuarto_items = None, []
         self.pend, self.pend_hist = [], []
         self.ultimo_t, self.ultimo_intervalo = None, INTERVALO_NORMAL
+        self.intervalo = INTERVALO_NORMAL       # intervalo efectivo en segundo plano (ajustes)
         self.ultimo_recorte = 0
 
     # -- entrada -------------------------------------------------------------
@@ -976,7 +984,7 @@ class Historico:
             ultimo = max(m.get("u", m["t"] + 60) for m in self.minutos[-2:])
         elif self.cuartos:
             ultimo = self.cuartos[-1]["t"] + 900
-        if ultimo is not None and ahora - ultimo > FACTOR_HUECO * INTERVALO_NORMAL:
+        if ultimo is not None and ahora - ultimo > FACTOR_HUECO * self.intervalo:
             self._hueco(ultimo, ahora)
 
     # -- consulta ------------------------------------------------------------
@@ -1004,7 +1012,7 @@ class Historico:
             desde = ahora - RANGOS[rango]
             puntos = [pseudo_agregado(m) for m in anillo if m["t"] >= desde]
             difs = sorted(b["t"] - a["t"] for a, b in zip(puntos, puntos[1:]) if b["t"] > a["t"])
-            resolucion = max(1, int(round(difs[len(difs) // 2]))) if difs else INTERVALO_NORMAL
+            resolucion = max(1, int(round(difs[len(difs) // 2]))) if difs else self.intervalo
         elif rango == "24h":
             desde, resolucion = ahora - 86400, 60
             puntos = [a for a in self.minutos if a["t"] >= desde]
@@ -1343,6 +1351,9 @@ def umbrales_desde_ajustes(doc):
             del leidos[menor], leidos[mayor]
     for k, v in leidos.items():
         u[k] = float(v) if k.startswith(("temp", "disco")) else v
+    for a in doc.get("ajustes") or []:
+        if isinstance(a, dict) and a.get("clave") == "cc_notificar" and a.get("valor") in OPCIONES_NOTIFICAR:
+            u["notificar"] = a["valor"]
     return u
 
 
@@ -4252,6 +4263,7 @@ class Servicio:
                                       lambda: os.path.join(carpeta_config(), "perfil-personalizado.json"),
                                       evento=self.evento, notificar=self._perfil_cambiado,
                                       cambio=lambda perfil, origen: self.reglas.perfil_cambiado(perfil, origen))
+        self.aviso_lanzar = self._lanzar_aviso  # las pruebas lo sustituyen
         self.reglas_ejecutar = subprocess.run   # las pruebas lo sustituyen
         ejecutar_reglas = lambda *a, **k: self.reglas_ejecutar(*a, **k)
         self.reglas = MotorReglas(
@@ -4314,10 +4326,45 @@ class Servicio:
             self.eventos.append(nuevo_evento(t, tipo, gravedad, texto, proceso, origen))
 
     def recargar_umbrales(self):
+        antes = self.intervalo_actual()
         u = dict(UMBRALES)
         u.update(self._leer_umbrales() or {})
         self.umbrales = u
         self.historico.dias = int(u["historial_dias"])
+        self.historico.intervalo = self.intervalo_normal()
+        if self._fuente is not None and self.intervalo_actual() != antes:
+            self._programar()               # el temporizador sigue ya el intervalo nuevo
+
+    def intervalo_normal(self):
+        return max(1, int(self.umbrales.get("intervalo_normal", INTERVALO_NORMAL)))
+
+    def intervalo_rapido(self):
+        return max(1, int(self.umbrales.get("intervalo_rapido", INTERVALO_RAPIDO)))
+
+    # -- avisos de incidencias en el escritorio ----------------------------------
+    def _lanzar_aviso(self, orden):
+        """Lanza notify-send fuera del bucle de muestreo (hilo; no espera el bucle)."""
+        def trabajo():
+            try:
+                subprocess.run(orden, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=subprocess.DEVNULL, timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                pass
+
+        threading.Thread(target=trabajo, daemon=True).start()
+
+    def avisar_incidencias(self, lineas):
+        """Una notificacion por incidencia nueva o escalada, segun cc_notificar. Las
+        recuperaciones (NORMAL) no avisan. Solo lleva texto de la incidencia."""
+        permitidas = GRAVEDADES_AVISO.get(self.umbrales.get("notificar"), ())
+        for d in lineas:
+            if d.get("gravedad") not in permitidas:
+                continue
+            nombre = NOMBRES_COMPONENTE.get(d.get("componente"), d.get("componente") or "").upper()
+            cuerpo = ". ".join(t.rstrip(".") for t in (d.get("descripcion"), d.get("recomendacion")) if t)
+            self.aviso_lanzar(["notify-send", "--app-name=Jaime0",
+                               "--urgency=" + ("critical" if d["gravedad"] == "CRITICAL" else "normal"),
+                               "--", f"{nombre} · {d['gravedad']}", cuerpo])
 
     # -- incidencias (archivo) -------------------------------------------------
     def archivo_incidencias(self):
@@ -4350,13 +4397,13 @@ class Servicio:
         return list(self.eventos)[::-1]
 
     def intervalo_actual(self):
-        return INTERVALO_RAPIDO if time.time() < self.rapido_hasta else INTERVALO_NORMAL
+        return self.intervalo_rapido() if time.time() < self.rapido_hasta else self.intervalo_normal()
 
     def rapido(self):
         self.rapido_hasta = time.time() + DURACION_RAPIDO
-        if self._fuente is not None and self._intervalo_programado != INTERVALO_RAPIDO:
+        if self._fuente is not None and self._intervalo_programado != self.intervalo_rapido():
             self._programar()
-        return INTERVALO_RAPIDO, int(self.rapido_hasta)
+        return self.intervalo_rapido(), int(self.rapido_hasta)
 
     def instante_doc(self):
         return self.instante
@@ -4387,10 +4434,12 @@ class Servicio:
         for ev in self.detector.procesar(inst):
             self.eventos.append(ev)
         self.historico.anadir(muestra, inst["intervalo"])
+        nuevas = self.incidencias_estado.observar(inst, self.umbrales, inst["t"])
         try:
-            self.anotar_incidencias(self.incidencias_estado.observar(inst, self.umbrales, inst["t"]))
+            self.anotar_incidencias(nuevas)
         except OSError:
             registrar("no se pudo escribir incidencias.jsonl:\n" + traceback.format_exc())
+        self.avisar_incidencias(nuevas)
         self._reglas_muestra(inst)
 
     def publicar(self, estado, motivos):

@@ -144,6 +144,17 @@ local function color(v)
     local rgb = hex:match("^#(%x%x%x%x%x%x)$")
     return rgb and rgb:lower()
 end
+-- Nivel de animacion: no, sutil o suave ("si" de versiones anteriores = sutil).
+local function nivelAnimacion(v)
+    if v == "si" or v == "sutil" then return "sutil" end
+    if v == "no" or v == "suave" then return v end
+    return nil
+end
+-- Atajo del Control Center (lo valida jaime0-ajustes): "SUPER+SHIFT+I" -> "SUPER + SHIFT + I".
+local function atajoTeclas(v)
+    if not v:match("^[%u]+[%w+]*$") or not v:find("+", 1, true) then return nil end
+    return (v:gsub("%+", " + "))
+end
 local function imagen(v)
     local f = io.open(v, "r")
     if f then f:close(); return v end
@@ -315,7 +326,7 @@ hl.config({
     },
 
     animations = {
-        enabled = ajuste("animaciones", sino, true) and not esVirtual,
+        enabled = ajuste("animaciones", nivelAnimacion, "sutil") ~= "no" and not esVirtual,
     },
 
     -- En VM el cursor por hardware va a saltos: se dibuja por software.
@@ -363,18 +374,26 @@ hl.config({
 })
 
 --------------------------------------------------------------------------------
--- Animaciones: cortas (unos 200-300 ms) y con pocas curvas
+-- Animaciones (ajuste "animaciones": no, sutil o suave; "no" las apaga arriba).
+--   sutil: cortas (200-300 ms) y discretas. Predeterminado.
+--   suave: algo mas largas (400-500 ms), escritorios con desvanecido y capas (barra,
+--          lanzador, notificaciones) que entran deslizandose. Nunca mas de medio segundo.
+-- "speed" va en decimas de segundo.
 --------------------------------------------------------------------------------
+local nivelAnim = ajuste("animaciones", nivelAnimacion, "sutil")
+local suave = nivelAnim == "suave"
+
 hl.curve("suave",  { type = "bezier", points = { {0.25, 1.0}, {0.5, 1.0} } })
 hl.curve("salida", { type = "bezier", points = { {0.4, 0.0},  {0.2, 1.0} } })
+hl.curve("fluida", { type = "bezier", points = { {0.16, 1.0}, {0.3, 1.0} } })
 
-hl.animation({ leaf = "windowsIn",   enabled = true,  speed = 3, bezier = "suave",  style = "popin 85%" })
-hl.animation({ leaf = "windowsOut",  enabled = true,  speed = 2, bezier = "salida", style = "popin 85%" })
-hl.animation({ leaf = "windowsMove", enabled = true,  speed = 3, bezier = "suave" })
-hl.animation({ leaf = "fade",        enabled = true,  speed = 2, bezier = "salida" })
+hl.animation({ leaf = "windowsIn",   enabled = true,  speed = suave and 4 or 3, bezier = suave and "fluida" or "suave", style = suave and "popin 80%" or "popin 85%" })
+hl.animation({ leaf = "windowsOut",  enabled = true,  speed = suave and 3 or 2, bezier = "salida", style = suave and "popin 80%" or "popin 85%" })
+hl.animation({ leaf = "windowsMove", enabled = true,  speed = suave and 4 or 3, bezier = suave and "fluida" or "suave" })
+hl.animation({ leaf = "fade",        enabled = true,  speed = suave and 3 or 2, bezier = "salida" })
 hl.animation({ leaf = "border",      enabled = false, speed = 1, bezier = "suave" })
-hl.animation({ leaf = "layers",      enabled = true,  speed = 2, bezier = "suave" })
-hl.animation({ leaf = "workspaces",  enabled = true,  speed = 3, bezier = "suave",  style = "slide" })
+hl.animation({ leaf = "layers",      enabled = true,  speed = suave and 3 or 2, bezier = suave and "fluida" or "suave", style = suave and "slide" or "fade" })
+hl.animation({ leaf = "workspaces",  enabled = true,  speed = suave and 5 or 3, bezier = suave and "fluida" or "suave", style = suave and "slidefade 20%" or "slide" })
 
 hl.gesture({
     fingers   = 3,
@@ -453,7 +472,8 @@ atajo(mainMod .. " + L",              "bloquear",          "Bloquear la pantalla
 atajo(mainMod .. " + SHIFT + R",      "hyprctl reload",    "Recargar la configuración de Hyprland")
 atajo("SHIFT + Print",                "captura pantalla",  "Captura de la pantalla entera (archivo y portapapeles)")
 atajo(mainMod .. " + F2",             "modo-noche",        "Modo noche (tonos cálidos)")
-atajo(mainMod .. " + I",              "jaime0-control",    "Control Center")
+-- Control Center: el atajo se cambia en SETTINGS o con "jaime0-ajustes poner control_atajo".
+atajo(ajuste("control_atajo", atajoTeclas, "SUPER + I"), "jaime0-control", "Control Center")
 atajo(mainMod .. " + SHIFT + C",      "hyprpicker --autocopy --format=hex --lowercase-hex --notify", "Selector de color (copia el color)")
 atajo(mainMod .. " + Print",          "captura ventana",   "Captura de la ventana activa (archivo y portapapeles)")
 

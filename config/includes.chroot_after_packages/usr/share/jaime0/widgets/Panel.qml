@@ -49,6 +49,7 @@ PanelWindow {
             model: Estado.claves.filter(c => Estado.widgets[c] === panel.posicion)
 
             Loader {
+                id: cargadorWidget
                 required property string modelData
                 source: panel.componentes[modelData]
                 // "mostrar" y no "visible": item.visible incluye la del propio Loader y la
@@ -56,6 +57,19 @@ PanelWindow {
                 visible: item !== null && item.mostrar
                 x: panel.derecha ? columna.width - width
                    : (panel.izquierda ? 0 : Math.round((columna.width - width) / 2))
+
+                // Entrada: aparece y sube unos pixeles (sin animacion con el nivel "no").
+                opacity: 0
+                transform: Translate { id: desplazamiento; y: 0 }
+                onLoaded: {
+                    if (Estado.duracion === 0) { opacity = 1; return; }
+                    entrada.restart();
+                }
+                ParallelAnimation {
+                    id: entrada
+                    NumberAnimation { target: cargadorWidget; property: "opacity"; from: 0; to: 1; duration: Estado.duracion; easing.type: Easing.OutCubic }
+                    NumberAnimation { target: desplazamiento; property: "y"; from: 8; to: 0; duration: Estado.duracion; easing.type: Easing.OutCubic }
+                }
             }
         }
     }

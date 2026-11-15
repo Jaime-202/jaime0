@@ -60,7 +60,7 @@ Item {
                         color: Tema.colorEstado(vista.global)
                         // Latido lento solo si hay un problema.
                         SequentialAnimation on opacity {
-                            running: vista.global === "WARNING" || vista.global === "CRITICAL"
+                            running: Tema.animar && (vista.global === "WARNING" || vista.global === "CRITICAL")
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.25; duration: 700 }
                             NumberAnimation { to: 1; duration: 700 }

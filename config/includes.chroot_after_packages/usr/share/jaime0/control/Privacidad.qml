@@ -270,7 +270,7 @@ Item {
                                     color: modelData[1] === null ? Tema.apagado : vista.colorUso(modelData[1])
                                     // Parpadeo lento mientras algo usa el dispositivo.
                                     SequentialAnimation on opacity {
-                                        running: modelData[1] !== null && modelData[1].length > 0
+                                        running: Tema.animar && modelData[1] !== null && modelData[1].length > 0
                                         loops: Animation.Infinite
                                         NumberAnimation { to: 0.3; duration: 800 }
                                         NumberAnimation { to: 1; duration: 800 }

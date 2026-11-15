@@ -25,6 +25,9 @@ Singleton {
     property bool doceHoras: false
     property string ciudad: ""
     property var widgets: ({})          // clave -> posicion, solo los activados
+    // Nivel de animacion de Jaime0 (no, sutil, suave) y la duracion que le corresponde.
+    property string animaciones: "sutil"
+    readonly property int duracion: animaciones === "no" ? 0 : animaciones === "suave" ? 420 : 220
 
     function cargar(texto) {
         let d = {};
@@ -39,6 +42,7 @@ Singleton {
         tarjetas = d.tarjetas !== false;
         doceHoras = d.reloj_formato === "12h";
         ciudad = typeof d.ciudad === "string" ? d.ciudad : "";
+        animaciones = ["no", "sutil", "suave"].indexOf(d.animaciones) >= 0 ? d.animaciones : "sutil";
         const w = {};
         for (const c of claves)
             if (d.widgets && posiciones.indexOf(d.widgets[c]) >= 0)

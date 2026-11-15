@@ -29,8 +29,7 @@ ShellRoot {
         { id: "AUTOMATION", titulo: "JAIME0 RULES" },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
-        { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS", fase: "Fase 7",
-          contenido: ["Animaciones OFF, SUBTLE y SMOOTH", "Frecuencia de actualización y umbrales de alerta", "Historial, atajo y notificaciones"] }
+        { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" }
     ]
 
     function leerJson(vista) {
@@ -69,6 +68,20 @@ ShellRoot {
             const d = raiz.leerJson(archivoEstado);
             if (d && d.v === 1)
                 raiz.estado = d;
+        }
+    }
+    // Preferencias del Control Center (jaime0-ajustes): nivel de animacion.
+    FileView {
+        id: archivoControl
+        blockLoading: true
+        path: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/jaime0/generado/control.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            const d = raiz.leerJson(archivoControl);
+            if (d && ["no", "sutil", "suave"].indexOf(d.animaciones) >= 0)
+                Tema.nivel = d.animaciones;
         }
     }
     FileView {
@@ -135,9 +148,9 @@ ShellRoot {
                 }
             }
 
-            // Entrada al abrir: aparece y baja unos pixeles.
-            opacity: 0
-            Component.onCompleted: entrada.start()
+            // Entrada al abrir: aparece y baja unos pixeles. La animacion parte de 0; sin
+            // animaciones la ventana sale tal cual (opacidad 1).
+            Component.onCompleted: if (Tema.animar) entrada.start()
             ParallelAnimation {
                 id: entrada
                 NumberAnimation { target: lienzo; property: "opacity"; from: 0; to: 1; duration: Tema.medio; easing.type: Easing.OutCubic }
@@ -247,7 +260,7 @@ ShellRoot {
                     }
                     Timer {
                         interval: 10000
-                        running: true
+                        running: Tema.animar
                         repeat: true
                         onTriggered: pasada.restart()
                     }
@@ -308,13 +321,6 @@ ShellRoot {
                                     font.pixelSize: Tema.letraMini
                                     font.letterSpacing: 1.5
                                 }
-                                Text {
-                                    visible: !!elemento.modelData.fase
-                                    text: "·"
-                                    color: Tema.apagado
-                                    font.family: Tema.mono
-                                    font.pixelSize: Tema.letraMini
-                                }
                             }
                             HoverHandler { id: raiz_hover }
                             TapHandler { onTapped: raiz.seccion = elemento.index }
@@ -350,7 +356,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaPendiente][raiz.seccion]
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -399,12 +405,8 @@ ShellRoot {
                     }
                 }
                 Component {
-                    id: vistaPendiente
-                    Pendiente {
-                        seccion: raiz.secciones[raiz.seccion].id
-                        fase: raiz.secciones[raiz.seccion].fase || ""
-                        lista: raiz.secciones[raiz.seccion].contenido || []
-                    }
+                    id: vistaAjustes
+                    Preferencias {}
                 }
             }
 
