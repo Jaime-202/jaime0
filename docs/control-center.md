@@ -25,6 +25,7 @@ Estado: **Fases 1 a 8 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaim
 - Con el servicio parado, la barra, `jaime0-salud` y la ventana seguían mostrando el último estado como actual (la ventana, con el PID y la hora de la última muestra). Ahora el servicio borra lo que publica al parar y avisa a la barra; la ventana pasa a SERVICE OFFLINE con todo en N/D; `jaime0-salud` hace una medición puntual y lo dice.
 - El límite fijo de 30 s para dar los datos por frescos no servía con `cc_intervalo = 30` (fase 7): ahora es el mayor de 30 s y tres muestras.
 - Sin datos, la ventana afirmaba «SIN BATERÍA» y «sin swap en uso»: ahora no afirma nada.
+- Dos peticiones seguidas de las reglas del cortafuegos podían abrir dos ventanas de contraseña: la marca de «consulta en curso» se ponía dentro del hilo. Ahora se pone antes de lanzarlo (salió como una prueba que fallaba 2 de cada 20 veces en Linux; tras el arreglo, 0 de 300).
 
 | Prueba | Resultado |
 |---|---|

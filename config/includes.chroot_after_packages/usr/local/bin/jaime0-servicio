@@ -81,6 +81,7 @@ UMBRALES = {
     "notificar": "criticas",                           # avisos de incidencias (cc_notificar)
 }
 OPCIONES_NOTIFICAR = ("todas", "criticas", "ninguna")
+REGLAS_EN_CURSO = "ya hay una consulta de reglas en curso"
 # Gravedades de incidencia que avisan en el escritorio segun cc_notificar
 GRAVEDADES_AVISO = {"todas": ("WARNING", "CRITICAL"), "criticas": ("CRITICAL",), "ninguna": ()}
 # Ajuste de jaime0-ajustes -> clave de UMBRALES
@@ -4299,6 +4300,11 @@ def procesar_linea(linea, ctx, responder=None):
             calcular = ctx.privacidad_doc if orden == "privacidad" else ctx.ufw_reglas_doc
             if responder is None:
                 return json.dumps(calcular(), ensure_ascii=False)
+            if orden == "ufw_reglas":
+                # El cerrojo se toma aqui, antes del hilo (ver ufw_reglas_doc).
+                if not ctx._reglas_en_curso.acquire(blocking=False):
+                    return json.dumps({"ok": False, "error": REGLAS_EN_CURSO}, ensure_ascii=False)
+                calcular = functools.partial(ctx.ufw_reglas_doc, reservado=True)
 
             def en_hilo():
                 try:
@@ -4814,14 +4820,17 @@ class Servicio:
                     "historial": self.priv_historial.ultimos(20)})
         return doc
 
-    def ufw_reglas_doc(self):
+    def ufw_reglas_doc(self, reservado=False):
         """Reglas de UFW con autorizacion (pkexec). Bloquea hasta que el usuario responde: se
-        llama desde un hilo. Anota el resultado en el historial; la salida no se guarda."""
-        if leer_conf_ufw() is None:
-            return {"ok": False, "error": "El cortafuegos (UFW) no está instalado"}
-        if not self._reglas_en_curso.acquire(blocking=False):
-            return {"ok": False, "error": "ya hay una consulta de reglas en curso"}
+        llama desde un hilo. Anota el resultado en el historial; la salida no se guarda.
+        Con reservado=True el cerrojo ya lo tomo quien lanzo el hilo (procesar_linea, en el
+        bucle): asi una segunda peticion seguida no puede colarse antes de que el hilo
+        arranque y abrir otra ventana de contraseña. Aqui solo se suelta."""
+        if not reservado and not self._reglas_en_curso.acquire(blocking=False):
+            return {"ok": False, "error": REGLAS_EN_CURSO}
         try:
+            if leer_conf_ufw() is None:
+                return {"ok": False, "error": "El cortafuegos (UFW) no está instalado"}
             doc = consultar_ufw_reglas(self.priv_ejecutar)
         finally:
             self._reglas_en_curso.release()
