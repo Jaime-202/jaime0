@@ -26,8 +26,7 @@ ShellRoot {
         { id: "SYSTEM", titulo: "OVERVIEW" },
         { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES" },
         { id: "PROFILES", titulo: "SMART PROFILES" },
-        { id: "AUTOMATION", titulo: "JAIME0 RULES", fase: "Fase 6",
-          contenido: ["Reglas CUANDO → SI → HACER por eventos reales", "Activar, editar y borrar reglas", "Historial de ejecuciones: correctas y fallidas"] },
+        { id: "AUTOMATION", titulo: "JAIME0 RULES" },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS", fase: "Fase 7",
@@ -351,7 +350,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaPendiente, vistaPrivacidad, vistaSalud, vistaPendiente][raiz.seccion]
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaPendiente][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -383,6 +382,10 @@ ShellRoot {
                 Component {
                     id: vistaPerfiles
                     Perfiles { estado: raiz.estado }
+                }
+                Component {
+                    id: vistaAutomatizacion
+                    Automatizacion {}
                 }
                 Component {
                     id: vistaPrivacidad

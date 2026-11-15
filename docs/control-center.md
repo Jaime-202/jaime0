@@ -1,6 +1,36 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1 a 5 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, la ventana con SYSTEM OVERVIEW, PERFORMANCE, PROFILES, PRIVACY & SECURITY y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. AUTOMATION y SETTINGS dicen en qué fase llegarán y no muestran datos inventados.
+Estado: **Fases 1 a 6 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY y HEALTH (gráficas, histórico, incidencias y DIAGNOSTIC MODE), el atajo y el indicador de la barra. SETTINGS dice en qué fase llegará y no muestra datos inventados.
+
+## AUTOMATION · Jaime0 Rules (fase 6)
+
+Reglas **CUANDO → SI → HACER**. Las ejecuta el servicio aunque el Control Center esté cerrado.
+
+| | Disponibles |
+|---|---|
+| **CUANDO** (un evento) | Batería baja (umbral, se rearma 5 puntos por encima), cargador conectado/desconectado, dispositivo Bluetooth (de audio o cualquiera, por nombre), monitor conectado/desconectado, aplicación abierta (primera ventana) o cerrada (última), hora del día y días, red conectada/desconectada (o una Wi-Fi concreta), suspender/reanudar, inactividad de 5 min y vuelta, cambio del estado del sistema, servicio fallido, cambio de perfil hecho por ti |
+| **SI** (opcional) | Perfil activo, cargador conectado o no, batería por debajo o por encima de un valor, entre dos horas (también de noche, pasando la medianoche), días de la semana |
+| **HACER** (1 a 5, lista cerrada) | Cambiar de perfil, modo noche, no molestar, notificar, abrir una aplicación instalada, volumen, silenciar, salida de audio por nombre (p. ej. los auriculares Bluetooth), mantenimiento seguro (borrar miniaturas de más de 30 días; comprobar actualizaciones) y scripts autorizados |
+
+**De dónde salen los eventos** (sin sondeo nuevo): batería y cargador, de las muestras que el servicio ya toma; Bluetooth (BlueZ), red (NetworkManager) y suspensión (logind), de señales de D-Bus; monitores y aplicaciones, del socket de eventos de Hyprland; la hora, de un temporizador al instante exacto; la inactividad, de hypridle (`jaime0-reglas evento inactivo|activo` a los 5 min). Un evento que el equipo no puede detectar sale apagado en el editor, con el motivo.
+
+**Seguridad.** Ninguna acción necesita root. Los scripts solo se ejecutan si están en `~/.config/jaime0/scripts-autorizados/`, son tuyos, ejecutables y nadie más puede modificarlos (tampoco la carpeta); sin shell, sin argumentos y con 60 s como mucho. Las reglas importadas (`jaime0-reglas importar`) entran desactivadas y marcadas `REVISAR`.
+
+**Sin bucles:** lo que hace una regla no dispara otras reglas; los disparadores son por flanco; 30 s de enfriamiento por regla (se registra como «omitida»); si una regla se ejecuta 5 veces en 5 min o hay más de 20 ejecuciones en un minuto, se desactiva sola y abre una incidencia; una regla «cambio de perfil → cambiar de perfil» se rechaza al guardarla.
+
+**Ventana:** lista con interruptor, resumen CUANDO → SI → HACER y última ejecución (ok, fallo u omitida), botones PROBAR, EDITAR y BORRAR (pide confirmación), editor construido con el catálogo del servicio e historial de ejecuciones. **Terminal:** `jaime0-reglas lista|catalogo|historial|crear ARCHIVO|importar ARCHIVO|activar|desactivar|probar|borrar ID`.
+
+### Resultados de la fase 6 (14-11-2026, misma VM)
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas | 525 correctas (149 nuevas del motor, validación, eventos, acciones, enfriamiento, topes, importación y cliente) |
+| Reglas reales | Inactividad → POWER SAVER y notificación (correcto; el segundo disparo a los 3 s, «omitida» por enfriamiento); abrir kitty (evento real de Hyprland) → modo noche encendido; hora 01:03 → notificación a las 01:03:00 |
+| Bucle | «Cambio de perfil → cambiar de perfil» rechazada al crearla, con el motivo |
+| Ventana | Regla creada desde el editor (evento, acción y textos), PROBAR, desactivar y borrar con confirmación; historial con colores por resultado; 0 avisos de QML y 0 errores del servicio |
+| No probado | Bluetooth, batería y cargador reales, red Wi-Fi y suspensión real, y la salida de audio a unos auriculares: necesitan el portátil |
+
+Encontrado al probar: en el editor cada tecla reconstruía el formulario y el campo perdía el foco (solo se guardaba la primera letra); y las opciones largas se salían del editor (ahora pasan de línea).
 
 ## PRIVACY & SECURITY (fase 5)
 
@@ -250,7 +280,7 @@ Todos los archivos llevan `"v": 1`. Los valores que no existen se escriben `null
 
 `~/.local/state/jaime0/incidencias.jsonl`: `{"v":1,"t":…,"gravedad":"WARNING","componente":"thermal","descripcion":…,"diagnostico":…,"recomendacion":…}`
 
-`~/.config/jaime0/reglas.json`: `{"v":1,"reglas":[{"id":…,"nombre":…,"activa":true,"cuando":{"evento":"bateria","debajo":20,"rearme":25},"si":[…],"hacer":[{"accion":"perfil","valor":"power-saver"}]}]}`
+`~/.config/jaime0/reglas.json`: `{"v":1,"reglas":[{"id":"ahorro-al-20","nombre":"Ahorro al 20 %","activa":true,"revisar":false,"cuando":{"evento":"bateria_baja","umbral":20},"si":[{"condicion":"cargador","conectado":false}],"hacer":[{"accion":"perfil","perfil":"power-saver"},{"accion":"notificar","titulo":"Batería","texto":"Modo ahorro"}]}]}` (cada evento, condición y acción lleva sus parámetros por nombre; `jaime0-reglas catalogo` los lista)
 
 Órdenes del socket (una línea JSON por petición): `estado`, `instante`, `rapido` (muestreo a 2 s durante 15 s), `serie` con `rango` `5m`/`1h`/`24h`/`historia` (como mucho 720 puntos; en 24 h e historia, mínimo/media/máximo de cada agregado; con `huecos`, `eventos` y `disponible`), `incidencias` (con `limite`) y `eventos`. Los agregados de minuto llevan `u`, la hora de su última muestra real.
 

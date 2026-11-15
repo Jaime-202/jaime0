@@ -131,7 +131,7 @@ for F in auto/config auto/build \
          "$I/usr/share/backgrounds/jaime0/jaime0.png"; do
     [ -f "$F" ] || fallo "falta $F"
 done
-for P in actualizaciones jaime0-servicio jaime0-salud jaime0-control jaime0-perfil jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
+for P in actualizaciones jaime0-servicio jaime0-salud jaime0-control jaime0-perfil jaime0-privacidad jaime0-reglas jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
     [ -f "$I/usr/local/bin/$P" ] || fallo "falta el programa $P"
 done
 ok "archivos imprescindibles revisados"

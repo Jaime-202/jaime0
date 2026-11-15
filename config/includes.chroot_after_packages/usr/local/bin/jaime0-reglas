@@ -1,0 +1,366 @@
+#!/usr/bin/python3 -I
+# jaime0-reglas: cliente del motor de reglas del Control Center (las ejecuta jaime0-servicio).
+#
+#   jaime0-reglas lista [--json]            reglas, su estado y su ultima ejecucion
+#   jaime0-reglas historial [-n N] [--json] ultimas ejecuciones (por defecto 20)
+#   jaime0-reglas activar ID                activa una regla (si estaba por revisar, la da por revisada)
+#   jaime0-reglas desactivar ID
+#   jaime0-reglas borrar ID [--si]          pide confirmacion salvo con --si
+#   jaime0-reglas probar ID                 ejecuta sus acciones ahora (respeta enfriamiento y tope)
+#   jaime0-reglas importar ARCHIVO.json     entran desactivadas y por revisar
+#   jaime0-reglas crear ARCHIVO.json        crea una regla desde un archivo JSON
+#   jaime0-reglas evento inactivo|activo    lo llama hypridle; sin servicio, sale en silencio
+#   jaime0-reglas catalogo [--json]         eventos, condiciones y acciones con sus parametros
+#
+# No cambia nada por su cuenta: pide al servicio por su socket ($XDG_RUNTIME_DIR/jaime0/
+# control.sock, o JAIME0_RUNTIME). Sin servicio, error claro y codigo 1 (salvo `evento`).
+
+import json
+import os
+import sys
+import time
+
+PROGRAMA = "jaime0-reglas"
+SIN_SERVICIO = "el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio"
+MAX_ARCHIVO = 1024 * 1024
+TIMEOUT_PROBAR = 330.0          # cinco acciones de hasta 60 s
+
+
+def directorio_ejecucion():
+    d = os.environ.get("JAIME0_RUNTIME")
+    if d:
+        return d
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    return os.path.join(base, "jaime0") if base else None
+
+
+def pedir_socket(peticion, timeout=15.0):
+    """Una peticion al socket del servicio. OSError si no esta; ValueError si la respuesta
+    esta rota."""
+    import socket
+    d = directorio_ejecucion()
+    if not d or not hasattr(socket, "AF_UNIX"):
+        raise OSError("sin socket del servicio")
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect(os.path.join(d, "control.sock"))
+        s.sendall((json.dumps(peticion) + "\n").encode("utf-8"))
+        buf = bytearray()
+        while b"\n" not in buf:
+            datos = s.recv(65536)
+            if not datos:
+                break
+            buf.extend(datos)
+    finally:
+        s.close()
+    doc = json.loads(buf.decode("utf-8"))
+    if not isinstance(doc, dict):
+        raise ValueError("respuesta no válida")
+    return doc
+
+
+def error(texto):
+    print(f"{PROGRAMA}: {texto}", file=sys.stderr)
+    return 1
+
+
+def consultar(peticion, enviar, **k):
+    """(respuesta, None) o (None, codigo de salida) si el servicio no contesta bien."""
+    try:
+        return enviar(peticion, **k), None
+    except (OSError, ValueError):
+        return None, error(SIN_SERVICIO)
+
+
+def fecha(t):
+    try:
+        return time.strftime("%d-%m-%Y %H:%M:%S", time.localtime(t))
+    except (OverflowError, OSError, ValueError, TypeError):
+        return "?"
+
+
+def leer_archivo_json(ruta):
+    """JSON de un archivo, con errores claros (ValueError con el mensaje en espanol)."""
+    try:
+        if os.path.getsize(ruta) > MAX_ARCHIVO:
+            raise ValueError(f"{ruta} es demasiado grande (más de 1 MiB)")
+        with open(ruta, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        raise ValueError(f"no existe el archivo {ruta}")
+    except OSError as e:
+        raise ValueError(f"no se pudo leer {ruta}: {e.strerror or e}")
+    except json.JSONDecodeError as e:
+        raise ValueError(f"{ruta} no es un JSON válido: {e}")
+
+
+def describir(bloque, clave, nombres):
+    """'Batería baja (umbral=20)' a partir de un bloque {clave: id, ...parametros}."""
+    nombre = nombres.get(bloque.get(clave), bloque.get(clave))
+    params = [f"{k}={json.dumps(v, ensure_ascii=False) if not isinstance(v, str) else v}"
+              for k, v in bloque.items() if k != clave]
+    return nombre + (f" ({', '.join(params)})" if params else "")
+
+
+def nombres_catalogo(cat, seccion):
+    return {e["id"]: e["nombre"] for e in (cat or {}).get(seccion, [])}
+
+
+def texto_reglas(doc):
+    cat = doc.get("catalogo") or {}
+    ev, co, ac = (nombres_catalogo(cat, s) for s in ("eventos", "condiciones", "acciones"))
+    L = []
+    for r in doc.get("reglas", []):
+        estado = "POR REVISAR" if r.get("revisar") else ("activa" if r.get("activa") else "desactivada")
+        L.append(f"{r['id']}  [{estado}]  {r['nombre']}")
+        L.append("    CUANDO: " + describir(r["cuando"], "evento", ev))
+        for c in r.get("si") or []:
+            L.append("    SI:     " + describir(c, "condicion", co))
+        for a in r.get("hacer") or []:
+            L.append("    HACER:  " + describir(a, "accion", ac))
+        u = r.get("ultima")
+        L.append("    Última: " + (f"{fecha(u['t'])} {u['resultado']} ({u['evento']})" if u else "nunca"))
+    if not doc.get("reglas"):
+        L.append("No hay reglas.")
+    for e in doc.get("errores") or []:
+        donde = f"regla {e['id']}" if e.get("id") else (f"entrada {e['indice'] + 1}" if e.get("indice") is not None else "archivo")
+        L.append(f"No válida ({donde}): {e['error']}")
+    return "\n".join(L)
+
+
+def cmd_lista(args, enviar):
+    r, codigo = consultar({"orden": "reglas"}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    if "--json" in args:
+        print(json.dumps({k: r[k] for k in ("reglas", "errores") if k in r}, ensure_ascii=False))
+    else:
+        print(texto_reglas(r))
+    return 0
+
+
+def texto_historial(doc):
+    L = []
+    for e in doc.get("ejecuciones", []):
+        L.append(f"{fecha(e['t'])}  {e['resultado']:<8} {e['nombre']}  ·  {e['evento']}")
+        if e.get("detalle"):
+            L.append(f"    {e['detalle']}")
+        for a in e.get("acciones") or []:
+            L.append(f"    - {a['accion']}: {a['resultado']} ({a['detalle']})")
+    return "\n".join(L) or "Todavía no se ha ejecutado ninguna regla."
+
+
+def cmd_historial(args, enviar):
+    limite = 20
+    if "-n" in args:
+        i = args.index("-n")
+        try:
+            limite = int(args[i + 1])
+        except (IndexError, ValueError):
+            return error("-n necesita un número")
+        if limite < 1:
+            return error("-n necesita un número mayor que 0")
+    r, codigo = consultar({"orden": "reglas_historial", "limite": limite}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(json.dumps(r, ensure_ascii=False) if "--json" in args else texto_historial(r))
+    return 0
+
+
+def cmd_activar(args, enviar, activa=True):
+    if len(args) != 1:
+        return error(f"uso: {PROGRAMA} {'activar' if activa else 'desactivar'} ID")
+    r, codigo = consultar({"orden": "regla_activar", "id": args[0], "activa": activa}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(f"Regla {'activada' if activa else 'desactivada'}: {args[0]}")
+    return 0
+
+
+def cmd_borrar(args, enviar, preguntar):
+    seguro = "--si" in args
+    ids = [a for a in args if a != "--si"]
+    if len(ids) != 1:
+        return error(f"uso: {PROGRAMA} borrar ID [--si]")
+    if not seguro:
+        try:
+            respuesta = preguntar(f"¿Borrar la regla «{ids[0]}»? [s/N] ")
+        except EOFError:
+            respuesta = ""
+        if respuesta.strip().lower() not in ("s", "si", "sí", "y", "yes"):
+            return error("cancelado: no se ha borrado nada")
+    r, codigo = consultar({"orden": "regla_borrar", "id": ids[0]}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(f"Regla borrada: {ids[0]}")
+    return 0
+
+
+def cmd_probar(args, enviar):
+    if len(args) != 1:
+        return error(f"uso: {PROGRAMA} probar ID")
+    r, codigo = consultar({"orden": "regla_probar", "id": args[0]}, enviar, timeout=TIMEOUT_PROBAR)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    e = r.get("ejecucion") or {}
+    print(f"Resultado: {e.get('resultado')} ({e.get('detalle')})")
+    for a in e.get("acciones") or []:
+        print(f"  - {a['accion']}: {a['resultado']} ({a['detalle']})")
+    return 0 if e.get("resultado") == "ok" else 1
+
+
+def cmd_importar(args, enviar):
+    if len(args) != 1:
+        return error(f"uso: {PROGRAMA} importar ARCHIVO.json")
+    try:
+        doc = leer_archivo_json(args[0])
+    except ValueError as e:
+        return error(str(e))
+    lista = doc.get("reglas") if isinstance(doc, dict) else doc
+    if not isinstance(lista, list):
+        return error("el archivo debe ser una lista de reglas o un objeto con «reglas»")
+    r, codigo = consultar({"orden": "reglas_importar", "reglas": lista}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(f"Reglas importadas: {r.get('importadas', 0)} (desactivadas y por revisar: "
+          f"revísalas y actívalas con «{PROGRAMA} activar ID»)")
+    for e in r.get("errores") or []:
+        print(f"No importada (entrada {e['indice'] + 1}): {e['error']}", file=sys.stderr)
+    return 0 if r.get("importadas") or not r.get("errores") else 1
+
+
+def cmd_crear(args, enviar):
+    if len(args) != 1:
+        return error(f"uso: {PROGRAMA} crear ARCHIVO.json")
+    try:
+        doc = leer_archivo_json(args[0])
+    except ValueError as e:
+        return error(str(e))
+    if not isinstance(doc, dict) or "reglas" in doc:
+        return error("el archivo debe contener una sola regla (un objeto); para varias usa «importar»")
+    r, codigo = consultar({"orden": "regla_guardar", "regla": doc}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    print(f"Regla guardada: {r['regla']['id']}")
+    return 0
+
+
+def cmd_evento(args, enviar):
+    if len(args) != 1 or args[0] not in ("inactivo", "activo"):
+        return error(f"uso: {PROGRAMA} evento inactivo|activo")
+    try:
+        r = enviar({"orden": "evento", "nombre": args[0]})
+    except (OSError, ValueError):
+        return 0            # sin servicio: en silencio, para no molestar a hypridle
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    return 0
+
+
+def texto_parametro(p):
+    extra = []
+    if "opciones" in p:
+        extra.append("uno de: " + ", ".join(p["opciones"]))
+    elif p["tipo"] == "entero":
+        extra.append(f"entero {p['min']}–{p['max']}")
+    elif p["tipo"] in ("texto", "script"):
+        extra.append(f"texto de {p.get('min', 1)} a {p['max']} caracteres")
+    elif p["tipo"] == "hora":
+        extra.append("HH:MM")
+    elif p["tipo"] == "dias":
+        extra.append("lista de 0 (lunes) a 6 (domingo)")
+    elif p["tipo"] == "bool":
+        extra.append("true o false")
+    elif p["tipo"] == "aplicacion":
+        extra.append("id de una aplicación de «jaime0-anclar disponibles»")
+    if not p.get("requerido"):
+        extra.append("opcional" + (f", por defecto {json.dumps(p['defecto'], ensure_ascii=False)}"
+                                   if p.get("defecto") is not None else ""))
+    return f"      {p['clave']}: {p['texto']} ({'; '.join(extra)})"
+
+
+def texto_catalogo(cat):
+    L = []
+    for titulo, seccion, clave in (("CUANDO (eventos)", "eventos", "evento"),
+                                   ("SI (condiciones, opcionales)", "condiciones", "condicion"),
+                                   ("HACER (acciones)", "acciones", "accion")):
+        L.append(titulo)
+        for e in cat.get(seccion, []):
+            marca = "" if e.get("disponible") else "  [NO DISPONIBLE]"
+            L.append(f"  {e['id']}  {e['nombre']}{marca}")
+            L.append(f"      {e['descripcion']}")
+            if not e.get("disponible"):
+                L.append(f"      Motivo: {e.get('motivo')}")
+            L += [texto_parametro(p) for p in e["parametros"]]
+        L.append("")
+    return "\n".join(L).rstrip()
+
+
+def cmd_catalogo(args, enviar):
+    r, codigo = consultar({"orden": "reglas"}, enviar)
+    if r is None:
+        return codigo
+    if not r.get("ok"):
+        return error(r.get("error", "error desconocido"))
+    cat = r.get("catalogo") or {}
+    print(json.dumps(cat, ensure_ascii=False) if "--json" in args else texto_catalogo(cat))
+    return 0
+
+
+AYUDA = ("Uso: jaime0-reglas lista [--json] | historial [-n N] [--json] | activar ID | desactivar ID | "
+         "borrar ID [--si] | probar ID | importar ARCHIVO.json | crear ARCHIVO.json | "
+         "evento inactivo|activo | catalogo [--json]")
+
+
+def main(argv=None, enviar=None, preguntar=None):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+    argv = list(sys.argv[1:] if argv is None else argv)
+    enviar = enviar or pedir_socket
+    preguntar = preguntar or input
+    if not argv or argv[0] in ("-h", "--help"):
+        print(AYUDA)
+        return 0
+    orden, args = argv[0], argv[1:]
+    if orden == "lista":
+        return cmd_lista(args, enviar)
+    if orden == "historial":
+        return cmd_historial(args, enviar)
+    if orden == "activar":
+        return cmd_activar(args, enviar, True)
+    if orden == "desactivar":
+        return cmd_activar(args, enviar, False)
+    if orden == "borrar":
+        return cmd_borrar(args, enviar, preguntar)
+    if orden == "probar":
+        return cmd_probar(args, enviar)
+    if orden == "importar":
+        return cmd_importar(args, enviar)
+    if orden == "crear":
+        return cmd_crear(args, enviar)
+    if orden == "evento":
+        return cmd_evento(args, enviar)
+    if orden == "catalogo":
+        return cmd_catalogo(args, enviar)
+    return error(f"orden desconocida: {orden}. {AYUDA}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

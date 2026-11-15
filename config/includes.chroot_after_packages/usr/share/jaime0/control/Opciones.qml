@@ -1,14 +1,18 @@
 import QtQuick
 
-// Fila de opciones exclusivas (chips cuadrados). "opciones": [{valor, texto, disponible}].
-Row {
+// Opciones exclusivas (chips cuadrados). "opciones": [{valor, texto, disponible}].
+// Con "ancho" > 0 pasan a la linea siguiente si no caben (editor de reglas, columnas
+// estrechas); sin el, van en una sola fila.
+Flow {
     id: fila
 
     property var opciones: []
     property string valor: ""
+    property real ancho: 0
     signal elegido(string valor)
 
     spacing: 4
+    width: ancho > 0 ? ancho : 2000
 
     Repeater {
         model: fila.opciones

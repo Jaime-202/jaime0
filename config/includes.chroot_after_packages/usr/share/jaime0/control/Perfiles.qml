@@ -317,6 +317,7 @@ Item {
                                     font.letterSpacing: 1
                                 }
                                 Opciones {
+                                    ancho: 360
                                     opciones: modelData.opciones
                                     valor: vista.borrador[modelData.clave] || (modelData.clave === "energia" ? "balanced" : modelData.clave === "inhibir_inactividad" ? "no" : "base")
                                     onElegido: v => {
