@@ -1044,12 +1044,37 @@ class PruebasIncidencias(unittest.TestCase):
         self.assertEqual(len(self.correr(inc, [96, 96, 96, 90, 90, 90])), 1)
         self.assertEqual(inc.abiertas(), [{"componente": "cpu-temp", "gravedad": "WARNING"}])
 
-    def test_sin_dato_no_abre_ni_cierra(self):
+    def test_sin_dato_no_abre_nada(self):
+        self.assertEqual(self.correr(S.Incidencias(), [None] * 6), [])
+
+    def test_con_pocas_muestras_sin_dato_la_incidencia_sigue_abierta(self):
         inc = S.Incidencias()
         self.correr(inc, [90, 90, 90])
-        self.assertEqual(self.correr(inc, [None] * 6), [])
+        self.assertEqual(self.correr(inc, [None] * (S.MUESTRAS_SIN_DATO - 1)), [])
         self.assertEqual(len(inc.abiertas()), 1)
-        self.assertEqual(self.correr(S.Incidencias(), [None] * 6), [])
+        # un dato intercalado reinicia la cuenta de muestras sin dato
+        self.assertEqual(self.correr(inc, [90] + [None] * (S.MUESTRAS_SIN_DATO - 1)), [])
+        self.assertEqual(len(inc.abiertas()), 1)
+
+    def test_componente_que_deja_de_dar_dato_se_cierra_sin_inventar_valores(self):
+        inc = S.Incidencias()
+        self.correr(inc, [90, 90, 90])
+        lineas = self.correr(inc, [None] * S.MUESTRAS_SIN_DATO, t0=2000)
+        self.assertEqual(len(lineas), 1)
+        l = lineas[0]
+        self.assertEqual((l["gravedad"], l["componente"]), ("NORMAL", "cpu-temp"))
+        self.assertTrue(l["descripcion"].startswith("Recuperado: "))
+        self.assertIn("sin datos del sensor", l["diagnostico"].lower())
+        self.assertIsNone(l["valor"])
+        self.assertEqual(inc.abiertas(), [])
+        self.assertEqual(self.correr(inc, [None] * 5, t0=3000), [], "cerrada una vez: no se repite")
+
+    def test_la_ventana_vieja_no_se_reutiliza_cuando_vuelve_el_dato(self):
+        inc = S.Incidencias()
+        self.correr(inc, [90, 90])                  # dos muestras malas: aun sin abrir
+        self.correr(inc, [None] * S.MUESTRAS_SIN_DATO, t0=2000)
+        self.assertEqual(self.correr(inc, [90], t0=3000), [], "con la ventana vieja se abriria con una sola muestra")
+        self.assertEqual(inc.abiertas(), [])
 
     def test_systemd_y_smart_con_una_sola_muestra(self):
         inc = S.Incidencias()
@@ -1767,6 +1792,163 @@ class PruebasSaludFase3(Base):
     def test_pedir_socket_sin_servicio_lanza_oserror(self):
         with self.assertRaises(OSError):
             H.pedir_socket({"orden": "estado"})
+
+
+class GLibFalso:
+    PRIORITY_DEFAULT, IO_IN, IO_HUP, IO_ERR = 0, 1, 2, 4
+
+    def __init__(self, orden):
+        self.orden, self.watches, self.quitados, self.ociosos = orden, {}, [], []
+
+    def io_add_watch(self, fd, prioridad, condicion, callback):
+        ident = 100 + len(self.watches)
+        self.watches[ident] = callback
+        return ident
+
+    def source_remove(self, ident):
+        self.quitados.append(ident)
+        self.orden.append(("quitar", ident))
+
+    def idle_add(self, fn, *args):
+        self.ociosos.append((fn, args))
+
+
+class ConexionFalsa:
+    def __init__(self, orden, datos=(b'{"orden":"rapido"}' + bytes([10]),), falla_envio=True):
+        self.orden, self.datos, self.falla_envio = orden, list(datos), falla_envio
+
+    def fileno(self):
+        return 7
+
+    def setblocking(self, v):
+        pass
+
+    def settimeout(self, v):
+        pass
+
+    def recv(self, n):
+        return self.datos.pop(0) if self.datos else b""
+
+    def sendall(self, datos):
+        if self.falla_envio:
+            raise BrokenPipeError()
+
+    def close(self):
+        self.orden.append(("cerrar", 7))
+
+
+class ServidorFalso:
+    def __init__(self, con):
+        self.con = con
+
+    def accept(self):
+        return self.con, None
+
+
+class PruebasConexionesApi(Base):
+    """El watch de GLib de cada conexion se quita antes de cerrar su descriptor."""
+
+    def preparar(self, **k):
+        self.orden = []
+        self.glib = GLibFalso(self.orden)
+        self.con = ConexionFalsa(self.orden, **k)
+        self.sv = S.Servicio(directorio=self.rt, estado=self.estado)
+        self.sv._servidor = ServidorFalso(self.con)
+        p = mock.patch.object(S, "_gi", lambda: (self.glib, None))
+        p.start()
+        self.addCleanup(p.stop)
+        self.assertTrue(self.sv._aceptar(0, 0))
+        (self.ident, self.leer), = self.glib.watches.items()
+
+    def test_fallo_al_enviar_quita_el_watch_antes_de_cerrar(self):
+        self.preparar()
+        self.leer(7, 1)
+        self.assertEqual(self.orden, [("quitar", self.ident), ("cerrar", 7)])
+
+    def test_fallo_al_entregar_desde_un_hilo_quita_el_watch_antes_de_cerrar(self):
+        self.preparar()
+        respuestas = []
+        with mock.patch.object(S, "procesar_linea", lambda linea, ctx, responder: respuestas.append(responder)):
+            self.assertTrue(self.leer(7, 1))        # la respuesta la dara un hilo: el watch sigue vivo
+        self.assertEqual(self.orden, [])
+        respuestas[0]("respuesta")
+        fn, args = self.glib.ociosos[0]
+        fn(*args)
+        self.assertEqual(self.orden, [("quitar", self.ident), ("cerrar", 7)])
+
+    def test_cierre_del_cliente_no_quita_dos_veces_el_watch(self):
+        self.preparar(datos=(), falla_envio=False)
+        self.assertFalse(self.leer(7, 1))           # False: GLib destruye el watch por si solo
+        self.assertEqual(self.orden, [("cerrar", 7)])
+
+
+class PruebasInstanciaUnica(Base):
+    def test_el_segundo_arranque_no_obtiene_el_cerrojo(self):
+        class FcntlFalso:
+            LOCK_EX, LOCK_NB, tomado = 2, 4, False
+
+            @classmethod
+            def flock(cls, f, op):
+                if cls.tomado:
+                    raise BlockingIOError()
+                cls.tomado = True
+
+        primero = S.adquirir_cerrojo(self.rt, FcntlFalso)
+        self.addCleanup(primero.close)
+        self.assertTrue(os.path.exists(os.path.join(self.rt, "servicio.lock")))
+        with self.assertRaises(S.ServicioYaEnMarcha):
+            S.adquirir_cerrojo(self.rt, FcntlFalso)
+
+    def test_sin_fcntl_se_tolera(self):
+        with mock.patch.object(S, "fcntl", None):
+            self.assertIsNone(S.adquirir_cerrojo(self.rt))
+
+    @unittest.skipUnless(S.fcntl, "flock solo existe en Linux")
+    def test_flock_real(self):
+        primero = S.adquirir_cerrojo(self.rt)
+        self.addCleanup(primero.close)
+        with self.assertRaises(S.ServicioYaEnMarcha):
+            S.adquirir_cerrojo(self.rt)
+
+    def test_con_el_cerrojo_tomado_no_se_toca_el_socket_de_la_otra_instancia(self):
+        sock = os.path.join(self.rt, "control.sock")
+        with open(sock, "w") as f:
+            f.write("socket de la otra instancia")
+        sv = S.Servicio(directorio=self.rt, estado=self.estado)
+        with mock.patch.object(S, "adquirir_cerrojo", side_effect=S.ServicioYaEnMarcha("ya hay otra")):
+            with self.assertRaises(S.ServicioYaEnMarcha):
+                sv.ejecutar()
+        self.assertTrue(os.path.exists(sock))
+
+    def test_main_sale_con_codigo_distinto_de_cero_y_mensaje(self):
+        class ServicioOcupado:
+            def ejecutar(self):
+                raise S.ServicioYaEnMarcha("ya hay otra instancia")
+
+        err = io.StringIO()
+        with mock.patch.object(S, "Servicio", ServicioOcupado), contextlib.redirect_stderr(err):
+            self.assertEqual(S.main(["ejecutar"]), S.SALIDA_YA_EN_MARCHA)
+        self.assertNotEqual(S.SALIDA_YA_EN_MARCHA, 0)
+        self.assertIn("ya hay otra instancia", err.getvalue())
+
+
+class PruebasFirmaHyprland(unittest.TestCase):
+    def test_usa_la_del_socket_vivo_aunque_el_entorno_la_tenga_vacia_o_vieja(self):
+        socket = os.path.join("/run/user/1000", "hypr", "nueva", ".socket2.sock")
+        for firma in ("", "vieja"):
+            entorno = {"XDG_RUNTIME_DIR": "/run/user/1000", "HYPRLAND_INSTANCE_SIGNATURE": firma}
+            self.assertEqual(S.firma_hyprland(entorno, listar=lambda patron: [socket],
+                                              existe=lambda p: p == socket), "nueva", firma)
+
+    def test_sin_socket_cae_a_la_del_entorno_y_sin_nada_es_none(self):
+        sin = dict(listar=lambda patron: [], existe=lambda p: False)
+        self.assertEqual(S.firma_hyprland({"XDG_RUNTIME_DIR": "/r", "HYPRLAND_INSTANCE_SIGNATURE": "abc"}, **sin), "abc")
+        self.assertIsNone(S.firma_hyprland({"XDG_RUNTIME_DIR": "/r"}, **sin))
+        self.assertIsNone(S.firma_hyprland({"XDG_RUNTIME_DIR": "/r", "HYPRLAND_INSTANCE_SIGNATURE": ""}, **sin))
+
+    def test_entorno_para_hyprctl(self):
+        self.assertIsNone(S.entorno_hyprland(None))
+        self.assertEqual(S.entorno_hyprland("nueva")["HYPRLAND_INSTANCE_SIGNATURE"], "nueva")
 
 
 if __name__ == "__main__":

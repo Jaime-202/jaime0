@@ -6,4 +6,6 @@ Type=simple
 ExecStart=/usr/local/bin/jaime0-servicio ejecutar
 Restart=on-failure
 RestartSec=5
+# 2 = ya hay otra instancia en marcha (cerrojo): no tiene sentido reintentar.
+RestartPreventExitStatus=2
 Nice=5

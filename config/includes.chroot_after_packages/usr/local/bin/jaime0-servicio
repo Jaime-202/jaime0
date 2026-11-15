@@ -25,13 +25,20 @@ import math
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
 import unicodedata
+
+try:
+    import fcntl            # solo Linux: en Windows (pruebas) no hay cerrojo de instancia unica
+except ImportError:
+    fcntl = None
 
 PROGRAMA = "jaime0-servicio"
 VERSION_DATOS = 1
@@ -50,6 +57,7 @@ MAX_PUNTOS = 720            # puntos como maximo en una serie
 MAX_EVENTOS = 200           # eventos de actividad en RAM
 MAX_INCIDENCIAS = 500       # lineas de incidencias.jsonl
 MUESTRAS_INCIDENCIA = 3     # muestras seguidas para abrir o cerrar una incidencia
+MUESTRAS_SIN_DATO = 3       # muestras seguidas sin dato de un componente para dar por cerrada su incidencia
 MUESTRAS_PICO_CPU = 2
 UMBRAL_PICO_CPU = 85.0
 UMBRAL_PICO_RAM = 90.0
@@ -1209,7 +1217,8 @@ def texto_incidencia(componente, gravedad, valor, detalle, u):
 class Incidencias:
     """Abre, escala y cierra incidencias con histeresis: una condicion debe mantenerse
     MUESTRAS_INCIDENCIA muestras seguidas para abrirse y otras tantas en NORMAL para cerrarse
-    (una sola para systemd y smart). Una muestra suelta no dispara nada."""
+    (una sola para systemd y smart). Una muestra suelta no dispara nada. Un componente que
+    deja de dar dato MUESTRAS_SIN_DATO muestras seguidas se cierra (sin inventar valores)."""
 
     def __init__(self):
         self.comp = {}
@@ -1217,8 +1226,22 @@ class Incidencias:
     def observar(self, inst, u, t):
         """Devuelve las lineas de incidencia nuevas (abrir, escalar, cerrar)."""
         lineas = []
-        for nombre, (grav, valor, detalle) in condiciones(inst, u).items():
-            c = self.comp.setdefault(nombre, {"abierta": "NORMAL", "ventana": []})
+        conds = condiciones(inst, u)
+        for nombre, c in self.comp.items():
+            if nombre in conds:
+                c["sin_dato"] = 0
+                continue
+            c["sin_dato"] = c.get("sin_dato", 0) + 1
+            if c["sin_dato"] < MUESTRAS_SIN_DATO:
+                continue
+            c["ventana"] = []                   # la ventana vieja no debe reutilizarse al volver el dato
+            if c["abierta"] != "NORMAL":
+                c["abierta"] = "NORMAL"
+                lineas.append({"v": VERSION_DATOS, "t": int(t), "gravedad": "NORMAL", "componente": nombre,
+                               "descripcion": "Recuperado: " + NOMBRES_COMPONENTE.get(nombre, nombre),
+                               "diagnostico": "Sin datos del sensor", "recomendacion": "", "valor": None})
+        for nombre, (grav, valor, detalle) in conds.items():
+            c = self.comp.setdefault(nombre, {"abierta": "NORMAL", "ventana": [], "sin_dato": 0})
             n = 1 if nombre in LENTOS else MUESTRAS_INCIDENCIA
             c["ventana"].append(grav)
             del c["ventana"][:-n]
@@ -1552,6 +1575,27 @@ def avisar_barra():
 # pasa por un objeto "sistema" (SistemaReal, o uno falso en las pruebas).
 # ---------------------------------------------------------------------------
 
+def nivel_animaciones_usuario():
+    """Ajuste efectivo de animaciones SIN la capa del perfil, como lo resuelve hyprland.lua:
+    el del usuario, si no el predeterminado y, si ninguno es valido, 'sutil' ('si' = 'sutil')."""
+    for archivo in (os.path.join(carpeta_config(), "ajustes"),
+                    ruta("usr", "share", "jaime0", "ajustes.predeterminados")):
+        valor = None
+        try:
+            with open(archivo, encoding="utf-8") as f:
+                for linea in f:
+                    m = re.match(r"^\s*animaciones\s*=\s*(.*?)\s*$", linea)
+                    if m:
+                        valor = m.group(1)
+        except OSError:
+            continue
+        if valor in ("si", "sutil"):
+            return "sutil"
+        if valor in ("no", "suave"):
+            return valor
+    return "sutil"
+
+
 AJUSTES_PERFIL = ("energia", "animaciones", "desenfoque", "no_molestar", "inhibir_inactividad", "modo_noche")
 TRI = ("si", "no", "base")
 VALORES_AJUSTE = {"energia": ("balanced", "performance", "power-saver"),
@@ -1629,9 +1673,10 @@ class SistemaReal:
         self.ejecutar = ejecutar or subprocess.run
 
     # -- subprocesos ---------------------------------------------------------
-    def _correr(self, orden, timeout):
+    def _correr(self, orden, timeout, env=None):
+        extra = {} if env is None else {"env": env}
         try:
-            return self.ejecutar(orden, capture_output=True, text=True, timeout=timeout)
+            return self.ejecutar(orden, capture_output=True, text=True, timeout=timeout, **extra)
         except subprocess.TimeoutExpired:
             raise OSError(f"{os.path.basename(orden[0])} no responde")
 
@@ -1710,10 +1755,10 @@ class SistemaReal:
 
     # -- Hyprland ------------------------------------------------------------
     def hypr_disponible(self):
-        return bool(os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")) and shutil.which("hyprctl") is not None
+        return firma_hyprland() is not None and shutil.which("hyprctl") is not None
 
     def hypr_recargar(self):
-        r = self._correr(["hyprctl", "reload"], 5)
+        r = self._correr(["hyprctl", "reload"], 5, env=entorno_hyprland(firma_hyprland()))
         if r.returncode != 0:
             raise OSError("hyprctl reload ha fallado")
 
@@ -1752,8 +1797,9 @@ class MotorPerfiles:
     """Perfil activo, instantaneas por ajuste y aplicadores. Un solo hilo (el bucle de GLib)."""
 
     def __init__(self, sistema, dir_ejecucion, dir_estado, archivo_custom, evento=None, notificar=None,
-                 cambio=None):
+                 cambio=None, animaciones_usuario=None):
         self.sistema = sistema
+        self.animaciones_usuario = animaciones_usuario or nivel_animaciones_usuario   # callable -> no|sutil|suave
         self.dir_ejecucion = dir_ejecucion      # donde vive perfil.ajustes (tmpfs)
         self.dir_estado = dir_estado            # callable -> ~/.local/state/jaime0
         self.archivo_custom = archivo_custom    # callable -> ~/.config/jaime0/perfil-personalizado.json
@@ -1862,6 +1908,13 @@ class MotorPerfiles:
             except Exception:
                 registrar("no se pudo liberar la retención de energía:\n" + traceback.format_exc())
 
+    def retencion_obsoleta(self, activo):
+        """ppd suelta las retenciones cuando alguien cambia el perfil por fuera. Si el perfil
+        activo real ya no es el que retenemos, la cookie no vale: se olvida (y se intenta
+        soltar, por si ppd aun la guardara) para que volver a pedirlo vuelva a retener."""
+        if self.cookie is not None and activo is not None and activo != self.retencion:
+            self._liberar_energia()
+
     def _ap_energia(self, valor):
         if valor == "balanced":
             self._liberar_energia()
@@ -1874,6 +1927,10 @@ class MotorPerfiles:
         deseado = [(k, aj[k]) for k in CAPA_CLAVES if aj.get(k) in ("si", "no")]
         if deseado and not self.sistema.hypr_disponible():
             raise OSError("Hyprland no está disponible")
+        # hyprland.lua convierte la animacion "si" en "sutil" por encima del ajuste del usuario
+        # (rebajaria "suave"): "si" solo escribe la clave si el usuario las tiene apagadas.
+        deseado = [(k, "sutil" if (k, v) == ("animaciones", "si") else v) for k, v in deseado
+                   if (k, v) != ("animaciones", "si") or self.animaciones_usuario() == "no"]
         archivo = os.path.join(self.dir_ejecucion, "perfil.ajustes")
         nuevo = "".join(f"{k} = {v}\n" for k, v in deseado) or None
         try:
@@ -2583,9 +2640,10 @@ class HistorialPrivacidad:
 # los perfiles ni de la API. Todo lo que toca el sistema (subprocesos, reloj, hilos, GLib,
 # aplicaciones, perfiles) entra por argumentos del motor, asi que se prueba sin D-Bus ni
 # sockets. Proteccion contra bucles: origen en cada cambio (los eventos causados por una
-# regla no disparan reglas), disparo por flanco, enfriamiento de 30 s por regla, tope global
-# y por regla (la regla se desactiva y queda una incidencia), "perfil -> perfil" rechazado
-# y reglas importadas desactivadas hasta que el usuario las active.
+# regla no disparan reglas), disparo por flanco, enfriamiento de 30 s por regla, tope por
+# regla (la regla se desactiva y queda una incidencia), tope global (las ejecuciones de
+# sobra se omiten, sin desactivar ninguna regla, y queda una incidencia por ventana),
+# "perfil -> perfil" rechazado y reglas importadas desactivadas hasta que el usuario las active.
 # ---------------------------------------------------------------------------
 
 MAX_EJECUCIONES = 1000              # lineas de ejecuciones.jsonl
@@ -3107,6 +3165,22 @@ def ruta_socket2(entorno=None, listar=glob.glob, existe=os.path.exists):
     return max(candidatos, key=mtime)
 
 
+def firma_hyprland(entorno=None, **k):
+    """Firma de la instancia de Hyprland, resuelta en cada uso: la del socket vivo (ruta_socket2)
+    y, si no hay ninguno, la del entorno. None si no hay Hyprland. La del entorno del arranque
+    puede estar vacia (el servicio arranca a la vez que Hyprland) o ser la de una sesion anterior."""
+    entorno = os.environ if entorno is None else entorno
+    p = ruta_socket2(entorno, **k)
+    if p:
+        return os.path.basename(os.path.dirname(p))
+    return entorno.get("HYPRLAND_INSTANCE_SIGNATURE") or None
+
+
+def entorno_hyprland(firma):
+    """Entorno para lanzar hyprctl con la firma resuelta (None = el heredado)."""
+    return dict(os.environ, HYPRLAND_INSTANCE_SIGNATURE=firma) if firma else None
+
+
 def parsear_sinks_wpctl(texto):
     """Salidas de audio de 'wpctl status': [{"id", "nombre", "defecto"}]. El nombre es la
     descripcion que muestra wpctl (sin el volumen)."""
@@ -3215,14 +3289,39 @@ class AplicacionesDisponibles:
         return apps
 
 
+def ejecutar_grupo(orden, timeout=None, stdin=None, **_):
+    """Como subprocess.run para los scripts autorizados, sin esperar a sus hijos: el script
+    corre en una sesion propia (grupo de procesos), la salida estandar se descarta y el error
+    va a un archivo temporal (con tuberias, run() esperaria a que un hijo en segundo plano las
+    cerrase). Al agotar el tiempo se mata el GRUPO entero. Devuelve un CompletedProcess con
+    el principio de stderr."""
+    with tempfile.TemporaryFile() as err:
+        p = subprocess.Popen(orden, stdin=stdin, stdout=subprocess.DEVNULL, stderr=err, start_new_session=True)
+        try:
+            p.wait(timeout)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(p.pid, getattr(signal, "SIGKILL", 9))
+            except (OSError, AttributeError):
+                p.kill()                    # sin killpg (no es Linux) o el grupo ya no existe
+            p.wait()
+            raise
+        err.seek(0)
+        texto = err.read(65536).decode("utf-8", "replace")
+    return subprocess.CompletedProcess(orden, p.returncode, "", texto)
+
+
 class Acciones:
     """Lista blanca cerrada de acciones. Cada una devuelve (ok, detalle). Todas con timeout y
     sin shell; ninguna necesita root. Se ejecutan en un hilo de trabajo: lo que debe tocar
     el estado del servicio (el perfil) pasa por en_bucle."""
 
     def __init__(self, ejecutar, apps, aplicar_perfil, en_bucle, dir_miniaturas, dir_scripts, reloj=time.time,
-                 dormir=time.sleep, uid=None, estatus_script=None):
+                 dormir=time.sleep, uid=None, estatus_script=None, ejecutar_script=None):
         self.ejecutar = ejecutar
+        # Los scripts no usan subprocess.run (ver ejecutar_grupo); si se inyecta otro `ejecutar`
+        # (pruebas) tambien se usa para ellos.
+        self.ejecutar_script = ejecutar_script or (ejecutar_grupo if ejecutar is subprocess.run else ejecutar)
         self.apps = apps                    # callable -> {id: nombre} | None
         self.aplicar_perfil = aplicar_perfil
         self.en_bucle = en_bucle
@@ -3230,10 +3329,12 @@ class Acciones:
         self.reloj, self.dormir, self.uid = reloj, dormir, uid
         self.estatus_script = estatus_script or {}
 
-    def _correr(self, orden, timeout, **k):
+    def _correr(self, orden, timeout, ejecutar=None, captura=True, **k):
         """(proceso, error): error es un texto si no se pudo ejecutar o se agoto el tiempo."""
+        if captura:
+            k.update(capture_output=True, text=True)
         try:
-            return self.ejecutar(orden, capture_output=True, text=True, timeout=timeout, **k), None
+            return (ejecutar or self.ejecutar)(orden, timeout=timeout, **k), None
         except FileNotFoundError:
             return None, f"{os.path.basename(orden[0])} no está instalado"
         except subprocess.TimeoutExpired:
@@ -3335,7 +3436,8 @@ class Acciones:
         ruta_script, error = comprobar_script(a["nombre"], carpeta, self.uid, **self.estatus_script)
         if error:
             return False, error
-        proc, err = self._correr([ruta_script], TIMEOUT_SCRIPT, stdin=subprocess.DEVNULL)
+        proc, err = self._correr([ruta_script], TIMEOUT_SCRIPT, ejecutar=self.ejecutar_script, captura=False,
+                                 stdin=subprocess.DEVNULL, start_new_session=True)
         if err:
             return False, err
         lineas = [l.strip() for l in (proc.stderr or "").splitlines() if l.strip()][:3]
@@ -3386,7 +3488,7 @@ class MotorReglas:
     def __init__(self, archivo_reglas, archivo_ejecuciones, reloj=time.time, ejecutar=None, estado=None,
                  aplicar_perfil=None, apps=None, disponibilidad=None, incidencia=None, evento=None,
                  notificar=None, lanzador=None, en_bucle=None, temporizador=None, cancelar=None,
-                 dormir=time.sleep, dir_miniaturas=None, dir_scripts=None, uid=None):
+                 dormir=time.sleep, dir_miniaturas=None, dir_scripts=None, uid=None, ejecutar_script=None):
         self.archivo_reglas = archivo_reglas
         self.reloj = reloj
         self.estado = estado or (lambda: {})
@@ -3404,12 +3506,14 @@ class MotorReglas:
             lambda fn: self.en_bucle(fn), dir_miniaturas or (lambda: os.path.join(
                 os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache"), "thumbnails")),
             dir_scripts or (lambda: os.path.join(carpeta_config(), "scripts-autorizados")),
-            reloj=reloj, dormir=dormir, uid=uid)
+            reloj=reloj, dormir=dormir, uid=uid, ejecutar_script=ejecutar_script)
         self.reglas, self.invalidas, self.errores = [], [], []
         self.cargado = False
         self._ultimo = {}                   # id -> instante del ultimo disparo (enfriamiento)
         self._por_regla = {}                # id -> instantes de ejecucion (tope por regla)
         self._global = collections.deque()  # instantes de ejecucion (tope global)
+        self._tope_global_avisado = False   # ya hay aviso del tope global en esta ventana
+        self._archivo_roto = False          # la ultima lectura de reglas.json fallo: no pisarlo sin copia
         self._en_curso = set()
         self._silencio = {}                 # evento -> instante hasta el que no dispara
         self._armados = {}                  # umbral de bateria -> armado
@@ -3429,6 +3533,7 @@ class MotorReglas:
         """Lee reglas.json. Una regla invalida no se carga y su error se informa; un archivo
         ilegible conserva las reglas que ya habia cargadas."""
         self.cargado = True
+        self._archivo_roto = False
         try:
             with open(self.archivo_reglas(), encoding="utf-8") as f:
                 doc = json.load(f)
@@ -3437,9 +3542,11 @@ class MotorReglas:
             self._reprogramar_hora()
             return
         except (OSError, ValueError) as e:
+            self._archivo_roto = True
             self.errores = [{"indice": None, "error": f"no se pudo leer reglas.json: {e}"}]
             return
         if not isinstance(doc, dict) or doc.get("v") != 1 or not isinstance(doc.get("reglas"), list):
+            self._archivo_roto = True
             self.errores = [{"indice": None, "error": "reglas.json no tiene el formato esperado (v 1)"}]
             return
         ctx, reglas, invalidas, errores, ids = self._ctx(False), [], [], [], set()
@@ -3468,12 +3575,32 @@ class MotorReglas:
         """Escritura atomica; conserva tal cual las reglas invalidas del archivo."""
         destino = self.archivo_reglas()
         os.makedirs(os.path.dirname(destino), exist_ok=True)
+        if self._archivo_roto:
+            self._copiar_roto(destino)          # si falla, no se guarda (OSError): no se pierde la edicion
         doc = {"v": VERSION_DATOS, "reglas": list(self.reglas) + [i["bruta"] for i in self.invalidas]}
         tmp = destino + ".tmp"
         with open(tmp, "w", encoding="utf-8", newline="\n") as f:
             json.dump(doc, f, ensure_ascii=False, indent=2)
             f.write("\n")
         os.replace(tmp, destino)
+
+    def _copiar_roto(self, destino):
+        """Antes de sobrescribir un reglas.json ilegible, lo copia a reglas.json.roto (o, si ya
+        hay una copia, a reglas.json.roto.AAAAMMDD-HHMMSS[-N]) sin pisar copias anteriores."""
+        if not os.path.exists(destino):
+            self._archivo_roto = False          # ya no esta: nada que conservar
+            return
+        copia = destino + ".roto"
+        if os.path.exists(copia):
+            base = f"{copia}.{datetime.datetime.fromtimestamp(self.reloj()).strftime('%Y%m%d-%H%M%S')}"
+            copia, n = base, 1
+            while os.path.exists(copia):
+                n += 1
+                copia = f"{base}-{n}"
+        shutil.copy2(destino, copia)
+        self._archivo_roto = False
+        self.evento_actividad(f"reglas.json estaba dañado: copia guardada en {os.path.basename(copia)}",
+                              None, "WARNING", None, "regla")
 
     def _buscar(self, rid):
         return next((r for r in self.reglas if r["id"] == rid), None)
@@ -3647,9 +3774,30 @@ class MotorReglas:
         self.notificar()
         return detalle
 
+    def _omitir_por_tope_global(self, regla, texto, motivo):
+        """Tope global: la ejecucion se omite y la regla sigue activa (el exceso no es culpa
+        suya). El evento y la incidencia se registran una sola vez por ventana."""
+        detalle = f"omitida (tope global): {motivo}"
+        self._anotar(regla, texto, "omitida", detalle)
+        if not self._tope_global_avisado:
+            self._tope_global_avisado = True
+            self.evento_actividad("Reglas: ejecuciones omitidas por el tope global", None, "WARNING", None, "regla")
+            try:
+                self.incidencia({
+                    "v": VERSION_DATOS, "t": int(self.reloj()), "gravedad": "WARNING", "componente": "reglas",
+                    "descripcion": f"Se han omitido ejecuciones de reglas: {motivo}",
+                    "diagnostico": "Hay demasiadas reglas disparándose a la vez; ninguna se ha desactivado",
+                    "recomendacion": "Revisa en AUTOMATION si hay un bucle entre eventos y acciones",
+                    "valor": None})
+            except Exception:
+                registrar("no se pudo abrir la incidencia de reglas:\n" + traceback.format_exc())
+            self.notificar()
+        return detalle
+
     def _intentar(self, regla, texto, cb=None):
         """Enfriamiento, tope y lanzamiento. Devuelve (estado, mensaje): 'lanzada', 'omitida'
-        o 'tope'."""
+        (enfriamiento, ya en curso o tope global: la regla sigue activa) o 'tope' (tope por
+        regla: la regla se desactiva)."""
         rid, ahora = regla["id"], self.reloj()
         if rid in self._en_curso:
             self._anotar(regla, texto, "omitida", "omitida (ya se está ejecutando)")
@@ -3663,12 +3811,13 @@ class MotorReglas:
             self._global.popleft()
         propias = [t for t in self._por_regla.get(rid, []) if t > ahora - TOPE_REGLA[1]]
         self._por_regla[rid] = propias
-        motivo = None
-        if len(self._global) >= TOPE_GLOBAL[0]:
+        if len(self._global) < TOPE_GLOBAL[0]:
+            self._tope_global_avisado = False
+        else:
             motivo = f"más de {TOPE_GLOBAL[0]} ejecuciones en {TOPE_GLOBAL[1]} s en total"
-        elif len(propias) + 1 >= TOPE_REGLA[0]:
+            return "omitida", self._omitir_por_tope_global(regla, texto, motivo)
+        if len(propias) + 1 >= TOPE_REGLA[0]:
             motivo = f"{TOPE_REGLA[0]} ejecuciones de esta regla en {TOPE_REGLA[1] // 60} min"
-        if motivo:
             return "tope", self._desactivar_por_tope(regla, texto, motivo)
         self._ultimo[rid] = ahora
         self._global.append(ahora)
@@ -3883,7 +4032,7 @@ def disponibilidad_sistema(en_bus=nombre_en_bus, entorno=None, cual=shutil.which
     poner(ev, "bluetooth", bluez is True,
           "BlueZ (org.bluez) no está disponible: este equipo no tiene Bluetooth o el servicio está desinstalado"
           if bluez is False else "No se pudo consultar el bus del sistema")
-    hypr = bool(entorno.get("HYPRLAND_INSTANCE_SIGNATURE")) or ruta_socket2(entorno) is not None
+    hypr = firma_hyprland(entorno) is not None
     for ident in ("monitor", "aplicacion"):
         poner(ev, ident, hypr, "No hay una sesión de Hyprland: los eventos de ventanas y monitores vienen de ella")
     poner(ev, "hora", True, None)
@@ -4021,7 +4170,7 @@ class FuenteHyprland:
 
     def iniciar(self):
         GLib, _Gio = _gi()
-        if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and ruta_socket2() is None:
+        if firma_hyprland() is None:
             return False                    # sin Hyprland: no hay nada que escuchar
         self._conectar()
         GLib.timeout_add_seconds(REINTENTO_HYPRLAND, self._reintentar)
@@ -4057,7 +4206,8 @@ class FuenteHyprland:
         """Ventanas que ya existian, para contar bien la primera y la ultima de cada clase."""
         GLib, _Gio = _gi()
         try:
-            r = self.ejecutar(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=5)
+            extra = {} if (env := entorno_hyprland(firma_hyprland())) is None else {"env": env}
+            r = self.ejecutar(["hyprctl", "clients", "-j"], capture_output=True, text=True, timeout=5, **extra)
             ventanas = [(c["address"], c.get("class") or "") for c in json.loads(r.stdout)] if r.returncode == 0 else []
         except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
             return
@@ -4230,6 +4380,29 @@ def _orden_reglas(orden, peticion, ctx, responder):
 # Servicio: reune medicion, estado, bus y api
 # ---------------------------------------------------------------------------
 
+SALIDA_YA_EN_MARCHA = 2     # codigo de salida cuando ya hay otra instancia del servicio
+
+
+class ServicioYaEnMarcha(Exception):
+    pass
+
+
+def adquirir_cerrojo(directorio, modulo=None):
+    """Cerrojo de instancia unica: flock exclusivo y no bloqueante sobre servicio.lock del
+    directorio de ejecucion. Devuelve el archivo (hay que mantenerlo abierto mientras viva el
+    servicio) o None si el sistema no tiene fcntl. Lanza ServicioYaEnMarcha si ya esta tomado."""
+    modulo = fcntl if modulo is None else modulo
+    if modulo is None:
+        return None
+    f = open(os.path.join(directorio, "servicio.lock"), "a+")
+    try:
+        modulo.flock(f, modulo.LOCK_EX | modulo.LOCK_NB)
+    except OSError:
+        f.close()
+        raise ServicioYaEnMarcha(f"ya hay otra instancia de {PROGRAMA} en marcha")
+    return f
+
+
 class Servicio:
     def __init__(self, directorio=None, estado=None, leer_umbrales=None, reloj=time.time, sistema=None):
         """directorio: de ejecucion (tmpfs); estado: de ~/.local/state/jaime0 (se crea al
@@ -4266,10 +4439,12 @@ class Servicio:
         self.aviso_lanzar = self._lanzar_aviso  # las pruebas lo sustituyen
         self.reglas_ejecutar = subprocess.run   # las pruebas lo sustituyen
         ejecutar_reglas = lambda *a, **k: self.reglas_ejecutar(*a, **k)
+        self.reglas_ejecutar_script = ejecutar_grupo    # scripts autorizados: ver ejecutar_grupo
         self.reglas = MotorReglas(
             lambda: os.path.join(carpeta_config(), "reglas.json"),
             lambda: os.path.join(self.dir_estado(), "ejecuciones.jsonl"),
             reloj=reloj, ejecutar=ejecutar_reglas, estado=self._estado_reglas,
+            ejecutar_script=lambda *a, **k: self.reglas_ejecutar_script(*a, **k),
             aplicar_perfil=lambda pid: self.perfiles.aplicar(pid, "regla"),
             apps=AplicacionesDisponibles(ejecutar_reglas).obtener, disponibilidad=disponibilidad_sistema,
             incidencia=lambda linea: self.anotar_incidencias([linea]), evento=self.evento,
@@ -4474,6 +4649,7 @@ class Servicio:
         if self.energia is not None or valor is not None:
             self.evento(f"Perfil de energía: {valor or 'N/D'}", "perfil")
         self.energia = valor
+        self.perfiles.retencion_obsoleta(valor)
         self._perfil_cambiado()
 
     def _perfil_cambiado(self):
@@ -4763,6 +4939,18 @@ class Servicio:
         buf = bytearray()
         pendientes = [0]            # respuestas de hilos aun por entregar
         por_cerrar = [False]        # el cliente ya cerro su lado
+        fuente = [None]             # id del watch de lectura de esta conexion
+
+        def cerrar():
+            """Cierra la conexion quitando antes su watch: un watch sobre un descriptor ya
+            cerrado (o reutilizado por otra conexion) vigilaria el descriptor equivocado."""
+            if fuente[0] is not None:
+                id_watch, fuente[0] = fuente[0], None
+                try:
+                    GLib.source_remove(id_watch)
+                except Exception:
+                    registrar("no se pudo quitar el watch de la conexión:\n" + traceback.format_exc())
+            con.close()
 
         def enviar(texto):
             try:
@@ -4771,7 +4959,7 @@ class Servicio:
                 con.setblocking(False)
                 return True
             except OSError:
-                con.close()
+                cerrar()
                 return False
 
         @protegido(False)
@@ -4779,7 +4967,7 @@ class Servicio:
             """Respuesta de un hilo, ya en el bucle de GLib."""
             pendientes[0] -= 1
             if enviar(texto) and por_cerrar[0] and not pendientes[0]:
-                con.close()
+                cerrar()
             return False
 
         def responder_desde_hilo(texto):
@@ -4796,7 +4984,7 @@ class Servicio:
             if datos:
                 buf.extend(datos)
             if len(buf) > 262144:
-                con.close()
+                cerrar()
                 return False
             final = not datos
             while True:
@@ -4817,13 +5005,14 @@ class Servicio:
                     return False
             if final:
                 por_cerrar[0] = True
+                fuente[0] = None        # este watch acaba al devolver False: no hay que quitarlo
                 if not pendientes[0]:
-                    con.close()
+                    cerrar()
                 return False
             return True
 
-        GLib.io_add_watch(con.fileno(), GLib.PRIORITY_DEFAULT, GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR,
-                          leer_cliente)
+        fuente[0] = GLib.io_add_watch(con.fileno(), GLib.PRIORITY_DEFAULT,
+                                      GLib.IO_IN | GLib.IO_HUP | GLib.IO_ERR, leer_cliente)
         return True
 
     @protegido(None)
@@ -4839,6 +5028,8 @@ class Servicio:
 
     def ejecutar(self):
         import signal
+        # Antes del try/finally: si ya hay otra instancia, limpiar() no debe borrar SU control.sock.
+        self._cerrojo = adquirir_cerrojo(self.dir)
         GLib, _Gio = _gi()
         self._bucle = GLib.MainLoop()
         try:
@@ -4920,6 +5111,9 @@ def main(argv=None):
         return 0
     try:
         Servicio().ejecutar()
+    except ServicioYaEnMarcha as e:
+        registrar(f"{e}: no se inicia otra (cerrojo servicio.lock)")
+        return SALIDA_YA_EN_MARCHA
     except KeyboardInterrupt:
         pass
     except Exception:

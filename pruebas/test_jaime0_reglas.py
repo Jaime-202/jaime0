@@ -7,6 +7,7 @@ procesos reales.
 """
 import contextlib
 import datetime
+import glob
 import importlib.machinery
 import importlib.util
 import io
@@ -805,12 +806,36 @@ class PruebasProteccion(Base):
         self.assertEqual([x["resultado"] for x in h].count("ok"), 20)
         self.assertEqual(h[-1]["resultado"], "omitida")
         self.assertIn("20 ejecuciones en 60 s", h[-1]["detalle"])
+        self.assertIn("tope global", h[-1]["detalle"])
         self.assertEqual(len(self.ejec.llamadas), 20)
-        desactivadas = [r for r in self.motor.reglas if not r["activa"]]
-        self.assertEqual(len(desactivadas), 1)
-        self.assertEqual(desactivadas[0]["nombre"], h[-1]["nombre"])
-        self.assertEqual([r["activa"] for r in self.leer_reglas()["reglas"]].count(False), 1)
+        # El tope GLOBAL omite la ejecucion pero no desactiva la regla (no tiene la culpa).
+        self.assertEqual([r for r in self.motor.reglas if not r["activa"]], [])
+        self.assertEqual([r["activa"] for r in self.leer_reglas()["reglas"]].count(False), 0)
         self.assertEqual(len(self.incs), 1)
+
+    def test_tope_global_no_desactiva_a_las_reglas_que_lo_superan(self):
+        for i in range(25):
+            self.guardar(f"Regla {i}")
+        self.disparar()
+        h = self.historial()
+        self.assertEqual([x["resultado"] for x in h].count("ok"), 20)
+        self.assertEqual([x["resultado"] for x in h].count("omitida"), 5)
+        self.assertTrue(all(r["activa"] for r in self.motor.reglas))
+        self.assertTrue(all(r["activa"] for r in self.leer_reglas()["reglas"]))
+        self.assertEqual(len(self.incs), 1, "una sola incidencia por ventana, no una por regla omitida")
+        self.assertEqual(len([a for a in self.actividad if "tope global" in a[0]]), 1)
+        self.reloj.avanzar(61)                                   # ventana nueva: las omitidas vuelven a funcionar
+        self.disparar()
+        self.assertEqual([x["resultado"] for x in self.historial()].count("ok"), 40)
+
+    def test_tope_global_vuelve_a_avisar_en_la_ventana_siguiente(self):
+        for i in range(21):
+            self.guardar(f"Regla {i}")
+        self.disparar()
+        self.assertEqual(len(self.incs), 1)
+        self.reloj.avanzar(61)
+        self.disparar()
+        self.assertEqual(len(self.incs), 2)
 
     def test_el_tope_global_se_libera_con_el_tiempo(self):
         for i in range(20):
@@ -1039,6 +1064,42 @@ class PruebasArchivo(Base):
         self.motor.cargar()
         self.assertEqual(len(self.motor.reglas), 1)
         self.assertIn("formato", self.motor.errores[0]["error"])
+
+    def test_guardar_con_el_archivo_roto_lo_copia_antes_de_sobrescribir(self):
+        self.guardar("Primera")
+        roto = '{"v": 1, "reglas": [esto no es json'
+        with open(self.archivo, "w", encoding="utf-8") as f:
+            f.write(roto)
+        self.motor.cargar()
+        self.assertEqual(len(self.motor.reglas), 1)
+        self.guardar("Segunda")
+        with open(self.archivo + ".roto", encoding="utf-8") as f:
+            self.assertEqual(f.read(), roto)
+        self.assertEqual(len(self.leer_reglas()["reglas"]), 2)
+        self.assertTrue(any("reglas.json" in a[0] and ".roto" in a[0] for a in self.actividad))
+        self.guardar("Tercera")                                  # ya sobrescrito: no se vuelve a copiar
+        with open(self.archivo + ".roto", encoding="utf-8") as f:
+            self.assertEqual(f.read(), roto)
+        self.assertEqual(len(glob.glob(self.archivo + ".roto*")), 1)
+
+    def test_segundo_archivo_roto_no_pisa_la_copia_anterior(self):
+        self.guardar("Primera")
+        for texto in ("{primero", "{segundo"):
+            with open(self.archivo, "w", encoding="utf-8") as f:
+                f.write(texto)
+            self.motor.cargar()
+            self.guardar(texto.strip("{"))
+        with open(self.archivo + ".roto", encoding="utf-8") as f:
+            self.assertEqual(f.read(), "{primero")
+        otras = [c for c in glob.glob(self.archivo + ".roto.*")]
+        self.assertEqual(len(otras), 1)
+        with open(otras[0], encoding="utf-8") as f:
+            self.assertEqual(f.read(), "{segundo")
+
+    def test_archivo_sano_no_genera_copia(self):
+        self.guardar("Primera")
+        self.guardar("Segunda")
+        self.assertEqual(glob.glob(self.archivo + ".roto*"), [])
 
     def test_recarga_tras_editar_el_archivo(self):
         self.guardar("Una")
@@ -1625,6 +1686,53 @@ class PruebasScripts(Base):
         ok, d = self.accion()
         self.assertFalse(ok)
         self.assertIn("60 s", d)
+
+    def test_el_script_corre_en_sesion_propia_y_sin_tuberias(self):
+        ok, d = self.accion()
+        self.assertTrue(ok, d)
+        k = self.ejec.llamadas[0][1]
+        self.assertTrue(k["start_new_session"])
+        self.assertNotIn("capture_output", k)        # con tuberias, un hijo en segundo plano bloquea la espera
+
+    def test_ejecutar_grupo_mata_el_grupo_al_agotar_el_tiempo(self):
+        muertes = []
+
+        class PopenFalso:
+            def __init__(self, orden, **k):
+                self.pid, self.k, self.returncode = 4321, k, None
+
+            def wait(self, timeout=None):
+                if not muertes:
+                    raise subprocess.TimeoutExpired("x.sh", timeout)
+                self.returncode = -9
+
+            def kill(self):
+                muertes.append("solo el proceso")
+
+        with mock.patch.object(S.subprocess, "Popen", PopenFalso), \
+                mock.patch.object(S.os, "killpg", lambda pid, sig: muertes.append((pid, sig)), create=True):
+            with self.assertRaises(subprocess.TimeoutExpired):
+                S.ejecutar_grupo(["x.sh"], timeout=60, stdin=subprocess.DEVNULL)
+        self.assertEqual(muertes, [(4321, getattr(S.signal, "SIGKILL", 9))])
+
+    def test_ejecutar_grupo_sin_esperar_a_hijos_y_devuelve_el_error(self):
+        capturado = {}
+
+        class PopenFalso:
+            def __init__(self, orden, **k):
+                capturado.update(k)
+                k["stderr"].write("fallo uno\nfallo dos\n".encode())
+                self.returncode = 3
+
+            def wait(self, timeout=None):
+                return 3
+
+        with mock.patch.object(S.subprocess, "Popen", PopenFalso):
+            r = S.ejecutar_grupo(["x.sh"], timeout=60, stdin=subprocess.DEVNULL)
+        self.assertEqual((r.returncode, r.stderr), (3, "fallo uno\nfallo dos\n"))
+        self.assertTrue(capturado["start_new_session"])
+        self.assertEqual(capturado["stdout"], subprocess.DEVNULL)
+        self.assertNotEqual(capturado["stderr"], subprocess.PIPE)
 
     def test_un_script_inseguro_no_se_ejecuta(self):
         a = self.motor.acciones

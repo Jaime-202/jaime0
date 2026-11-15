@@ -334,6 +334,38 @@ class PruebasAplicar(Base):
         s.perfiles.aplicar("custom")
         self.assertEqual(self.leer_capa(), "desenfoque = si\n")
 
+    def capa_con_animaciones_si(self, usuario):
+        """CUSTOM con animaciones = si, con `usuario` como ajuste efectivo del usuario."""
+        s = S.Servicio(directorio=self.rt, estado=self.estado, sistema=self.sis, leer_umbrales=lambda: {})
+        s.perfiles.animaciones_usuario = lambda: usuario
+        escribir_archivo_custom(self.config, json.dumps({"v": 1, "ajustes": {"animaciones": "si"}}))
+        self.assertTrue(s.perfiles.aplicar("custom")["ok"])
+
+    def test_animaciones_si_no_rebaja_el_ajuste_del_usuario(self):
+        for usuario in ("suave", "sutil"):
+            self.capa_con_animaciones_si(usuario)
+            self.assertIsNone(self.leer_capa(), usuario)       # que mande el ajuste del usuario
+
+    def test_animaciones_si_con_el_usuario_en_no_escribe_sutil(self):
+        self.capa_con_animaciones_si("no")
+        self.assertEqual(self.leer_capa(), "animaciones = sutil\n")
+
+    def test_el_ajuste_de_animaciones_del_usuario_sale_de_sus_archivos(self):
+        os.makedirs(os.path.join(self.config, "jaime0"))
+        archivo = os.path.join(self.config, "jaime0", "ajustes")
+        for texto, esperado in (("animaciones = suave\n", "suave"), ("# animaciones = no\n", "sutil"),
+                                ("animaciones = no\n", "no"), ("animaciones = si\n", "sutil"),
+                                ("animaciones = raro\n", "sutil")):
+            with open(archivo, "w", encoding="utf-8") as f:
+                f.write(texto)
+            self.assertEqual(S.nivel_animaciones_usuario(), esperado, texto)
+
+    def test_animaciones_no_se_sigue_escribiendo_como_no(self):
+        s = self.servicio()
+        escribir_archivo_custom(self.config, json.dumps({"v": 1, "ajustes": {"animaciones": "no"}}))
+        s.perfiles.aplicar("custom")
+        self.assertEqual(self.leer_capa(), "animaciones = no\n")
+
     def test_sin_hyprland_no_se_toca_la_capa(self):
         s = self.servicio(SistemaFalso(hypr=False))
         self.assertTrue(s.perfiles.aplicar("focus")["ok"])
@@ -671,6 +703,25 @@ class PruebasEventosYEstado(Base):
         with open(os.path.join(self.rt, "estado.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["perfil"]["activo"], "focus")
 
+    def test_si_ppd_suelta_la_retencion_por_un_cambio_externo_se_vuelve_a_retener(self):
+        s = self.servicio()
+        s.perfiles.aplicar("performance")
+        self.assertEqual(self.sis.hold_llamadas, ["performance"])
+        s.poner_energia("performance")                    # el perfil activo coincide: la retencion vale
+        self.assertIsNotNone(s.perfiles.cookie)
+        s.poner_energia("balanced")                       # el usuario cambio la energia fuera: ppd soltó la retencion
+        self.assertIsNone(s.perfiles.cookie)
+        self.assertIsNone(s.perfiles.retencion)
+        s.perfiles.aplicar("performance")                 # pedir lo mismo de nuevo debe retener otra vez
+        self.assertEqual(self.sis.hold_llamadas, ["performance", "performance"])
+        self.assertIsNotNone(s.perfiles.cookie)
+        self.assertEqual(list(self.sis.retenciones.values()), ["performance"])
+
+    def test_un_cambio_de_ppd_sin_retencion_nuestra_no_hace_nada(self):
+        s = self.servicio()
+        s.poner_energia("power-saver")
+        self.assertEqual(self.sis.release_llamadas, [])
+
     def test_cambio_de_energia_de_ppd_no_toca_el_perfil_de_jaime0(self):
         s = self.servicio()
         s.perfiles.aplicar("focus")
@@ -794,12 +845,37 @@ class PruebasSistemaReal(unittest.TestCase):
         with mock.patch.dict(os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "abc"}), \
                 mock.patch.object(S.shutil, "which", return_value="/usr/bin/hyprctl"):
             self.assertTrue(sis.hypr_disponible())
-        with mock.patch.dict(os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": ""}), \
+        with mock.patch.dict(os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "", "XDG_RUNTIME_DIR": "/no/existe"}), \
                 mock.patch.object(S.shutil, "which", return_value="/usr/bin/hyprctl"):
             self.assertFalse(sis.hypr_disponible())
         with mock.patch.dict(os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "abc"}), \
                 mock.patch.object(S.shutil, "which", return_value=None):
             self.assertFalse(sis.hypr_disponible())
+
+    def socket_de_hyprland(self, firma):
+        tmp = tempfile.mkdtemp(prefix="jaime0-hypr-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        os.makedirs(os.path.join(tmp, "hypr", firma))
+        with open(os.path.join(tmp, "hypr", firma, ".socket2.sock"), "w") as f:
+            f.write("")
+        return tmp
+
+    def test_hyprland_disponible_resuelve_la_firma_en_cada_uso(self):
+        # El servicio arranca a la vez que Hyprland: su entorno puede traer la firma vacia o la vieja.
+        tmp = self.socket_de_hyprland("nueva")
+        sis = S.SistemaReal(lambda *a, **k: None)
+        for firma in ("", "vieja"):
+            entorno = {"XDG_RUNTIME_DIR": tmp, "HYPRLAND_INSTANCE_SIGNATURE": firma}
+            with mock.patch.dict(os.environ, entorno), \
+                    mock.patch.object(S.shutil, "which", return_value="/usr/bin/hyprctl"):
+                self.assertTrue(sis.hypr_disponible(), firma)
+
+    def test_hyprctl_reload_lleva_la_firma_resuelta(self):
+        tmp = self.socket_de_hyprland("nueva")
+        sis = self.sistema(RespuestaFalsa())
+        with mock.patch.dict(os.environ, {"XDG_RUNTIME_DIR": tmp, "HYPRLAND_INSTANCE_SIGNATURE": "vieja"}):
+            sis.hypr_recargar()
+        self.assertEqual(self.llamadas[0][1]["env"]["HYPRLAND_INSTANCE_SIGNATURE"], "nueva")
 
     def test_modo_noche(self):
         with mock.patch.object(S, "programa_hermano", return_value="/bin/modo-noche"):

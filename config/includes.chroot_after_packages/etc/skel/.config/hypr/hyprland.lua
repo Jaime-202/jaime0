@@ -254,7 +254,12 @@ hl.on("hyprland.start", function()
     end
     -- Tambien las de maquina virtual (si no existen se ignoran): lo que arranca D-Bus, como
     -- swaync, debe dibujar igual que lo que arranca Hyprland.
-    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE HYPRLAND_INSTANCE_SIGNATURE NO_AT_BRIDGE GTK_A11Y LIBGL_ALWAYS_SOFTWARE GSK_RENDERER")
+    -- El servicio del Control Center (jaime0-servicio: medicion, estado global, perfiles y
+    -- reglas; va aparte de la interfaz y funciona con el Control Center cerrado) se arranca
+    -- DESPUES de exportar el entorno, en la misma orden: asi hereda HYPRLAND_INSTANCE_SIGNATURE
+    -- y WAYLAND_DISPLAY. Con ";" y no con "&&": si dbus-update-activation-environment falla
+    -- o no esta, el servicio debe arrancar igual (resuelve la firma de Hyprland por su cuenta).
+    hl.exec_cmd("sh -c 'dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE HYPRLAND_INSTANCE_SIGNATURE NO_AT_BRIDGE GTK_A11Y LIBGL_ALWAYS_SOFTWARE GSK_RENDERER; exec systemctl --user start jaime0-servicio.service'")
     hl.exec_cmd("xdg-user-dirs-update")
     hl.exec_cmd("sh -c 'test -d /run/live/medium && sleep 4 && notify-send \"Sistema en vivo\" \"Pulsa SUPER + Espacio y busca: Instalar el sistema. SUPER + F1 muestra los atajos.\"'")
     hl.exec_cmd(polkitAgent)
@@ -266,9 +271,7 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("jaime0-anclar vigilar")
     -- Notificaciones: swaync (o dunst si swaync no esta instalado).
     hl.exec_cmd("notificaciones iniciar")
-    -- Servicio del Control Center: medicion, estado global y (mas adelante) perfiles y reglas.
-    -- Va aparte de la interfaz: funciona aunque el Control Center este cerrado.
-    hl.exec_cmd("systemctl --user start jaime0-servicio.service")
+    -- (El servicio del Control Center se arranca arriba, tras exportar el entorno.)
     -- Si la NVIDIA espera a que se registre su clave (Secure Boot), un aviso al entrar.
     hl.exec_cmd("sh -c 'sleep 6; exec jaime0-nvidia aviso'")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
