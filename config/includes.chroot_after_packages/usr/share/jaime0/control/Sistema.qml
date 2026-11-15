@@ -178,8 +178,9 @@ Item {
                 unidad: vista.ram ? "/ " + (vista.ram.total / 1024).toFixed(1) + " GiB" : ""
                 decimales: 1
                 nivel: vista.ram ? vista.ram.usada / vista.ram.total : -1
-                detalle: vista.ram && vista.ram.swap_total > 0
-                         ? "swap " + (vista.ram.swap / 1024).toFixed(1) + " GiB" : "sin swap en uso"
+                // Sin datos no se afirma nada; "sin swap" solo si el equipo no tiene.
+                detalle: !vista.ram ? "" : vista.ram.swap_total > 0
+                         ? "swap " + (vista.ram.swap / 1024).toFixed(1) + " GiB" : "sin swap"
             }
             Traza {
                 anchors.left: parent.left
@@ -254,7 +255,7 @@ Item {
             etiqueta: "BATTERY"
             Medidor {
                 width: parent.width
-                etiqueta: vista.bat ? vista.bat.estado.toUpperCase() + (vista.instante.cargador ? " · CARGADOR" : "") : "SIN BATERÍA"
+                etiqueta: vista.bat ? vista.bat.estado.toUpperCase() + (vista.instante.cargador ? " · CARGADOR" : "") : vista.instante ? "SIN BATERÍA" : ""
                 valor: vista.bat ? vista.bat.nivel : null
                 unidad: "%"
                 nivel: vista.bat ? vista.bat.nivel / 100 : -1

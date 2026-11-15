@@ -1,6 +1,46 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1 a 7 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con sus 7 secciones (SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH y SETTINGS), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Queda la fase 8 (pruebas de conjunto).
+Estado: **Fases 1 a 8 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con sus 7 secciones (SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH y SETTINGS), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Probado de punta a punta en un sistema instalado desde una ISO nueva (fase 8); queda lo que solo existe en el portátil.
+
+## Pruebas de conjunto (fase 8)
+
+**Cómo:** ISO nueva compilada con las fases 2 a 7 (15-11-2026), arrancada en vivo e instalada con el instalador gráfico (UEFI, ext4, disco entero) en una VM nueva (`jaime0-fase8`: 4 GiB, 4 CPU). Los arreglos de esta fase se copiaron encima del sistema instalado (la ISO se compiló antes). Además, revisión del código de las fases 2 a 7 por un revisor independiente.
+
+**Revisión del código:** sin fallos de seguridad (el ayudante de polkit no acepta argumentos y solo vale en la sesión activa; las órdenes externas van sin shell; socket 0600 en una carpeta 0700; nada sale del equipo). Corregidos 9 fallos:
+
+| Fallo | Arreglo |
+|---|---|
+| El tope global de reglas (20 por minuto) desactivaba para siempre reglas sin culpa | Se omiten esas ejecuciones con el motivo; desactivar queda para el tope por regla |
+| Una incidencia de un sensor que deja de dar datos (p. ej. la GPU al suspenderse) quedaba abierta para siempre | Tras 3 muestras sin dato se cierra («Sin datos del sensor») |
+| Si el perfil de energía se cambiaba fuera, power-profiles-daemon soltaba la retención y Jaime0 no lo veía | Se olvida la retención y se vuelve a pedir |
+| El servicio podía arrancar antes de exportar el entorno de Hyprland (POWER SAVER salía como no disponible) | Se arranca después, en la misma orden, y busca la firma de Hyprland en cada uso |
+| Un `reglas.json` roto a mano se sobrescribía | Antes se guarda una copia `reglas.json.roto` |
+| Una conexión cerrada por error dejaba su vigilancia de GLib activa | Se quita antes de cerrar |
+| Un script autorizado que dejaba un proceso en segundo plano daba un falso «superó el tiempo» | Grupo de procesos propio; al agotar el tiempo se mata el grupo |
+| CUSTOM con animaciones «SÍ» bajaba «suave» a «sutil» | Solo escribe el nivel si el usuario las tiene apagadas |
+| Se podían lanzar dos servicios a la vez | Cerrojo (`flock`); la segunda instancia sale con código 2 y systemd no la reintenta |
+
+**Fallos encontrados en el sistema instalado y corregidos:**
+
+- Con el servicio parado, la barra, `jaime0-salud` y la ventana seguían mostrando el último estado como actual (la ventana, con el PID y la hora de la última muestra). Ahora el servicio borra lo que publica al parar y avisa a la barra; la ventana pasa a SERVICE OFFLINE con todo en N/D; `jaime0-salud` hace una medición puntual y lo dice.
+- El límite fijo de 30 s para dar los datos por frescos no servía con `cc_intervalo = 30` (fase 7): ahora es el mayor de 30 s y tres muestras.
+- Sin datos, la ventana afirmaba «SIN BATERÍA» y «sin swap en uso»: ahora no afirma nada.
+
+| Prueba | Resultado |
+|---|---|
+| Pruebas automáticas | 580 correctas en Windows y en Linux (la del cerrojo real solo en Linux) |
+| ISO | Compila; en vivo, el servicio arranca, el ayudante de polkit es `root:root 755`, `pkexec` y `upower` presentes |
+| Instalación | Instalador gráfico completo; primer arranque en 24 s hasta tuigreet, sin unidades fallidas |
+| Secciones | Las 7, abiertas con el atajo real (SUPER+I) y las teclas 1–7, con datos reales; 0 avisos de QML |
+| No disponible bien indicado | Temperatura N/D, PERFORMANCE «UNAVAILABLE» con el motivo, Flatpak no instalado, rangos del historial sin datos desactivados, consumo y autonomía de la batería N/D |
+| Terminal | `jaime0-salud`, `barra`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas` correctos; con el servicio parado, `jaime0-perfil` y `jaime0-reglas` lo dicen con la orden para arrancarlo |
+| Regla real | «Servicio fallido → notificar» se ejecuta con una unidad fallida de verdad y queda en el historial |
+| Fallos | Servicio parado (ver arriba); `reglas.json` roto (copia `.roto` y se reescribe); sin Quickshell, `jaime0-control` explica que el estado se ve con `jaime0-salud`; segunda instancia rechazada |
+| Reinicio | Tras reiniciar el sistema siguen los ajustes, el perfil (FOCUS se vuelve a aplicar), las reglas y el historial; la incidencia abierta antes se cierra una sola vez al ver que las unidades ya no fallan; 0 errores del servicio |
+| Consumo | Servicio en reposo (cada 10 s, ventana cerrada): 0,10 % de CPU y 55 MiB, estable en 20 min (de 55,05 a 55,20 MiB en 15 min, mientras se llena el anillo). Ventana abierta en HEALTH: 2,5 % de CPU y 134 MiB; el servicio, midiendo cada 2 s, 0,6 %. Sistema entero con la sesión abierta: 613 MiB |
+| No probado | Lo que solo existe en el portátil (sensores, NVIDIA, batería real, PERFORMANCE, Bluetooth, Wi-Fi, suspensión), el efecto visual de las animaciones de Hyprland (en una VM están apagadas) y el histórico de 24 h con un hueco por reinicio (necesita una hora de datos) |
+
+**Pendiente (no corregido):** el servicio atiende algunas órdenes de perfil dentro de su bucle principal; si un programa externo se cuelga (p. ej. swaync), el muestreo, el socket y las reglas se detienen unos segundos (como mucho el límite de cada orden, 3–5 s). Arreglarlo exige pasar la aplicación de perfiles a un hilo; queda para más adelante.
 
 ## SETTINGS, animaciones e integración (fase 7)
 
@@ -334,7 +374,7 @@ Todos los archivos llevan `"v": 1`. Los valores que no existen se escriben `null
 | 5 · PRIVACY & SECURITY | UFW (estado y reglas con polkit), conexiones, dispositivos en uso, servicios, historial | VM |
 | 6 · AUTOMATION | Motor de reglas por eventos, lista blanca de acciones, editor sencillo, historial de ejecuciones | VM (Bluetooth y batería reales, en el portátil) |
 | 7 · ANIMATIONS & INTEGRATION | Animaciones OFF/SUBTLE/SMOOTH (migrando el ajuste `animaciones` de sí/no), transiciones del Control Center, Waybar, atajos, SETTINGS — **hecha** | VM |
-| 8 · TESTING | Todo, persistencia, reinicios, consumo, funciones no disponibles bien indicadas | VM y portátil |
+| 8 · TESTING | Todo, persistencia, reinicios, consumo, funciones no disponibles bien indicadas — **hecha en VM; falta el portátil** | VM y portátil |
 
 ## Riesgos
 

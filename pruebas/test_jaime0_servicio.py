@@ -444,6 +444,17 @@ class PruebasInstanteYServicio(Base):
         self.assertIn("Perfil de energía: performance", textos)
         self.assertLessEqual(sv.actividad.maxlen, 20)
 
+    def test_limpiar_borra_lo_publicado(self):
+        # Al parar no deben quedar datos que la barra o jaime0-salud tomen por actuales.
+        sv = S.Servicio(directorio=self.rt)
+        for nombre in ("instante.json", "estado.json", "control.sock"):
+            open(os.path.join(self.rt, nombre), "w").close()
+        with mock.patch.object(sv.historico, "volcar"), mock.patch.object(S, "avisar_barra") as barra:
+            sv.limpiar()
+        for nombre in ("instante.json", "estado.json", "control.sock"):
+            self.assertFalse(os.path.exists(os.path.join(self.rt, nombre)), nombre)
+        barra.assert_called_once()
+
     def test_modo_rapido(self):
         sv = S.Servicio(directorio=self.rt)
         self.assertEqual(sv.intervalo_actual(), 10)
@@ -607,6 +618,14 @@ class PruebasSalud(Base):
         self.assertIn("SYSTEM ONLINE", txt)
         self.assertIn("N/D", txt)       # batería ausente
         self.assertNotIn("Servicio parado", txt)
+
+    def test_fresco_sigue_el_intervalo_publicado(self):
+        # Con cc_intervalo = 30, entre dos muestras pasan hasta 30 s: no es "parado".
+        self.assertTrue(H.fresco(instante_base(t=int(time.time()) - 45, intervalo=30), H.EDAD_MAXIMA))
+        self.assertFalse(H.fresco(instante_base(t=int(time.time()) - 95, intervalo=30), H.EDAD_MAXIMA))
+        self.assertFalse(H.fresco(instante_base(t=int(time.time()) - 45, intervalo=10), H.EDAD_MAXIMA))
+        self.estado_json(t=int(time.time()) - 80, servicio={"pid": 1, "desde": 0, "intervalo": 30})
+        self.assertNotEqual(H.barra()["class"], "parado")
 
     def test_obtener_servicio_parado_hace_medicion_puntual(self):
         self.escribir_rt("instante.json", instante_base(t=int(time.time()) - 600))

@@ -446,7 +446,7 @@ Item {
                     width: parent.width
                     spacing: 2
                     Text {
-                        text: marcoBateria.bat ? marcoBateria.bat.nivel + " %  " + marcoBateria.bat.estado.toUpperCase() : "SIN BATERÍA"
+                        text: marcoBateria.bat ? marcoBateria.bat.nivel + " %  " + marcoBateria.bat.estado.toUpperCase() : salud.instante ? "SIN BATERÍA" : "N/D"
                         color: Tema.texto
                         font.family: Tema.mono
                         font.pixelSize: 16

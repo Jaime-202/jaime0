@@ -69,8 +69,21 @@ def edad(doc):
         return float("inf")
 
 
+def intervalo_de(doc):
+    """Segundos entre muestras que publica el servicio (instante.json o estado.json)."""
+    try:
+        v = doc.get("intervalo")
+        if v is None:
+            v = (doc.get("servicio") or {}).get("intervalo")
+        return float(v) if v else 0.0
+    except (AttributeError, TypeError, ValueError):
+        return 0.0
+
+
 def fresco(doc, maximo):
-    return doc is not None and edad(doc) <= maximo
+    """Datos del servicio aun validos: como mucho `maximo` s o tres muestras (lo que sea
+    mayor; con cc_intervalo = 30, 30 s no bastan entre dos muestras)."""
+    return doc is not None and edad(doc) <= max(maximo, 3 * intervalo_de(doc))
 
 
 def medicion_puntual():

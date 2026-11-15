@@ -5078,10 +5078,14 @@ class Servicio:
                 self._servidor.close()
         except OSError:
             pass
-        try:
-            os.unlink(os.path.join(self.dir, "control.sock"))
-        except OSError:
-            pass
+        # Al parar, fuera tambien los datos publicados: si se quedaran, la barra, jaime0-salud
+        # y la ventana mostrarian el ultimo estado como si fuera actual.
+        for nombre in ("control.sock", "instante.json", "estado.json"):
+            try:
+                os.unlink(os.path.join(self.dir, nombre))
+            except OSError:
+                pass
+        avisar_barra()      # la barra no se refresca sola: que pase a "parado" ya
 
 
 # ---------------------------------------------------------------------------

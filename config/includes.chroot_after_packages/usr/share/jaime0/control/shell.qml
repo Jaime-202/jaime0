@@ -47,6 +47,7 @@ ShellRoot {
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
+        onLoadFailed: raiz.instante = null    // el servicio lo borra al parar
         onLoaded: {
             const d = raiz.leerJson(archivoInstante);
             if (!d || d.v !== 1 || d.t === raiz.ultimaMuestra)
@@ -64,6 +65,7 @@ ShellRoot {
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
+        onLoadFailed: raiz.estado = null
         onLoaded: {
             const d = raiz.leerJson(archivoEstado);
             if (d && d.v === 1)
@@ -421,7 +423,9 @@ ShellRoot {
                 Rectangle { width: parent.width; height: 1; color: Tema.borde }
 
                 readonly property var svc: raiz.estado ? raiz.estado.servicio : null
-                readonly property bool fresco: raiz.instante && (Date.now() / 1000 - raiz.instante.t) < 30
+                // raiz.ahora cambia cada segundo: obliga a recalcular la antiguedad.
+                readonly property bool fresco: raiz.ahora !== "" && raiz.instante !== null
+                    && (Date.now() / 1000 - raiz.instante.t) < Math.max(30, 3 * (raiz.instante.intervalo || 0))
 
                 Row {
                     anchors.left: parent.left
