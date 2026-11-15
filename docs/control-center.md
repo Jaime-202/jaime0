@@ -222,7 +222,7 @@ Arreglos encontrados al probar: el lector de CD de la VM salía como disco en ST
 | Dentro | `1`–`7` cambian de sección, `Esc` cierra |
 | Estado en la terminal | `jaime0-salud` (`--json` para la salida completa) |
 | El servicio | `systemctl --user status jaime0-servicio`; lo arranca la sesión de Hyprland |
-| Cambiar el atajo | `atajos quitar "SUPER+I"` y `atajos añadir "TECLAS" "jaime0-control" "Control Center"` |
+| Cambiar el atajo | SETTINGS → SHORTCUT, o `jaime0-ajustes poner control_atajo SUPER+SHIFT+C` (fase 7) |
 
 ### Resultados de la fase 2 (14-11-2026, VM `jaime0-pruebas`, sistema instalado 0.3.0-beta.1 con los archivos nuevos copiados)
 

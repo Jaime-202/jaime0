@@ -51,3 +51,16 @@ scripts/verificar-*.sh                                         comprobaciones so
 | Btrfs + snapper como opción | En ext4 (por defecto) revertir paquetes no es fiable. Btrfs se ofrece con snapper y subvolúmenes aparte para `/home`, registros y cachés; `/boot` sigue en ext4 por LUKS |
 | Ajustes del usuario fuera de `/etc/skel` | `~/.config/jaime0/ajustes` no lo trae la ISO: se conserva al copiar una configuración nueva |
 | Esquema de ajustes solo en `jaime0-ajustes` | Valida con límites y lo expone con `ver --json` a la interfaz. Hyprland solo comprueba el tipo y ante un valor roto usa el predeterminado |
+| Configuración de Hyprland: `hyprland.lua` con `hl.window_rule` | Hyprland 0.56 y 0.57 usan Lua |
+| Acceso: `greetd` con `tuigreet` | Mucho más ligero que SDDM con su compositor |
+| Agente de permisos: `lxpolkit` | El de KDE arrastra KDE Frameworks |
+| Waybar: `0.15.0-1+hypr1`, parcheado, fijado y retenido | El de Debian no cambia de escritorio con la configuración Lua |
+| Red y Bluetooth: Se abren desde la barra | Sin applets residentes |
+| Qt: Lo necesitan Quickshell (aplicación de ajustes) y el instalador; Calamares se retira al instalar | Quickshell no es imprescindible: sin él, `jaime0-ajustes` funciona desde la terminal y el escritorio arranca igual |
+| Base: `debootstrap` con `minbase`, sin recomendados | Lleva solo lo necesario |
+
+## Identidad visual
+
+Negro profundo `#080b0d` y negro secundario `#101519` de base, bordes `#26343a`, gris claro `#d8e2e8` y gris secundario `#71818c` para el texto, y un único acento verde `#54e58a` para lo importante: ventana y escritorio activos, selección y botón principal. El cian `#55cde0` aparece solo como acento secundario. Tonos derivados: superficie `#151c21`, gris medio `#a7b4bc`, gris apagado `#45545c` y blanco de selección `#eef4f7`. El rojo `#d9625b` y el ámbar `#d9a54a` solo avisan de errores. La consola de texto (`vt.default_*`), el acceso y los 16 colores ANSI de Kitty usan la misma paleta, con los colores de `git` y `ls` apagados pero distinguibles.
+
+El fondo de pantalla es propio: una malla digital oscura con líneas geométricas y pequeños puntos verdes, generada de forma determinista con `scripts/generar-fondo.py` (Python y Pillow) y guardada en el repositorio. La compilación no descarga nada para él.
