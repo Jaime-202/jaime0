@@ -91,6 +91,7 @@ ESQUEMA = {
     "cc_intervalo_rapido":   {"tipo": "opcion", "opciones": ["1", "2", "5"], "grupo": "Control Center", "etiqueta": "Frecuencia con el Control Center abierto (s)"},
     "cc_notificar":          {"tipo": "opcion", "opciones": ["todas", "criticas", "ninguna"], "grupo": "Control Center", "etiqueta": "Avisos de incidencias en el escritorio"},
     "control_atajo":         {"tipo": "atajo", "grupo": "Control Center", "etiqueta": "Atajo del Control Center"},
+    "cc_escala":             {"tipo": "opcion", "opciones": ["90", "100", "115", "130"], "grupo": "Control Center", "etiqueta": "Tamaño del Control Center (%)"},
     # Energia (POWER en el Control Center): inactividad y suspension. Se aplican con hypridle
     # (generado/hypridle.conf), salvo que ~/.config/hypr/hypridle.conf este personalizado.
     "inactividad_bloqueo":    {"tipo": "entero", "min": 0, "max": 120, "grupo": "Energía", "etiqueta": "Bloquear tras inactividad (min, 0 = nunca)"},
@@ -125,7 +126,7 @@ RESERVA = {
     "umbral_temp_aviso": "85", "umbral_temp_critico": "95", "umbral_disco_aviso": "85",
     "umbral_disco_critico": "95", "umbral_bateria_aviso": "15", "umbral_bateria_critico": "5",
     "historial_dias": "90", "cc_intervalo": "10", "cc_intervalo_rapido": "2",
-    "cc_notificar": "criticas", "control_atajo": "SUPER+I",
+    "cc_notificar": "criticas", "control_atajo": "SUPER+I", "cc_escala": "100",
     "inactividad_bloqueo": "10", "inactividad_pantalla": "11", "inactividad_suspender": "30",
     "suspender_con_cargador": "si",
 }
@@ -414,9 +415,34 @@ def hypridle_conf(valores):
     return texto
 
 
+def animaciones_del_sistema(ejecutar=None):
+    """Preferencia de accesibilidad del escritorio (org.gnome.desktop.interface
+    enable-animations, la que cambian nwg-look y las herramientas de GNOME): True, False o
+    None si no se puede saber (sin gsettings o sin el esquema)."""
+    ejecutar = ejecutar or subprocess.run
+    try:
+        r = ejecutar(["gsettings", "get", "org.gnome.desktop.interface", "enable-animations"],
+                     capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    valor = (r.stdout or "").strip() if r.returncode == 0 else ""
+    return {"true": True, "false": False}.get(valor)
+
+
+def nivel_animaciones(nivel, sistema=None):
+    """El nivel de Jaime0, salvo que el escritorio pida no animar: entonces "no". En modo de
+    prueba (raiz falsa) no se consulta el sistema."""
+    if nivel == "no":
+        return nivel
+    if sistema is None and not MODO_PRUEBA:
+        sistema = animaciones_del_sistema()
+    return "no" if sistema is False else nivel
+
+
 def generar():
     """Rehace ~/.config/jaime0/generado. Devuelve los nombres de lo que ha cambiado."""
     valores, _, temas, avisos = efectivos()
+    animaciones = nivel_animaciones(valores["animaciones"])
     acento = color_acento(valores["acento"], temas)
     g = carpeta_generado()
     archivos = {
@@ -429,23 +455,24 @@ def generar():
         "fondo": valores["fondo"] + "\n",
         "anclas": valores["anclas"] + "\n",
         "swaync.css": (f"/* Generado por {PROGRAMA}: no lo edites. */\n@define-color acento {acento};\n"
-                       + css_animaciones(valores["animaciones"])),
+                       + css_animaciones(animaciones)),
         # Widgets de escritorio (jaime0-widgets): solo los activados, con su posicion.
         "widgets.json": json.dumps({
             "acento": acento,
             "tarjetas": valores["widgets_tarjetas"] == "si",
             "reloj_formato": valores["reloj_formato"],
-            "animaciones": valores["animaciones"],
+            "animaciones": animaciones,
             "ciudad": valores["tiempo_ciudad"],
             "widgets": {w: valores[f"widget_{w}"] for w in WIDGETS if valores[f"widget_{w}"] != "no"},
         }, ensure_ascii=False, indent=4) + "\n",
         # Control Center: atajo (hyprland.lua) y ajustes de la ventana.
         "control.json": json.dumps({
             "atajo": valores["control_atajo"],
-            "animaciones": valores["animaciones"],
+            "animaciones": animaciones,
             "intervalo": int(valores["cc_intervalo"]),
             "intervalo_rapido": int(valores["cc_intervalo_rapido"]),
             "notificar": valores["cc_notificar"],
+            "escala": int(valores["cc_escala"]),
         }, ensure_ascii=False, indent=4) + "\n",
         # Indicador de volumen y brillo (wob, via jaime0-osd).
         "wob.ini": (f"# Generado por {PROGRAMA}: no lo edites.\n"

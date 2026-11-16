@@ -106,7 +106,7 @@ Item {
         color: "transparent"
         border.color: activo ? tono : Tema.rejilla
         Text { id: tBoton; anchors.centerIn: parent; text: parent.texto; color: parent.activo ? parent.tono : Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
-        TapHandler { enabled: parent.activo; onTapped: parent.pulsado() }
+        Pulsar { enabled: parent.activo; onPulsado: parent.pulsado() }
     }
     component Lista: Column {
         property string titulo: ""

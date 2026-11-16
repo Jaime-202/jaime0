@@ -78,7 +78,7 @@ El comando `atajos` muestra la lista real y permite añadir los tuyos (`atajos a
 
 ### Control Center
 
-Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`9` y `0` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
+Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`9` y `0` cambian de sección (o `Ctrl+Tab` a la siguiente), `Tab` recorre los botones, `Intro` o `Espacio` los pulsa y `Esc` cierra. El tamaño se cambia en SETTINGS › ACCESSIBILITY. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
 
 ![Control Center: SYSTEM](capturas/cc-sistema.png)
 

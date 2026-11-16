@@ -35,6 +35,15 @@ ShellRoot {
         { id: "POWER", titulo: "POWER MANAGER" }
     ]
 
+    // Escala: la del ajuste cc_escala, salvo que la ventana no deje sitio al diseno minimo
+    // (DISENO_ANCHO x DISENO_ALTO puntos): entonces se reduce lo justo, nunca por debajo de
+    // 0,75. El contenido se dispone en ese tamano logico y se amplia entero, sin solaparse.
+    readonly property int disenoAncho: 1100
+    readonly property int disenoAlto: 680
+    property real escalaAjuste: 1.0
+    readonly property real escala: Math.max(0.75, Math.min(escalaAjuste, ventana.width / disenoAncho, ventana.height / disenoAlto))
+    onEscalaChanged: Tema.escala = escala
+
     function leerJson(vista) {
         try {
             return JSON.parse(vista.text());
@@ -87,6 +96,8 @@ ShellRoot {
             const d = raiz.leerJson(archivoControl);
             if (d && ["no", "sutil", "suave"].indexOf(d.animaciones) >= 0)
                 Tema.nivel = d.animaciones;
+            if (d && [90, 100, 115, 130].indexOf(d.escala) >= 0)
+                raiz.escalaAjuste = d.escala / 100;
         }
     }
     FileView {
@@ -142,13 +153,33 @@ ShellRoot {
 
         Item {
             id: lienzo
-            anchors.fill: parent
+            width: ventana.width / raiz.escala
+            height: ventana.height / raiz.escala
+            scale: raiz.escala
+            transformOrigin: Item.TopLeft
             focus: true
             Keys.onEscapePressed: Qt.quit()
+            // Teclado: 1-9 y 0 van a cada seccion; Ctrl+Tab / Ctrl+AvPag a la siguiente y
+            // Ctrl+Mayus+Tab / Ctrl+RePag a la anterior; Tab y Mayus+Tab recorren los botones
+            // de la seccion e Intro o Espacio los pulsan (ver Pulsar.qml); Esc cierra. Las
+            // cifras no se roban a un campo de texto: solo llegan aqui si nadie las usa.
             Keys.onPressed: evento => {
-                // 1-9 y 0 (la decima seccion).
+                const total = raiz.secciones.length;
+                const ctrl = evento.modifiers & Qt.ControlModifier;
+                if (ctrl && (evento.key === Qt.Key_Tab || evento.key === Qt.Key_PageDown)) {
+                    raiz.seccion = (raiz.seccion + 1) % total;
+                    evento.accepted = true;
+                    return;
+                }
+                if (ctrl && (evento.key === Qt.Key_Backtab || evento.key === Qt.Key_PageUp)) {
+                    raiz.seccion = (raiz.seccion + total - 1) % total;
+                    evento.accepted = true;
+                    return;
+                }
+                if (evento.modifiers & (Qt.ControlModifier | Qt.AltModifier))
+                    return;
                 const n = evento.key === Qt.Key_0 ? 9 : evento.key - Qt.Key_1;
-                if (n >= 0 && n < raiz.secciones.length) {
+                if (n >= 0 && n < total) {
                     raiz.seccion = n;
                     evento.accepted = true;
                 }
@@ -266,7 +297,8 @@ ShellRoot {
                     }
                     Timer {
                         interval: 10000
-                        running: Tema.animar
+                        // Movimiento decorativo: solo con animaciones "suave".
+                        running: Tema.nivel === "suave"
                         repeat: true
                         onTriggered: pasada.restart()
                     }
@@ -329,7 +361,7 @@ ShellRoot {
                                 }
                             }
                             HoverHandler { id: raiz_hover }
-                            TapHandler { onTapped: raiz.seccion = elemento.index }
+                            Pulsar { onPulsado: raiz.seccion = elemento.index }
                         }
                     }
                 }
@@ -338,7 +370,7 @@ ShellRoot {
                     anchors.bottomMargin: 12
                     x: 16
                     width: parent.width - 32
-                    text: "1–9, 0  sección\nESC  cerrar"
+                    text: "1–9, 0  sección\nCTRL+TAB  siguiente\nTAB  botones · INTRO\nESC  cerrar"
                     color: Tema.apagado
                     font.family: Tema.mono
                     font.pixelSize: Tema.letraMini
@@ -372,7 +404,9 @@ ShellRoot {
                 }
                 Connections {
                     target: raiz
-                    function onSeccionChanged() { cambio.restart(); }
+                    // El boton enfocado era de la seccion anterior: el foco vuelve a la ventana
+                    // para que el teclado siga funcionando.
+                    function onSeccionChanged() { cambio.restart(); lienzo.forceActiveFocus(); }
                 }
 
                 Component {

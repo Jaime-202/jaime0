@@ -81,10 +81,10 @@ Item {
         spacing: 6
         Text { text: parent.nombre; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini; Layout.preferredWidth: 100; elide: Text.ElideRight; Layout.alignment: Qt.AlignTop }
         Text { text: parent.texto; color: parent.origen === "no_disponible" ? Tema.apagado : parent.tono; font.family: Tema.mono; font.pixelSize: Tema.letraMini; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-        Text { visible: parent.origen !== ""; text: vista.etiquetaOrigen(parent.origen); color: vista.tonoOrigen(parent.origen); font.family: Tema.mono; font.pixelSize: 9; Layout.alignment: Qt.AlignTop }
+        Text { visible: parent.origen !== ""; text: vista.etiquetaOrigen(parent.origen); color: vista.tonoOrigen(parent.origen); font.family: Tema.mono; font.pixelSize: Tema.letraMini; Layout.alignment: Qt.AlignTop }
     }
     component Titulo: Text { color: Tema.cian; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1.5 }
-    component Nota: Text { width: parent ? parent.width : 0; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap }
+    component Nota: Text { width: parent ? parent.width : 0; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap }
     component Boton: Rectangle {
         property string texto: ""
         property color tono: Tema.cian
@@ -94,8 +94,8 @@ Item {
         width: tB.implicitWidth + 14; height: 20
         color: marcado ? Qt.rgba(tono.r, tono.g, tono.b, 0.15) : "transparent"
         border.color: activo ? tono : Tema.rejilla
-        Text { id: tB; anchors.centerIn: parent; text: parent.texto; color: parent.activo ? parent.tono : Tema.apagado; font.family: Tema.mono; font.pixelSize: 9; font.letterSpacing: 1 }
-        TapHandler { enabled: parent.activo; onTapped: parent.pulsado() }
+        Text { id: tB; anchors.centerIn: parent; text: parent.texto; color: parent.activo ? parent.tono : Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
+        Pulsar { enabled: parent.activo; onPulsado: parent.pulsado() }
     }
     component Minutos: RowLayout {
         property string nombre: ""
@@ -148,7 +148,7 @@ Item {
                     }
                     Text {
                         text: vista.datos && vista.datos.perfil.retencion ? "Retenido por el perfil de Jaime0 (power-profiles-daemon)" : vista.datos && vista.datos.perfil.degradado ? "△ power-profiles-daemon limita el rendimiento: " + vista.datos.perfil.degradado : ""
-                        color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9
+                        color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                     }
                 }
                 Column {
@@ -157,10 +157,10 @@ Item {
                         spacing: 8
                         Repeater {
                             model: ["medido", "calculado", "estimado", "no_disponible"]
-                            Text { required property var modelData; text: "■ " + vista.etiquetaOrigen(modelData); color: vista.tonoOrigen(modelData); font.family: Tema.mono; font.pixelSize: 9 }
+                            Text { required property var modelData; text: "■ " + vista.etiquetaOrigen(modelData); color: vista.tonoOrigen(modelData); font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                         }
                     }
-                    Text { visible: vista.mensaje !== ""; text: (vista.mensajeError ? "△ " : "✓ ") + vista.mensaje; color: vista.mensajeError ? Tema.ambar : Tema.verde; font.family: Tema.mono; font.pixelSize: 9 }
+                    Text { visible: vista.mensaje !== ""; text: (vista.mensajeError ? "△ " : "✓ ") + vista.mensaje; color: vista.mensajeError ? Tema.ambar : Tema.verde; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                 }
             }
         }
@@ -411,7 +411,7 @@ Item {
                         t: vista.serie ? vista.serie.t : []
                         series: [vista.serieDe("vatios", "CONSUMO", Tema.ambar)]
                         huecos: vista.serie ? vista.serie.huecos : []
-                        Text { anchors.centerIn: parent; visible: !vista.conDatos(["vatios"]); text: "SIN MEDIDA DE CONSUMO"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9 }
+                        Text { anchors.centerIn: parent; visible: !vista.conDatos(["vatios"]); text: "SIN MEDIDA DE CONSUMO"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                     }
                     Grafica {
                         Layout.fillWidth: true
@@ -423,7 +423,7 @@ Item {
                         t: vista.serie ? vista.serie.t : []
                         series: [vista.serieDe("temp", "CPU", Tema.ambar), vista.serieDe("gpu_temp", "GPU", Tema.cian)]
                         huecos: vista.serie ? vista.serie.huecos : []
-                        Text { anchors.centerIn: parent; visible: !vista.conDatos(["temp", "gpu_temp"]); text: "SIN SENSORES DE TEMPERATURA"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9 }
+                        Text { anchors.centerIn: parent; visible: !vista.conDatos(["temp", "gpu_temp"]); text: "SIN SENSORES DE TEMPERATURA"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                     }
                 }
             }
@@ -444,7 +444,7 @@ Item {
                                : (marcoPerfiles.hist.cargador_24h.conectado / 60).toFixed(1) + " h de " + (marcoPerfiles.hist.cargador_24h.minutos / 60).toFixed(1) + " h medidas"
                         origen: marcoPerfiles.hist && marcoPerfiles.hist.cargador_24h.minutos ? "medido" : "no_disponible"
                     }
-                    Text { text: "EN BATERÍA         MIN    W MEDIO   %/h"; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
+                    Text { text: "EN BATERÍA         MIN    W MEDIO   %/h"; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                     Repeater {
                         model: marcoPerfiles.hist ? marcoPerfiles.hist.perfiles : []
                         Text {
@@ -453,7 +453,7 @@ Item {
                                   + (modelData.vatios.valor !== null ? modelData.vatios.valor.toFixed(1).padStart(7) : "    N/D") + "   "
                                   + (modelData.descarga_pct_h.valor !== null ? modelData.descarga_pct_h.valor.toFixed(1) : "N/D")
                             color: modelData.vatios.valor !== null ? Tema.texto : Tema.apagado
-                            font.family: Tema.mono; font.pixelSize: 9
+                            font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                     }
                     Nota {

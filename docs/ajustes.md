@@ -55,10 +55,11 @@ Al aplicar, se recarga Hyprland (`hyprctl reload`), Waybar relee su configuraci�
 | `esquinas` | 0-20 | `8` | Redondeo de las ventanas |
 | `opacidad_inactiva` | 0.6-1.0 | `1.0` | Opacidad de las ventanas sin foco. Pantalla completa y vídeo siempre opacos |
 | `desenfoque` | `si` / `no` | `si` | Blur detrás de lo translúcido: kitty, rofi y notificaciones (en una máquina virtual, siempre apagado) |
-| `animaciones` | `no` / `sutil` / `suave` | `sutil` | Animaciones de Hyprland, notificaciones, widgets y Control Center (`si` se lee como `sutil`; en una máquina virtual Hyprland las apaga siempre) |
+| `animaciones` | `no` / `sutil` / `suave` | `sutil` | Animaciones de Hyprland, notificaciones, widgets y Control Center (`si` se lee como `sutil`; en una máquina virtual Hyprland las apaga siempre). Si el escritorio pide no animar (`gsettings get org.gnome.desktop.interface enable-animations` = `false`, p. ej. desde nwg-look), notificaciones, widgets y Control Center usan `no` al entrar en la sesión. Con `sutil` nada se mueve en bucle; el barrido de la cabecera y el latido de un estado en alerta solo están con `suave` |
 | `cc_intervalo` | `5` / `10` / `30` | `10` | Segundos entre medidas del Control Center en segundo plano |
 | `cc_intervalo_rapido` | `1` / `2` / `5` | `2` | Segundos entre medidas con la ventana del Control Center abierta |
 | `cc_notificar` | `todas` / `criticas` / `ninguna` | `criticas` | Avisos de escritorio de incidencias nuevas |
+| `cc_escala` | `90` / `100` / `115` / `130` | `100` | Tamaño de toda la ventana del Control Center (texto, botones y gráficas). Si no cabe en la pantalla, se reduce lo justo (nunca por debajo del 75 %) |
 | `control_atajo` | atajo | `SUPER+I` | Atajo que abre el Control Center (modificadores y una tecla) |
 | `inactividad_bloqueo` | 0-120 (0 = nunca) | `10` | Minutos sin actividad hasta bloquear la sesión |
 | `inactividad_pantalla` | 0-120 (0 = nunca) | `11` | Minutos sin actividad hasta apagar la pantalla |

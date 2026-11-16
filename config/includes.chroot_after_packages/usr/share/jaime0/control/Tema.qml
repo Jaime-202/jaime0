@@ -12,15 +12,17 @@ Singleton {
     readonly property color borde: "#26343a"
     readonly property color rejilla: "#14202a"
     readonly property color texto: "#d8e2e8"
-    readonly property color secundario: "#71818c"
-    readonly property color apagado: "#45545c"
+    // Contraste (evolucion, fase 9): todo color de texto supera 4.5:1 sobre panel y fondo
+    // (pruebas/test_accesibilidad.py lo comprueba). rejilla y borde son solo para lineas.
+    readonly property color secundario: "#8796a1"
+    readonly property color apagado: "#74848e"
     readonly property color verde: "#54e58a"
     readonly property color cian: "#55cde0"
     readonly property color ambar: "#d9a54a"
     readonly property color rojo: "#d9625b"
 
     readonly property string mono: "JetBrainsMono Nerd Font"
-    readonly property int letraMini: 10
+    readonly property int letraMini: 10          // el tamano minimo: no hay texto mas pequeno
     readonly property int letra: 12
     readonly property int letraDato: 22
     readonly property int letraGrande: 30
@@ -29,6 +31,9 @@ Singleton {
     // shell.qml desde ~/.config/jaime0/generado/control.json. Con "no" no hay transiciones
     // ni movimientos decorativos (barrido de la cabecera, luces que laten).
     property string nivel: "sutil"
+    // Escala de la interfaz (ajuste cc_escala, en %) y la que se usa de verdad: si la ventana
+    // es demasiado pequena para el diseno, se reduce lo justo para que nada se corte.
+    property real escala: 1.0
     readonly property bool animar: nivel !== "no"
     readonly property int rapido: nivel === "no" ? 0 : nivel === "suave" ? 220 : 140
     readonly property int medio: nivel === "no" ? 0 : nivel === "suave" ? 340 : 220

@@ -69,7 +69,7 @@ Item {
         property color tono: Tema.secundario
         width: tEt.implicitWidth + 10; height: 16
         color: "transparent"; border.color: tono
-        Text { id: tEt; anchors.centerIn: parent; text: parent.texto; color: parent.tono; font.family: Tema.mono; font.pixelSize: 9 }
+        Text { id: tEt; anchors.centerIn: parent; text: parent.texto; color: parent.tono; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
     }
     component Bloque: Column {
         property string titulo: ""
@@ -122,7 +122,7 @@ Item {
                         Etiqueta {
                             required property var modelData
                             texto: vista.textoEstado(modelData) + " " + (vista.ultimo && vista.ultimo.resumen ? (vista.ultimo.resumen[modelData] || 0) : "—")
-                            tono: vista.ultimo && vista.ultimo.resumen && vista.ultimo.resumen[modelData] ? vista.color(modelData) : Tema.rejilla
+                            tono: vista.ultimo && vista.ultimo.resumen && vista.ultimo.resumen[modelData] ? vista.color(modelData) : Tema.apagado
                         }
                     }
                 }
@@ -132,9 +132,9 @@ Item {
                         width: tEj.implicitWidth + 18; height: 24
                         color: "transparent"; border.color: vista.enMarcha ? Tema.rejilla : Tema.cian
                         Text { id: tEj; anchors.centerIn: parent; text: vista.enMarcha ? "DIAGNOSTICANDO…" : "EJECUTAR DIAGNÓSTICO"; color: vista.enMarcha ? Tema.apagado : Tema.cian; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
-                        TapHandler { enabled: !vista.enMarcha; onTapped: vista.ejecutar() }
+                        Pulsar { enabled: !vista.enMarcha; onPulsado: vista.ejecutar() }
                     }
-                    Text { visible: vista.mensaje !== ""; text: (vista.mensajeError ? "△ " : "✓ ") + vista.mensaje; color: vista.mensajeError ? Tema.ambar : Tema.verde; font.family: Tema.mono; font.pixelSize: 9 }
+                    Text { visible: vista.mensaje !== ""; text: (vista.mensajeError ? "△ " : "✓ ") + vista.mensaje; color: vista.mensajeError ? Tema.ambar : Tema.verde; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                 }
             }
         }
@@ -186,10 +186,10 @@ Item {
                                     }
                                     Text {
                                         text: filaP.modelData.componente + (filaP.modelData.veces > 1 ? " · visto " + filaP.modelData.veces + " veces desde " + vista.fecha(filaP.modelData.primera_vez) : "")
-                                        color: filaP.modelData.veces > 1 ? Tema.ambar : Tema.secundario; font.family: Tema.mono; font.pixelSize: 9
+                                        color: filaP.modelData.veces > 1 ? Tema.ambar : Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                                     }
                                 }
-                                TapHandler { onTapped: vista.elegido = filaP.modelData.id }
+                                Pulsar { onPulsado: vista.elegido = filaP.modelData.id }
                             }
                         }
                     }
@@ -239,12 +239,12 @@ Item {
                                     }
                                 }
                             }
-                            Text { visible: !!(parent.rep && parent.rep.copia); text: parent.rep && parent.rep.copia ? "Antes se copia: " + parent.rep.copia : ""; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
+                            Text { visible: !!(parent.rep && parent.rep.copia); text: parent.rep && parent.rep.copia ? "Antes se copia: " + parent.rep.copia : ""; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                             Rectangle {
                                 width: tRep.implicitWidth + 18; height: 24
                                 color: "transparent"; border.color: Tema.ambar
                                 Text { id: tRep; anchors.centerIn: parent; text: "REPARAR (en una terminal, con confirmación)"; color: Tema.ambar; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
-                                TapHandler { onTapped: vista.reparar(vista.problema.id) }
+                                Pulsar { onPulsado: vista.reparar(vista.problema.id) }
                             }
                         }
                     }
@@ -288,7 +288,7 @@ Item {
                                         width: area.width
                                         text: vista.textoEstado(modelData.estado).padEnd(13) + " " + modelData.nombre
                                         color: vista.color(modelData.estado)
-                                        font.family: Tema.mono; font.pixelSize: 9
+                                        font.family: Tema.mono; font.pixelSize: Tema.letraMini
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -323,7 +323,7 @@ Item {
                                 text: (modelData.estado === "resuelto" ? "RESUELTO " : "ACTIVO   ") + modelData.titulo + " · " + modelData.veces + "× · " + vista.fecha(modelData.ultima_vez)
                                       + ((modelData.reparaciones || []).length ? " · reparado " + modelData.reparaciones.length + "×" : "")
                                 color: modelData.estado === "resuelto" ? Tema.verde : vista.color(modelData.gravedad)
-                                font.family: Tema.mono; font.pixelSize: 9
+                                font.family: Tema.mono; font.pixelSize: Tema.letraMini
                             }
                         }
                     }

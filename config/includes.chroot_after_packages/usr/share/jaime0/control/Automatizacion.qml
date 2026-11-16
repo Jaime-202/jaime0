@@ -122,7 +122,7 @@ Item {
                     text: (filaParam.modelData.texto || filaParam.modelData.clave).toUpperCase()
                     color: Tema.apagado
                     font.family: Tema.mono
-                    font.pixelSize: 9
+                    font.pixelSize: Tema.letraMini
                     elide: Text.ElideRight
                 }
                 Loader {
@@ -165,8 +165,8 @@ Item {
                                     color: activo ? Tema.cian : "transparent"
                                     border.color: activo ? Tema.cian : Tema.borde
                                     Text { anchors.centerIn: parent; text: vista.dias[index]; color: parent.activo ? Tema.fondo : Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
-                                    TapHandler {
-                                        onTapped: {
+                                    Pulsar {
+                                        onPulsado: {
                                             const s = (parent.sel || []).slice();
                                             const i = s.indexOf(parent.index);
                                             if (i >= 0) s.splice(i, 1); else s.push(parent.index);
@@ -191,8 +191,8 @@ Item {
                                     width: t.implicitWidth + 10; height: 18
                                     color: activo ? Tema.cian : "transparent"
                                     border.color: activo ? Tema.cian : Tema.borde
-                                    Text { id: t; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
-                                    TapHandler { onTapped: vista.poner(params.seccion, params.indice, parent.parent.parent.p.clave, parent.modelData.id) }
+                                    Text { id: t; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                    Pulsar { onPulsado: vista.poner(params.seccion, params.indice, parent.parent.parent.p.clave, parent.modelData.id) }
                                 }
                             }
                         }
@@ -244,7 +244,7 @@ Item {
                         width: tNueva.implicitWidth + 16; height: 22
                         color: "transparent"; border.color: Tema.verde; border.width: 1
                         Text { id: tNueva; anchors.centerIn: parent; text: "+ NUEVA REGLA"; color: Tema.verde; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
-                        TapHandler { enabled: vista.catalogo !== null; onTapped: vista.borrador = vista.nuevaRegla() }
+                        Pulsar { enabled: vista.catalogo !== null; onPulsado: vista.borrador = vista.nuevaRegla() }
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
@@ -304,8 +304,8 @@ Item {
                                     width: 34; height: 16
                                     color: fila.modelData.activa ? Tema.verde : "transparent"
                                     border.color: fila.modelData.activa ? Tema.verde : Tema.borde
-                                    Text { anchors.centerIn: parent; text: fila.modelData.activa ? "ON" : "OFF"; color: fila.modelData.activa ? Tema.fondo : Tema.apagado; font.family: Tema.mono; font.pixelSize: 9 }
-                                    TapHandler { onTapped: orden.pedir({ orden: "regla_activar", id: fila.modelData.id, activa: !fila.modelData.activa }) }
+                                    Text { anchors.centerIn: parent; text: fila.modelData.activa ? "ON" : "OFF"; color: fila.modelData.activa ? Tema.fondo : Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                    Pulsar { onPulsado: orden.pedir({ orden: "regla_activar", id: fila.modelData.id, activa: !fila.modelData.activa }) }
                                 }
                                 Column {
                                     id: datosFila
@@ -315,12 +315,12 @@ Item {
                                     Row {
                                         spacing: 8
                                         Text { text: fila.modelData.nombre; color: fila.modelData.activa ? Tema.texto : Tema.apagado; font.family: Tema.mono; font.pixelSize: 13 }
-                                        Text { visible: !!fila.modelData.revisar; text: "REVISAR"; color: Tema.ambar; font.family: Tema.mono; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter }
+                                        Text { visible: !!fila.modelData.revisar; text: "REVISAR"; color: Tema.ambar; font.family: Tema.mono; font.pixelSize: Tema.letraMini; anchors.verticalCenter: parent.verticalCenter }
                                         Text {
                                             visible: (fila.modelData.prioridad || "normal") !== "normal"
                                             text: "PRIORIDAD " + String(fila.modelData.prioridad || "").toUpperCase()
                                             color: fila.modelData.prioridad === "alta" ? Tema.cian : Tema.secundario
-                                            font.family: Tema.mono; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter
+                                            font.family: Tema.mono; font.pixelSize: Tema.letraMini; anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
                                     Text {
@@ -328,7 +328,7 @@ Item {
                                         text: vista.resumen(fila.modelData)
                                         color: Tema.secundario
                                         font.family: Tema.mono
-                                        font.pixelSize: 9
+                                        font.pixelSize: Tema.letraMini
                                         elide: Text.ElideRight
                                     }
                                     Text {
@@ -337,7 +337,7 @@ Item {
                                         text: u ? "ÚLTIMA  " + vista.hora(u.t) + "  " + u.resultado.toUpperCase() + (u.detalle ? " · " + u.detalle : "") : "SIN EJECUCIONES"
                                         color: u ? vista.colorResultado(u.resultado) : Tema.apagado
                                         font.family: Tema.mono
-                                        font.pixelSize: 9
+                                        font.pixelSize: Tema.letraMini
                                         elide: Text.ElideRight
                                     }
                                     Text {
@@ -345,7 +345,7 @@ Item {
                                         text: "PRÓXIMA  " + (fila.modelData.proxima ? vista.hora(fila.modelData.proxima) : "")
                                         color: Tema.cian
                                         font.family: Tema.mono
-                                        font.pixelSize: 9
+                                        font.pixelSize: Tema.letraMini
                                     }
                                     Repeater {
                                         model: fila.modelData.choca_con || []
@@ -355,7 +355,7 @@ Item {
                                             text: "△ PUEDE CHOCAR CON «" + modelData.nombre + "» (" + modelData.recurso + ") si se disparan a la vez"
                                             color: Tema.ambar
                                             font.family: Tema.mono
-                                            font.pixelSize: 9
+                                            font.pixelSize: Tema.letraMini
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -380,8 +380,8 @@ Item {
                                             required property var modelData
                                             width: tb.implicitWidth + 12; height: 20
                                             color: "transparent"; border.color: modelData.c; border.width: 1
-                                            Text { id: tb; anchors.centerIn: parent; text: modelData.t; color: modelData.c; font.family: Tema.mono; font.pixelSize: 9 }
-                                            TapHandler { onTapped: parent.modelData.f() }
+                                            Text { id: tb; anchors.centerIn: parent; text: modelData.t; color: modelData.c; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                            Pulsar { onPulsado: parent.modelData.f() }
                                         }
                                     }
                                 }
@@ -435,7 +435,7 @@ Item {
                         Text {
                             width: editor.width
                             text: "Si otra regla se dispara a la vez y pide otro valor para lo mismo (perfil, volumen, no molestar…), gana la de prioridad más alta; a igualdad, la que va antes en la lista."
-                            color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap
+                            color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap
                         }
 
                         // CUANDO
@@ -451,8 +451,8 @@ Item {
                                     width: te.implicitWidth + 10; height: 18
                                     color: activo ? Tema.verde : "transparent"
                                     border.color: activo ? Tema.verde : modelData.disponible ? Tema.borde : Tema.rejilla
-                                    Text { id: te; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : modelData.disponible ? Tema.secundario : Tema.rejilla; font.family: Tema.mono; font.pixelSize: 9 }
-                                    TapHandler { enabled: parent.modelData.disponible; onTapped: vista.cambiarTipo("cuando", -1, "evento", parent.modelData) }
+                                    Text { id: te; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : modelData.disponible ? Tema.secundario : Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                    Pulsar { enabled: parent.modelData.disponible; onPulsado: vista.cambiarTipo("cuando", -1, "evento", parent.modelData) }
                                 }
                             }
                         }
@@ -470,9 +470,9 @@ Item {
                                 text: "+ AÑADIR"
                                 color: Tema.cian
                                 font.family: Tema.mono
-                                font.pixelSize: 9
-                                TapHandler {
-                                    onTapped: {
+                                font.pixelSize: Tema.letraMini
+                                Pulsar {
+                                    onPulsado: {
                                         const b = vista.clonar(vista.borrador);
                                         b.si = (b.si || []).concat([vista.nuevoElemento("condicion", vista.catalogo.condiciones[0])]);
                                         vista.borrador = b;
@@ -499,13 +499,13 @@ Item {
                                             width: tc.implicitWidth + 10; height: 18
                                             color: activo ? Tema.cian : "transparent"
                                             border.color: activo ? Tema.cian : Tema.borde
-                                            Text { id: tc; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
-                                            TapHandler { onTapped: vista.cambiarTipo("si", cond.index, "condicion", parent.modelData) }
+                                            Text { id: tc; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                            Pulsar { onPulsado: vista.cambiarTipo("si", cond.index, "condicion", parent.modelData) }
                                         }
                                     }
                                     Text {
-                                        text: "✕ QUITAR"; color: Tema.rojo; font.family: Tema.mono; font.pixelSize: 9
-                                        TapHandler { onTapped: { const b = vista.clonar(vista.borrador); b.si.splice(cond.index, 1); vista.borrador = b; } }
+                                        text: "✕ QUITAR"; color: Tema.rojo; font.family: Tema.mono; font.pixelSize: Tema.letraMini
+                                        Pulsar { onPulsado: { const b = vista.clonar(vista.borrador); b.si.splice(cond.index, 1); vista.borrador = b; } }
                                     }
                                 }
                                 Parametros {
@@ -526,9 +526,9 @@ Item {
                                 text: "+ AÑADIR"
                                 color: Tema.cian
                                 font.family: Tema.mono
-                                font.pixelSize: 9
-                                TapHandler {
-                                    onTapped: {
+                                font.pixelSize: Tema.letraMini
+                                Pulsar {
+                                    onPulsado: {
                                         const b = vista.clonar(vista.borrador);
                                         const ac = vista.catalogo.acciones.find(a => a.disponible) || vista.catalogo.acciones[0];
                                         b.hacer = (b.hacer || []).concat([vista.nuevoElemento("accion", ac)]);
@@ -556,14 +556,14 @@ Item {
                                             width: ta.implicitWidth + 10; height: 18
                                             color: activo ? Tema.verde : "transparent"
                                             border.color: activo ? Tema.verde : modelData.disponible ? Tema.borde : Tema.rejilla
-                                            Text { id: ta; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : modelData.disponible ? Tema.secundario : Tema.rejilla; font.family: Tema.mono; font.pixelSize: 9 }
-                                            TapHandler { enabled: parent.modelData.disponible; onTapped: vista.cambiarTipo("hacer", acc.index, "accion", parent.modelData) }
+                                            Text { id: ta; anchors.centerIn: parent; text: modelData.nombre; color: parent.activo ? Tema.fondo : modelData.disponible ? Tema.secundario : Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                            Pulsar { enabled: parent.modelData.disponible; onPulsado: vista.cambiarTipo("hacer", acc.index, "accion", parent.modelData) }
                                         }
                                     }
                                     Text {
                                         visible: (vista.borrador.hacer || []).length > 1
-                                        text: "✕ QUITAR"; color: Tema.rojo; font.family: Tema.mono; font.pixelSize: 9
-                                        TapHandler { onTapped: { const b = vista.clonar(vista.borrador); b.hacer.splice(acc.index, 1); vista.borrador = b; } }
+                                        text: "✕ QUITAR"; color: Tema.rojo; font.family: Tema.mono; font.pixelSize: Tema.letraMini
+                                        Pulsar { onPulsado: { const b = vista.clonar(vista.borrador); b.hacer.splice(acc.index, 1); vista.borrador = b; } }
                                     }
                                 }
                                 Parametros {
@@ -584,13 +584,13 @@ Item {
                         width: tCancelar.implicitWidth + 16; height: 22
                         color: "transparent"; border.color: Tema.borde; border.width: 1
                         Text { id: tCancelar; anchors.centerIn: parent; text: "CANCELAR"; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
-                        TapHandler { onTapped: vista.borrador = null }
+                        Pulsar { onPulsado: vista.borrador = null }
                     }
                     Rectangle {
                         width: tGuardar.implicitWidth + 16; height: 22
                         color: Tema.verde
                         Text { id: tGuardar; anchors.centerIn: parent; text: "GUARDAR REGLA"; color: Tema.fondo; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
-                        TapHandler { onTapped: orden.pedir({ orden: "regla_guardar", regla: vista.borrador }) }
+                        Pulsar { onPulsado: orden.pedir({ orden: "regla_guardar", regla: vista.borrador }) }
                     }
                 }
             }

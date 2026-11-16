@@ -370,4 +370,23 @@ Item {
         }
         onDoubleClicked: { grafica.vistaHasta = null; grafica.vistaDesde = null; }
     }
+
+    // Leyenda con el nombre de cada serie: el color solo no basta para distinguirlas.
+    Row {
+        visible: !grafica.compacta && grafica.series.length > 1
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.rightMargin: grafica.margenDer
+        spacing: 10
+        Repeater {
+            model: grafica.series
+            Text {
+                required property var modelData
+                text: "■ " + modelData.nombre
+                color: modelData.color
+                font.family: Tema.mono
+                font.pixelSize: Tema.letraMini
+            }
+        }
+    }
 }

@@ -368,7 +368,7 @@ class PruebasAjustes(unittest.TestCase):
         self.assertIn("Animaciones: sutil", css)
         self.assertEqual(json.loads(self.e.generado("control.json")),
                          {"atajo": "SUPER+I", "animaciones": "sutil", "intervalo": 10,
-                          "intervalo_rapido": 2, "notificar": "criticas"})
+                          "intervalo_rapido": 2, "notificar": "criticas", "escala": 100})
         self.assertEqual(self.e.ejecutar("poner", "animaciones", "no")[0], 0)
         css = self.e.generado("swaync.css")
         self.assertIn("* { transition: none; animation: none; }", css)
@@ -386,7 +386,7 @@ class PruebasAjustes(unittest.TestCase):
                                          "cc_intervalo_rapido", "1", "cc_notificar", "todas")[0], 0)
         self.assertEqual(json.loads(self.e.generado("control.json")),
                          {"atajo": "CTRL+ALT+C", "animaciones": "sutil", "intervalo": 30,
-                          "intervalo_rapido": 1, "notificar": "todas"})
+                          "intervalo_rapido": 1, "notificar": "todas", "escala": 100})
 
     def test_animaciones_antiguas_tambien_generan_bien(self):
         self.usuario("animaciones = no\n")

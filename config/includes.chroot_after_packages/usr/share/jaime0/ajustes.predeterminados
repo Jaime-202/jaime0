@@ -59,6 +59,9 @@ cc_intervalo = 10
 cc_intervalo_rapido = 2
 cc_notificar = criticas
 control_atajo = SUPER+I
+# cc_escala: tamano del Control Center en % (90, 100, 115 o 130). Si la ventana no cabe en la
+# pantalla, se reduce lo justo.
+cc_escala = 100
 # Energia: minutos de inactividad hasta bloquear, apagar la pantalla y suspender (0 = nunca;
 # bloqueo y pantalla 0-120, suspension 0-240). suspender_con_cargador = no: con el cargador
 # conectado no se suspende por inactividad.

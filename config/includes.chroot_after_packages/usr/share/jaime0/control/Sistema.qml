@@ -75,7 +75,8 @@ Item {
                         color: Tema.colorEstado(vista.global)
                         // Latido lento solo si hay un problema.
                         SequentialAnimation on opacity {
-                            running: Tema.animar && (vista.global === "WARNING" || vista.global === "CRITICAL")
+                            // Solo con animaciones "suave": con "sutil" o "no" la luz no parpadea.
+                            running: Tema.nivel === "suave" && (vista.global === "WARNING" || vista.global === "CRITICAL")
                             loops: Animation.Infinite
                             NumberAnimation { to: 0.25; duration: 700 }
                             NumberAnimation { to: 1; duration: 700 }

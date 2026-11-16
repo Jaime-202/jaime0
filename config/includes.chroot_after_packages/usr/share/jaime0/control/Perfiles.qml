@@ -147,8 +147,8 @@ Item {
                         font.pixelSize: Tema.letraMini
                         font.letterSpacing: 1
                     }
-                    TapHandler {
-                        onTapped: {
+                    Pulsar {
+                        onPulsado: {
                             vista.ocupado = true;
                             cambio.pedir({ orden: "perfil_anterior" });
                         }
@@ -169,7 +169,7 @@ Item {
                         font.pixelSize: Tema.letraMini
                         font.letterSpacing: 1
                     }
-                    TapHandler { onTapped: vista.editando = !vista.editando }
+                    Pulsar { onPulsado: vista.editando = !vista.editando }
                 }
                 }
             }
@@ -252,9 +252,9 @@ Item {
                         }
                     }
                     HoverHandler { id: selector }
-                    TapHandler {
+                    Pulsar {
                         enabled: tarjeta.modelData.disponible && !tarjeta.esActivo && !vista.ocupado
-                        onTapped: vista.aplicar(tarjeta.modelData.id)
+                        onPulsado: vista.aplicar(tarjeta.modelData.id)
                     }
                 }
             }
@@ -345,8 +345,8 @@ Item {
                         font.pixelSize: Tema.letraMini
                         font.letterSpacing: 1
                     }
-                    TapHandler {
-                        onTapped: {
+                    Pulsar {
+                        onPulsado: {
                             vista.editando = false;
                             cambio.pedir({ orden: "personalizado", ajustes: vista.borrador });
                         }

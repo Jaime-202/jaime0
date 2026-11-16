@@ -22,6 +22,8 @@ Item {
           nota: "Un aviso debe quedar por debajo de su crítico (en la batería, al revés): si no, no se guarda." },
         { id: "C4", titulo: "HISTORY · NOTIFICATIONS", claves: ["historial_dias", "cc_notificar"],
           nota: "El historial vive en ~/.local/state/jaime0. Los avisos de escritorio son para incidencias nuevas; las recuperaciones no avisan." },
+        { id: "C6", titulo: "ACCESSIBILITY", claves: ["cc_escala"],
+          nota: "Tamaño de toda esta ventana (texto, botones y gráficas). Si no cabe en la pantalla, se reduce lo justo. Teclado: 1–9 y 0 secciones, Ctrl+Tab siguiente, Tab recorre los botones, Intro o Espacio los pulsa, Esc cierra." },
         { id: "C5", titulo: "SHORTCUT", claves: ["control_atajo"],
           nota: "Modificadores SUPER, SHIFT, CTRL o ALT y una tecla, p. ej. SUPER+I o SUPER+SHIFT+C. Se aplica al momento." }
     ]
@@ -113,9 +115,9 @@ Item {
                         Rectangle {
                             required property var modelData
                             width: 26; height: 20; color: "transparent"; border.color: Tema.borde
-                            Text { anchors.centerIn: parent; text: modelData[0]; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
-                            TapHandler {
-                                onTapped: vista.guardar(fila.clave, Math.max(fila.a.min, Math.min(fila.a.max, Number(fila.a.valor) + parent.modelData[1])))
+                            Text { anchors.centerIn: parent; text: modelData[0]; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                            Pulsar {
+                                onPulsado: vista.guardar(fila.clave, Math.max(fila.a.min, Math.min(fila.a.max, Number(fila.a.valor) + parent.modelData[1])))
                             }
                         }
                     }
@@ -128,9 +130,9 @@ Item {
                         Rectangle {
                             required property var modelData
                             width: 26; height: 20; color: "transparent"; border.color: Tema.borde
-                            Text { anchors.centerIn: parent; text: modelData[0]; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
-                            TapHandler {
-                                onTapped: vista.guardar(fila.clave, Math.max(fila.a.min, Math.min(fila.a.max, Number(fila.a.valor) + parent.modelData[1])))
+                            Text { anchors.centerIn: parent; text: modelData[0]; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                            Pulsar {
+                                onPulsado: vista.guardar(fila.clave, Math.max(fila.a.min, Math.min(fila.a.max, Number(fila.a.valor) + parent.modelData[1])))
                             }
                         }
                     }
@@ -140,7 +142,7 @@ Item {
                         text: fila.a.min + "–" + fila.a.max
                         color: Tema.apagado
                         font.family: Tema.mono
-                        font.pixelSize: 9
+                        font.pixelSize: Tema.letraMini
                     }
                 }
             }
@@ -158,7 +160,7 @@ Item {
                         visible: vista.borradores[fila.clave] !== undefined && vista.borradores[fila.clave] !== fila.a.valor
                         width: tAplicar.implicitWidth + 14; height: 22; color: Tema.cian
                         Text { id: tAplicar; anchors.centerIn: parent; text: "APLICAR"; color: Tema.fondo; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
-                        TapHandler { onTapped: vista.guardar(fila.clave, vista.borradores[fila.clave]) }
+                        Pulsar { onPulsado: vista.guardar(fila.clave, vista.borradores[fila.clave]) }
                     }
                 }
             }
@@ -170,8 +172,8 @@ Item {
             text: "↺ " + (fila.a ? String(fila.a.predeterminado).toUpperCase() : "")
             color: Tema.apagado
             font.family: Tema.mono
-            font.pixelSize: 9
-            TapHandler { onTapped: vista.restablecer(fila.clave) }
+            font.pixelSize: Tema.letraMini
+            Pulsar { onPulsado: vista.restablecer(fila.clave) }
         }
     }
 
@@ -241,7 +243,7 @@ Item {
                                 text: tarjeta.modelData.nota
                                 color: Tema.apagado
                                 font.family: Tema.mono
-                                font.pixelSize: 9
+                                font.pixelSize: Tema.letraMini
                                 wrapMode: Text.WordWrap
                             }
                         }

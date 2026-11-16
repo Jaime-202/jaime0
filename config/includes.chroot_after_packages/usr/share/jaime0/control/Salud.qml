@@ -173,11 +173,11 @@ Item {
                                 id: textoBoton
                                 anchors.centerIn: parent
                                 text: boton.modelData.nombre
-                                color: boton.activo ? Tema.fondo : boton.usable ? Tema.secundario : Tema.rejilla
+                                color: boton.activo ? Tema.fondo : boton.usable ? Tema.secundario : Tema.apagado
                                 font.family: Tema.mono
                                 font.pixelSize: Tema.letraMini
                             }
-                            TapHandler { enabled: boton.usable; onTapped: salud.rango = boton.index }
+                            Pulsar { enabled: boton.usable; onPulsado: salud.rango = boton.index }
                         }
                     }
                 }
@@ -195,7 +195,7 @@ Item {
                         font.family: Tema.mono
                         font.pixelSize: Tema.letraMini
                     }
-                    TapHandler { onTapped: salud.diagnostico = !salud.diagnostico }
+                    Pulsar { onPulsado: salud.diagnostico = !salud.diagnostico }
                 }
             }
         }
@@ -240,7 +240,7 @@ Item {
                             Column {
                                 required property var modelData
                                 anchors.bottom: parent.bottom
-                                Text { text: modelData[0]; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9; font.letterSpacing: 1 }
+                                Text { text: modelData[0]; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
                                 Text { text: modelData[1]; color: Tema.texto; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                             }
                         }
@@ -507,7 +507,7 @@ Item {
                     id: tablaTendencias
                     width: parent.width
                     spacing: 3
-                    Text { text: "MÉTRICA          MÍNIMO    MEDIA    PICO"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9 }
+                    Text { text: "MÉTRICA          MÍNIMO    MEDIA    PICO"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                     Repeater {
                         model: [["cpu", "CPU %"], ["ram", "RAM %"], ["swap", "SWAP %"], ["presion", "PRESIÓN"], ["temp", "TEMP CPU °C"],
                                 ["gpu_temp", "TEMP GPU °C"], ["bateria", "BATERÍA %"], ["disco", "DISCO %"], ["lectura", "LECTURA MB/s"], ["escritura", "ESCRITURA MB/s"]]
@@ -522,7 +522,7 @@ Item {
                     Text {
                         width: parent.width
                         text: "Solo datos medidos del rango elegido arriba; los huecos no cuentan. Lo que pasa ahora mismo está en PERFORMANCE."
-                        color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap
+                        color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap
                     }
                 }
                 }
@@ -544,7 +544,7 @@ Item {
                         spacing: 3
                         Text {
                             text: salud.hardware ? ["compatible", "detectado", "no_disponible", "error_lectura"].map(e => salud.textoHw(e) + " " + salud.hardware.cuenta[e]).join("   ") : "Detectando…"
-                            color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9
+                            color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                         Repeater {
                             model: salud.hardware ? salud.hardware.componentes : []
@@ -555,10 +555,10 @@ Item {
                                 spacing: 1
                                 Row {
                                     spacing: 6
-                                    Text { width: 112; text: salud.textoHw(comp.modelData.estado); color: salud.colorHw(comp.modelData.estado); font.family: Tema.mono; font.pixelSize: 9 }
+                                    Text { width: 112; text: salud.textoHw(comp.modelData.estado); color: salud.colorHw(comp.modelData.estado); font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                                     Text { text: comp.modelData.nombre; color: Tema.texto; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                                 }
-                                Text { x: 118; width: comp.width - 118; text: comp.modelData.detalle; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap }
+                                Text { x: 118; width: comp.width - 118; text: comp.modelData.detalle; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap }
                                 Repeater {
                                     model: (comp.modelData.valores || []).slice(0, 8)
                                     Text {
@@ -566,7 +566,7 @@ Item {
                                         x: 118
                                         text: modelData.id.padEnd(28).slice(0, 28) + " " + modelData.valor + " " + modelData.unidad
                                         color: modelData.unidad === "°C" && modelData.valor >= salud.umbrales.temp_aviso ? Tema.ambar : Tema.texto
-                                        font.family: Tema.mono; font.pixelSize: 9
+                                        font.family: Tema.mono; font.pixelSize: Tema.letraMini
                                     }
                                 }
                             }

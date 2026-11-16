@@ -79,7 +79,7 @@ Item {
                 id: columnaCat
                 width: parent.width
                 spacing: 7
-                Text { width: parent.width; text: marcoCat.explicacion; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap }
+                Text { width: parent.width; text: marcoCat.explicacion; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap }
                 Repeater {
                     model: marcoCat.elementos
                     Column {
@@ -92,14 +92,14 @@ Item {
                             Rectangle {
                                 width: tEstado.implicitWidth + 10; height: 16
                                 color: "transparent"; border.color: vista.color(elemento.modelData.estado)
-                                Text { id: tEstado; anchors.centerIn: parent; text: vista.texto(elemento.modelData.estado); color: vista.color(elemento.modelData.estado); font.family: Tema.mono; font.pixelSize: 9 }
+                                Text { id: tEstado; anchors.centerIn: parent; text: vista.texto(elemento.modelData.estado); color: vista.color(elemento.modelData.estado); font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                             }
                             Text { text: elemento.modelData.nombre; color: Tema.texto; font.family: Tema.mono; font.pixelSize: Tema.letraMini; anchors.verticalCenter: parent.verticalCenter }
                         }
-                        Text { width: parent.width; text: elemento.modelData.texto; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap }
+                        Text { width: parent.width; text: elemento.modelData.texto; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap }
                         Repeater {
                             model: (elemento.modelData.detalle || []).slice(0, 6)
-                            Text { required property var modelData; width: elemento.width; text: "  · " + modelData; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9; elide: Text.ElideRight }
+                            Text { required property var modelData; width: elemento.width; text: "  · " + modelData; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; elide: Text.ElideRight }
                         }
                     }
                 }
@@ -152,8 +152,8 @@ Item {
                         Text {
                             required property var modelData
                             text: vista.texto(modelData).padEnd(15) + (vista.cat ? vista.cat.cuenta[modelData] : "—")
-                            color: vista.cat && vista.cat.cuenta[modelData] ? vista.color(modelData) : Tema.rejilla
-                            font.family: Tema.mono; font.pixelSize: 9
+                            color: vista.cat && vista.cat.cuenta[modelData] ? vista.color(modelData) : Tema.apagado
+                            font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                     }
                 }
@@ -248,9 +248,9 @@ Item {
                         font.family: Tema.mono
                         font.pixelSize: Tema.letraMini
                     }
-                    TapHandler {
+                    Pulsar {
                         enabled: !vista.pidiendoReglas
-                        onTapped: {
+                        onPulsado: {
                             vista.pidiendoReglas = true;
                             vista.avisoReglas = "";
                             consultaReglas.pedir({ orden: "ufw_reglas" });

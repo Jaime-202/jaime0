@@ -17,6 +17,19 @@ Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [a
 
 Nuevo en el servicio: órdenes `procesos` (todos los de la última muestra) y `proceso` (detalle de uno, solo lectura de `/proc`); `red` (KB/s recibidos y enviados, sin `lo`) y `cpu.carga` (`/proc/loadavg`) en el instante; `servicios` en `estado.json` (una llamada a `systemctl show` por ámbito cada 60 s); y `categorias` en la orden `privacidad`, con AppArmor (`/sys/module/apparmor`) y Secure Boot (variable EFI, legible sin root) además de lo que ya se comprobaba.
 
+## Accesibilidad (evolución, fase 9)
+
+| Aspecto | Cómo |
+|---|---|
+| Teclado | `1`–`9` y `0` van a cada sección; `Ctrl+Tab` / `Ctrl+AvPág` a la siguiente y `Ctrl+Mayús+Tab` / `Ctrl+RePág` a la anterior; `Tab` y `Mayús+Tab` recorren los botones y filas en orden (primero la barra lateral, luego la sección); `Intro` o `Espacio` los pulsan; `Esc` cierra. Al cambiar de sección el foco vuelve a la ventana. Todo lo pulsable usa `Pulsar.qml`: no queda nada que solo funcione con el ratón |
+| Foco | Marco blanco de 2 px alrededor del elemento, distinto de los colores de estado |
+| Contraste | Todo color de texto supera 4,5:1 sobre los fondos (principal 14:1, secundario 6:1, atenuado 4,7:1, estados de 5 a 12:1). Los colores de líneas (`rejilla`, `borde`) no se usan para texto. Lo comprueba `pruebas/test_accesibilidad.py` |
+| Tamaño | Ningún texto por debajo de 10 px. `cc_escala` (90–130 %) amplía o reduce toda la ventana; si no cabe el diseño mínimo (1100 × 680 puntos), se reduce lo justo, nunca por debajo del 75 %. La escala de Hyprland del monitor se aplica además, como en cualquier ventana |
+| No solo color | Los estados llevan texto (`ACTIVE`, `WARNING`, `COMPATIBLE`…); las gráficas con varias series llevan leyenda con el nombre; los procesos que gastan mucho llevan `▲` además del ámbar |
+| Movimiento | Tres niveles (`no`, `sutil`, `suave`). Con `sutil` nada se repite en bucle; el latido de un estado en alerta y el barrido de la cabecera solo con `suave`. Se respeta la preferencia del escritorio de no animar |
+
+Probado en la VM (1280 × 800, ventana de 1100 × 688): Tab recorre la barra lateral y llega al botón de DIAGNOSTICS con el marco visible, Intro lo ejecuta, Ctrl+Tab pasa a POWER, escala 90 % reduce la ventana entera y 130 % se limita a lo que cabe.
+
 ## Detección de hardware (evolución, fase 8)
 
 La orden `hardware` del servicio (módulo `hardware`, solo lee sysfs) dice, para cada componente, si Jaime0 puede usarlo en ese equipo. La muestra HEALTH › SENSORS & TRENDS (panel HARDWARE · SENSORS).

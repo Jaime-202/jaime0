@@ -114,7 +114,7 @@ Item {
                             text: f === null || f === undefined ? "— MHz" : f + " MHz"
                             color: Tema.apagado
                             font.family: Tema.mono
-                            font.pixelSize: 9
+                            font.pixelSize: Tema.letraMini
                         }
                     }
                 }
@@ -171,7 +171,7 @@ Item {
                 spacing: 10
                 Marco {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 168
+                    Layout.preferredHeight: 182
                     ident: "R3"
                     etiqueta: "MEMORY · SWAP · PRESSURE"
                     acento: Tema.cian
@@ -203,7 +203,7 @@ Item {
                             wrapMode: Text.WordWrap
                             text: "PRESIÓN (avg10) " + (vista.ram && vista.ram.presion !== null ? vista.ram.presion.toFixed(2) : "N/D") + " · 0 = sin esperas, > 20 ya espera"
                             color: vista.ram && vista.ram.presion > 20 ? Tema.ambar : Tema.secundario
-                            font.family: Tema.mono; font.pixelSize: 9
+                            font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                     }
                 }
@@ -236,14 +236,14 @@ Item {
                         }
                         Item { width: 1; height: 4 }
                         Text { text: "PICOS RECIENTES"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1 }
-                        Text { width: parent.width; wrapMode: Text.WordWrap; visible: vista.picos.length === 0; text: "Ninguno (CPU ≥ 85 % dos muestras seguidas o RAM ≥ 90 %)."; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9 }
+                        Text { width: parent.width; wrapMode: Text.WordWrap; visible: vista.picos.length === 0; text: "Ninguno (CPU ≥ 85 % dos muestras seguidas o RAM ≥ 90 %)."; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                         Repeater {
                             model: vista.picos.slice(0, 4)
                             Text {
                                 required property var modelData
                                 width: parent.width
                                 text: vista.hora(modelData.t) + "  " + modelData.texto
-                                color: Tema.ambar; font.family: Tema.mono; font.pixelSize: 9; elide: Text.ElideRight
+                                color: Tema.ambar; font.family: Tema.mono; font.pixelSize: Tema.letraMini; elide: Text.ElideRight
                             }
                         }
                     }
@@ -277,18 +277,18 @@ Item {
                             color: activo ? Tema.verde : "transparent"
                             border.color: activo ? Tema.verde : Tema.borde
                             Text { id: tOrden; anchors.centerIn: parent; text: parent.modelData[1]; color: parent.activo ? Tema.fondo : Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
-                            TapHandler { onTapped: vista.orden = parent.modelData[0] }
+                            Pulsar { onPulsado: vista.orden = parent.modelData[0] }
                         }
                     }
                     Item { Layout.fillWidth: true }
-                    Text { text: vista.filtrados.length + " mostrados"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9 }
+                    Text { text: vista.filtrados.length + " mostrados"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                 }
                 Text {
                     id: cabeceraProc
                     anchors.top: barraProc.bottom
                     anchors.topMargin: 6
                     text: "    PID  NOMBRE                CPU %    RAM MiB  HILOS  ESTADO"
-                    color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9
+                    color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                 }
                 ListView {
                     id: listaProc
@@ -313,7 +313,8 @@ Item {
                             x: 4
                             anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - 8
-                            text: String(parent.modelData.pid).padStart(7) + "  " + String(parent.modelData.nombre).padEnd(20).slice(0, 20)
+                            // ▲ marca los que gastan mucho (ademas del color ambar).
+                            text: (parent.pesado ? "▲" : " ") + String(parent.modelData.pid).padStart(6) + "  " + String(parent.modelData.nombre).padEnd(20).slice(0, 20)
                                   + (parent.modelData.cpu === null ? "    —" : parent.modelData.cpu.toFixed(1).padStart(6)) + "  "
                                   + (parent.modelData.ram === null ? "      —" : parent.modelData.ram.toFixed(0).padStart(9)) + "  "
                                   + String(parent.modelData.hilos === null ? "—" : parent.modelData.hilos).padStart(5) + "  " + (parent.modelData.estado || "")
@@ -321,7 +322,7 @@ Item {
                             font.family: Tema.mono; font.pixelSize: Tema.letraMini
                             elide: Text.ElideRight
                         }
-                        TapHandler { onTapped: { vista.elegido = parent.modelData.pid; consultaDetalle.pedir({ orden: "proceso", pid: parent.modelData.pid }); } }
+                        Pulsar { onPulsado: { vista.elegido = parent.modelData.pid; consultaDetalle.pedir({ orden: "proceso", pid: parent.modelData.pid }); } }
                     }
                 }
                 Rectangle {
@@ -337,7 +338,7 @@ Item {
                         spacing: 2
                         Text {
                             width: parent.width
-                            text: !vista.detalle ? "Pulsa un proceso para ver su detalle. Ámbar = mucha CPU (≥ 50 %) o RAM (≥ 10 %)."
+                            text: !vista.detalle ? "Pulsa un proceso (o Tab e Intro) para ver su detalle. ▲ = mucha CPU (≥ 50 %) o RAM (≥ 10 %)."
                                   : vista.detalle.ok === false ? "△ " + vista.detalle.error
                                   : vista.detalle.nombre + " · PID " + vista.detalle.pid + " · padre " + (vista.detalle.padre || "—") + " · usuario " + (vista.detalle.usuario || "—")
                                     + " · " + (vista.detalle.hilos || "—") + " hilos · " + (vista.detalle.ram_mib !== null ? vista.detalle.ram_mib + " MiB" : "RAM N/D")
@@ -349,12 +350,12 @@ Item {
                             width: parent.width
                             visible: !!(vista.detalle && vista.detalle.ok !== false)
                             text: vista.detalle && vista.detalle.ok !== false ? (vista.detalle.orden || "(sin orden: hilo del núcleo)") : ""
-                            color: Tema.verde; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WrapAnywhere; maximumLineCount: 2; elide: Text.ElideRight
+                            color: Tema.verde; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WrapAnywhere; maximumLineCount: 2; elide: Text.ElideRight
                         }
                         Text {
                             visible: !!(vista.detalle && vista.detalle.ok !== false && vista.detalle.inicio)
                             text: vista.detalle && vista.detalle.inicio ? "En marcha desde " + new Date(vista.detalle.inicio * 1000).toLocaleString(Qt.locale(), "dd/MM HH:mm") + " · estado " + (vista.detalle.estado || "—") : ""
-                            color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9
+                            color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                     }
                 }

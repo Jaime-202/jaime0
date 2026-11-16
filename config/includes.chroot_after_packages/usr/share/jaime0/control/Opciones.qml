@@ -31,11 +31,11 @@ Flow {
                 id: texto
                 anchors.centerIn: parent
                 text: chip.modelData.texto
-                color: chip.activo ? Tema.fondo : chip.usable ? Tema.secundario : Tema.rejilla
+                color: chip.activo ? Tema.fondo : chip.usable ? Tema.secundario : Tema.apagado
                 font.family: Tema.mono
                 font.pixelSize: Tema.letraMini
             }
-            TapHandler { enabled: chip.usable; onTapped: fila.elegido(chip.modelData.valor) }
+            Pulsar { enabled: chip.usable; onPulsado: fila.elegido(chip.modelData.valor) }
         }
     }
 }
