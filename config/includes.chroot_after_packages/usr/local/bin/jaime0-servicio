@@ -58,6 +58,7 @@ from jaime0_servicio import privacidad as privacidad_mod        # noqa: E402
 from jaime0_servicio import estado as estado_mod                # noqa: E402
 from jaime0_servicio import reglas as reglas_mod                # noqa: E402
 from jaime0_servicio import actualizaciones as actualizaciones_mod  # noqa: E402
+from jaime0_servicio import diagnostico as diagnostico_mod      # noqa: E402
 from jaime0_servicio import api as api_mod                      # noqa: E402
 from jaime0_servicio import servicio as servicio_mod            # noqa: E402
 from jaime0_servicio.base import *                              # noqa: E402,F401,F403
@@ -70,6 +71,7 @@ from jaime0_servicio.privacidad import *                        # noqa: E402,F40
 from jaime0_servicio.estado import *                            # noqa: E402,F401,F403
 from jaime0_servicio.reglas import *                            # noqa: E402,F401,F403
 from jaime0_servicio.actualizaciones import *                   # noqa: E402,F401,F403
+from jaime0_servicio.diagnostico import *                       # noqa: E402,F401,F403
 from jaime0_servicio.api import *                               # noqa: E402,F401,F403
 from jaime0_servicio.servicio import *                          # noqa: E402,F401,F403
 

@@ -30,7 +30,8 @@ ShellRoot {
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" },
-        { id: "UPDATES", titulo: "UPDATE MANAGER" }
+        { id: "UPDATES", titulo: "UPDATE MANAGER" },
+        { id: "DIAGNOSTICS", titulo: "SYSTEM DIAGNOSTICS" }
     ]
 
     function leerJson(vista) {
@@ -359,7 +360,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes, vistaActualizaciones][raiz.seccion]
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes, vistaActualizaciones, vistaDiagnosticos][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -414,6 +415,10 @@ ShellRoot {
                 Component {
                     id: vistaActualizaciones
                     Actualizaciones {}
+                }
+                Component {
+                    id: vistaDiagnosticos
+                    Diagnosticos {}
                 }
             }
 

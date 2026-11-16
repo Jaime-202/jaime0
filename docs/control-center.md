@@ -2,6 +2,20 @@
 
 Estado: **Fases 1 a 8 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con sus 7 secciones (SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH y SETTINGS), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Probado de punta a punta en un sistema instalado desde una ISO nueva (fase 8); queda lo que solo existe en el portátil.
 
+Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [actualizaciones.md](actualizaciones.md)) y **DIAGNOSTICS** (sección 09, ver [diagnostico.md](diagnostico.md)); las teclas van de `1` a `9`.
+
+## DIAGNOSTICS (evolución, fase 5)
+
+| Zona | Contenido |
+|---|---|
+| X0 | Último diagnóstico: problemas por gravedad, cuándo y cuánto tardó, y `EJECUTAR DIAGNÓSTICO` |
+| X1 · PROBLEMS | Problemas detectados, de más a menos grave |
+| X2 · detalle | Lo detectado, causas posibles (marcadas como no confirmadas), consecuencias, qué hacer y, si hay reparación, sus órdenes y el botón `REPARAR` (abre una terminal que pide confirmación y guarda copia) |
+| X3 · CHECKS | Todas las comprobaciones por área, con su estado (incluidas `NO DISPONIBLE` y `NO APLICA`) |
+| X4 · HISTORY | Problemas activos y resueltos, con cuántas veces han aparecido |
+
+El servicio lanza `jaime0-diagnostico comprobar --json` en su propio hilo (a los 2 minutos de arrancar y cada 6 horas, o al pulsar el botón) y nunca repara nada. SYSTEM OVERVIEW enseña una línea con el problema más grave (`△ DIAGNOSTICS … (tecla 9)`); HEALTH sigue siendo para métricas e incidencias, sin repetir los diagnósticos.
+
 ## Pruebas de conjunto (fase 8)
 
 **Cómo:** ISO nueva compilada con las fases 2 a 7 (15-11-2026), arrancada en vivo e instalada con el instalador gráfico (UEFI, ext4, disco entero) en una VM nueva (`jaime0-fase8`: 4 GiB, 4 CPU). Los arreglos de esta fase se copiaron encima del sistema instalado (la ISO se compiló antes). Además, revisión del código de las fases 2 a 7 por un revisor independiente.
@@ -190,11 +204,11 @@ Arreglos encontrados al probar: el enlace para editar CUSTOM estaba dentro de su
 
 | Zona | Qué muestra |
 |---|---|
-| SYSTEM HEALTH | Estado global, CPU, RAM, temperatura y alertas activas; selector de intervalo (`REAL TIME`, `LAST 5 MIN`, `LAST HOUR`, `LAST 24 HOURS`, `HISTORY`: los que aún no tienen datos suficientes salen apagados) y `DIAGNOSTIC MODE` |
+| SYSTEM HEALTH | Estado global, CPU, RAM, temperatura y alertas activas; selector de intervalo (`REAL TIME`, `LAST 5 MIN`, `LAST HOUR`, `LAST 24 HOURS`, `HISTORY`: los que aún no tienen datos suficientes salen apagados) y `DETAILED VIEW` (antes `DIAGNOSTIC MODE`; el diagnóstico de problemas está en DIAGNOSTICS) |
 | LIVE MONITORING | Las dos gráficas grandes, CPU y RAM: valor actual, media y pico del intervalo, diferencia con la media, línea de referencia y marcas de eventos (▼) |
 | HARDWARE DIAGNOSTICS | Temperaturas (CPU y GPU, con los umbrales de aviso y crítico), almacenamiento (ocupación, lectura/escritura y SMART) y batería (nivel, consumo, autonomía marcada como *estimada* y salud) |
 | SYSTEM EVENTS | Incidencias: fecha, gravedad, componente, descripción y recomendación; también la recuperación |
-| DIAGNOSTIC MODE | Sustituye la zona de hardware por el detalle: cada núcleo con su uso y frecuencia, todos los sensores, memoria desglosada, procesos y eventos del intervalo |
+| DETAILED VIEW | Sustituye la zona de hardware por el detalle: cada núcleo con su uso y frecuencia, todos los sensores, memoria desglosada, procesos y eventos del intervalo |
 
 Las gráficas solo dibujan datos medidos. Al pasar el cursor muestran el valor exacto con fecha y hora (y el mínimo y máximo en los intervalos agregados); arrastrar amplía un tramo y el doble clic vuelve a la vista completa. Los tramos sin datos (suspensión, servicio parado) se rayan y se rotulan `SIN DATOS`, nunca se rellenan.
 

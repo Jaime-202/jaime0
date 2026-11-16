@@ -5,6 +5,10 @@
 #   jaime0-diagnostico --pantalla   lo muestra en vez de guardarlo
 #   jaime0-diagnostico --sudo       usa "sudo -n" (sin pedir contrasena) para lo que
 #                                   necesita root, como el registro del kernel
+#   jaime0-diagnostico comprobar [--json] [--sudo]   diagnostico interpretado: problemas
+#                                   con causa probable, consecuencias y que hacer
+#   jaime0-diagnostico historial [--json] [-n N]     problemas vistos y ejecuciones
+#   jaime0-diagnostico reparar ID   aplica la reparacion de un problema (pide confirmacion)
 #
 # Funciona en el sistema en vivo y en el instalado, sin root. Cada seccion es
 # independiente: si un comando falta, falla o tarda demasiado, se indica y se sigue.
@@ -21,11 +25,18 @@ import ipaddress
 import json
 import os
 import re
+import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
 import time
+
+try:
+    import fcntl
+except ImportError:  # Solo en las pruebas fuera de Linux
+    fcntl = None
 
 PROGRAMA = "jaime0-diagnostico"
 TIEMPO_MAXIMO = 8  # segundos por comando
@@ -861,7 +872,1964 @@ def colorear(texto):
     return re.sub(r"(?m)^(== .* ==)$", "\033[1;32m\\1\033[0m", texto)
 
 
+# ===========================================================================
+# Diagnostico interpretado: "comprobar", "historial" y "reparar"
+# ===========================================================================
+#
+# No vigila ni mide de forma continua (eso es de jaime0-servicio, HEALTH): comprueba una vez,
+# interpreta lo que ve y lo explica. Cada comprobacion da un estado:
+#   OK, INFO, WARNING, ERROR, CRITICAL   lo que se ha visto
+#   NO_DISPONIBLE   no se pudo comprobar (falta una herramienta o un permiso)
+#   NO_APLICA       el equipo no tiene esa pieza (sin NVIDIA, sin bateria, sin Wi-Fi)
+# Lo no disponible o no aplicable nunca es un problema. Cada WARNING, ERROR o CRITICAL (y
+# algun INFO util) es un "problema": lo detectado tal cual, causas probables (nunca dadas por
+# confirmadas), consecuencias, que hacer y, solo si es segura y acotada, una reparacion que
+# se aplica con "reparar ID", en una terminal y tras confirmar.
+#
+# Todo lo que sale (pantalla, JSON, historial) pasa por limpiar().
+
+VERSION_DIAGNOSTICO = 1
+GRAVEDADES = ("CRITICAL", "ERROR", "WARNING", "INFO")
+ORDEN_GRAVEDAD = {g: n for n, g in enumerate(GRAVEDADES)}
+AREAS = (("hardware", "HARDWARE"), ("sistema", "SYSTEM"), ("graficos", "GRAPHICS"),
+         ("conectividad", "CONNECTIVITY"), ("energia", "POWER"))
+ORDEN_AREA = {a: n for n, (a, _) in enumerate(AREAS)}
+LIMITE_EJECUCIONES = 500        # lineas de diagnosticos.jsonl
+LIMITE_PROBLEMAS = 200          # problemas recordados en diagnosticos.json
+LIMITE_REPARACIONES = 20        # reparaciones recordadas por problema
+OLVIDAR_RESUELTOS = 90 * 86400  # un problema resuelto se olvida a los 90 dias
+TIEMPO_REPARACION = 1800        # s por orden de una reparacion (compilar NVIDIA tarda)
+GIB = 1 << 30
+
+
+class Contexto:
+    """Una ejecucion: opciones, resultados de comandos (cada uno se ejecuta una vez) y lo anotado."""
+
+    def __init__(self, sudo=False):
+        self.sudo = bool(sudo)
+        self.comprobaciones = {a: [] for a, _ in AREAS}
+        self.problemas = []
+        self._cache = {}
+
+    def cmd(self, args, tiempo=TIEMPO_MAXIMO, sudo=False, env=None):
+        clave = (tuple(args), bool(sudo), tuple(sorted((env or {}).items())))
+        if clave not in self._cache:
+            self._cache[clave] = ejecutar(list(args), env_extra=env, tiempo=tiempo, sudo=sudo)
+        return self._cache[clave]
+
+    def memo(self, nombre, funcion):
+        clave = ("memo", nombre)
+        if clave not in self._cache:
+            self._cache[clave] = funcion()
+        return self._cache[clave]
+
+    def kernel(self):
+        """(lineas, origen) del registro del nucleo de este arranque, o (None, explicacion)."""
+        def leer_kernel():
+            lineas, origen = registro_kernel(False)
+            if lineas is None and self.sudo and not es_root():
+                otras, origen2 = registro_kernel(True)
+                if otras is not None:
+                    return otras, origen2
+                origen = f"{origen}; con sudo: {origen2}"
+            return lineas, origen
+        return self.memo("kernel", leer_kernel)
+
+    def anotar(self, cid, nombre, estado, detalle, problemas):
+        area = cid.split(".")[0]
+        problemas = [p for p in problemas or [] if p]
+        for p in problemas:
+            p["area"], p["_comprobacion"] = area, cid
+        peor = min((ORDEN_GRAVEDAD[p["gravedad"]] for p in problemas), default=None)
+        if peor is not None and (estado not in ORDEN_GRAVEDAD or ORDEN_GRAVEDAD[estado] > peor):
+            estado = GRAVEDADES[peor]
+        self.comprobaciones[area].append({"id": cid, "nombre": nombre, "estado": estado, "detalle": detalle})
+        self.problemas.extend(problemas)
+
+
+def problema(pid, base, gravedad, componente, detectado, causas, consecuencias, recomendacion,
+             reparacion=None):
+    return {"id": pid, "titulo": f"{base} {gravedad}", "gravedad": gravedad, "componente": componente,
+            "area": pid.split(".")[0], "detectado": [str(x) for x in detectado if x],
+            "causas_probables": list(causas), "consecuencias": consecuencias,
+            "recomendacion": list(recomendacion), "reparacion": reparacion}
+
+
+def reparacion(rid, descripcion, ordenes, root=False, copia=None):
+    """ordenes: listas de argumentos; se guardan como texto (shlex) y se ejecutan sin shell."""
+    return {"id": rid, "descripcion": descripcion, "ordenes": [shlex.join(o) for o in ordenes],
+            "root": bool(root), "copia": copia}
+
+
+def unicos(lista, maximo=None):
+    u = list(dict.fromkeys(x for x in lista if x))
+    return u[:maximo] if maximo else u
+
+
+def recortar(texto, n=240):
+    texto = " ".join(str(texto).split())
+    return texto if len(texto) <= n else texto[:n - 1] + "…"
+
+
+def sin_raiz(camino):
+    """Ruta tal como se ve en el sistema (sin la raiz falsa de las pruebas)."""
+    if RAIZ == "/":
+        return camino
+    return "/" + os.path.relpath(camino, RAIZ).replace(os.sep, "/")
+
+
+def resolver(nombre):
+    """Programa por su nombre: en PATH, en /usr/sbin (el PATH de un usuario no lo lleva en
+    Debian) o junto a este programa. Sin encontrarlo devuelve el nombre (ejecutar() dira que falta)."""
+    if "/" in nombre:
+        return nombre
+    encontrado = shutil.which(nombre)
+    if encontrado or MODO_PRUEBA:
+        return encontrado or nombre
+    encontrado = shutil.which(nombre, path=os.pathsep.join(("/usr/local/sbin", "/usr/sbin", "/sbin")))
+    if encontrado:
+        return encontrado
+    junto = os.path.join(os.path.dirname(os.path.abspath(__file__)), nombre)
+    return junto if os.path.isfile(junto) else nombre
+
+
+def ultimo_json(texto):
+    try:
+        return json.loads(texto)
+    except ValueError:
+        pass
+    lineas = [l for l in (texto or "").splitlines() if l.strip()]
+    try:
+        return json.loads(lineas[-1]) if lineas else None
+    except ValueError:
+        return None
+
+
+def leer_json(camino):
+    try:
+        with open(camino, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def stat_ruta(camino):
+    return os.lstat(camino)
+
+
+def uso_disco(camino):
+    """(total, libre) en bytes o None."""
+    try:
+        u = shutil.disk_usage(camino)
+        return u.total, u.free
+    except OSError:
+        return None
+
+
+def carpeta_config_usuario():
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+
+
+def dir_estado():
+    """JAIME0_ESTADO, o $XDG_STATE_HOME/jaime0, o ~/.local/state/jaime0 (como jaime0-salud)."""
+    d = os.environ.get("JAIME0_ESTADO")
+    if d:
+        return d
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "jaime0")
+
+
+def virtualizacion(ctx):
+    """Nombre de la virtualizacion (oracle, kvm...) o None en un equipo real."""
+    def detectar():
+        r = ctx.cmd(["systemd-detect-virt"], tiempo=4)
+        v = (r.salida.strip().splitlines() or [""])[0].strip()
+        if v and not r.motivo:
+            return None if v == "none" else v
+        dmi = " ".join(leer(ruta("sys", "class", "dmi", "id", x)) or "" for x in ("sys_vendor", "product_name"))
+        for marca, nombre in (("virtualbox", "oracle"), ("vmware", "vmware"), ("qemu", "qemu"),
+                              ("kvm", "kvm"), ("bochs", "bochs"), ("virtual machine", "microsoft")):
+            if marca in dmi.lower():
+                return nombre
+        if re.search(r"(?m)^flags\s*:.*\bhypervisor\b", leer(ruta("proc", "cpuinfo"), 1 << 20) or ""):
+            return "desconocida"
+        return None
+    return ctx.memo("virtualizacion", detectar)
+
+
+VENDEDORES = {"0x8086": "Intel", "0x10de": "NVIDIA", "0x1002": "AMD", "0x15ad": "VMware",
+              "0x80ee": "VirtualBox", "0x1af4": "virtio", "0x1234": "QEMU", "0x1b36": "Red Hat"}
+
+
+def dispositivos_pci():
+    base = ruta("sys", "bus", "pci", "devices")
+    lista = []
+    for d in listar(base):
+        p = os.path.join(base, d)
+        lista.append({"slot": d, "vendor": (leer(os.path.join(p, "vendor")) or "").lower(),
+                      "device": (leer(os.path.join(p, "device")) or "").lower(),
+                      "clase": (leer(os.path.join(p, "class")) or "").lower(),
+                      "driver": base_enlace(os.path.join(p, "driver"))})
+    return lista
+
+
+def gpus():
+    return [d for d in dispositivos_pci() if d["clase"][:6] in ("0x0300", "0x0302", "0x0380")]
+
+
+def nombre_pci(d):
+    return (f"{VENDEDORES.get(d['vendor'], d['vendor'] or '?')} [{d['vendor'][2:]}:{d['device'][2:]}]"
+            + (f" (driver {d['driver']})" if d["driver"] else ""))
+
+
+def modulo_presente(nombre):
+    return nombre in modulos_cargados() or existe(ruta("sys", "module", nombre))
+
+
+def lineas_diario(texto, n=None):
+    """Lineas utiles de journalctl (-o short-iso) sin el nombre del equipo ni los avisos."""
+    l = []
+    for x in (texto or "").splitlines():
+        x = x.strip()
+        if not x or x.startswith(("-- ", "Hint:")):
+            continue
+        m = re.match(r"^(\d{4}-\d\d-\d\dT[\d:]+(?:[+-]\d{2}:?\d{2}|Z)?)\s+\S+\s+(.*)$", x)
+        l.append(recortar(f"{m.group(1)} {m.group(2)}" if m else x))
+    return l[-n:] if n else l
+
+
+def lineas_unidad(ctx, unidad, usuario, n=5):
+    """Ultimas lineas del diario de una unidad en este arranque, como dato del problema."""
+    args = ["journalctl", *(["--user"] if usuario else []), "-b", "-u", unidad, "-n", str(n),
+            "--no-pager", "-o", "short-iso"]
+    lineas = lineas_diario(ctx.cmd(args, tiempo=6).salida, n)
+    if not lineas and not usuario and ctx.sudo and not es_root():
+        lineas = lineas_diario(ctx.cmd(args, tiempo=6, sudo=True).salida, n)
+    if not lineas:
+        falta = " (el diario del sistema necesita --sudo)" if not usuario and not ctx.sudo and not es_root() else ""
+        return [f"Diario de {unidad}: sin líneas visibles{falta}"]
+    return [f"Diario: {x}" for x in lineas]
+
+
+def propiedades_unidad(ctx, unidad, usuario=False):
+    r = ctx.cmd(["systemctl", *(["--user"] if usuario else []), "show", unidad, "-p", "LoadState",
+                 "-p", "ActiveState", "-p", "UnitFileState", "-p", "Result"], tiempo=5)
+    if r.motivo or not r.salida.strip():
+        return None, r.explicar()
+    d = {}
+    for linea in r.salida.splitlines():
+        k, _, v = linea.partition("=")
+        d[k.strip()] = v.strip()
+    return d, None
+
+
+CAUSAS_RESULTADO = {
+    "exit-code": "Probablemente el programa terminó con un error (configuración, archivo o dependencia "
+                 "que falta): las líneas del diario suelen decir cuál",
+    "signal": "Probablemente el programa se cerró de golpe (un fallo interno o alguien lo mató)",
+    "core-dump": "Probablemente el programa se cerró de golpe por un fallo interno (volcado de memoria)",
+    "timeout": "Posiblemente tardó demasiado en arrancar o en pararse y systemd lo detuvo",
+    "start-limit-hit": "Se reinició demasiadas veces seguidas y systemd dejó de intentarlo; la causa "
+                       "probable está en las líneas del diario",
+    "resources": "Posiblemente falta un archivo, una carpeta o un permiso que necesita para arrancar",
+    "watchdog": "Probablemente se quedó bloqueado y dejó de responder",
+    "oom-kill": "Probablemente se quedó sin memoria y el núcleo lo cerró",
+}
+CAUSA_GENERICA = "Posible error de configuración o de una dependencia (mira las líneas del diario)"
+
+
+def problema_servicio(ctx, unidad, props, pid, base, componente, gravedad, consecuencias):
+    """Servicio del sistema que deberia estar en marcha y no lo esta (failed, o parado y habilitado)."""
+    activo = props.get("ActiveState", "?")
+    detectado = [f"{unidad}: {activo} (resultado {props.get('Result') or '?'}, "
+                 f"arranque {props.get('UnitFileState') or '?'})", *lineas_unidad(ctx, unidad, False)]
+    causas = ([CAUSAS_RESULTADO.get(props.get("Result"), CAUSA_GENERICA)] if activo == "failed"
+              else ["Probablemente se paró a mano o no llegó a arrancar con el sistema"])
+    rep = reparacion(f"reiniciar-{unidad.rsplit('.', 1)[0].lower()}",
+                     f"Borra la marca de fallo de {unidad} y lo vuelve a arrancar. No cambia su configuración.",
+                     [["sudo", "/usr/bin/systemctl", "reset-failed", unidad],
+                      ["sudo", "/usr/bin/systemctl", "restart", unidad]], root=True)
+    return problema(pid, base, gravedad, componente, detectado, causas, consecuencias,
+                    [f"Lee su diario: journalctl -b -u {unidad}",
+                     f"Vuelve a arrancarlo (reparación de abajo o: sudo systemctl restart {unidad})",
+                     "Si vuelve a fallar, el motivo está en las líneas del diario"], rep)
+
+
+def comprobar_servicio(ctx, unidad, pid, base, componente, gravedad, consecuencias, inactivo_es_problema=True):
+    """(estado, detalle, problemas) de un servicio del sistema."""
+    props, error = propiedades_unidad(ctx, unidad)
+    if props is None:
+        return "NO_DISPONIBLE", f"systemctl: {error}", []
+    carga, activo, archivo = props.get("LoadState"), props.get("ActiveState"), props.get("UnitFileState")
+    if carga == "not-found":
+        return "NO_DISPONIBLE", f"{unidad} no está instalado", []
+    if carga == "masked" or archivo == "masked":
+        return "INFO", f"{unidad} está enmascarado (desactivado a propósito)", []
+    if activo == "active":
+        return "OK", f"{unidad} en marcha", []
+    if activo == "failed" or (inactivo_es_problema and activo == "inactive" and archivo in ("enabled", "static")):
+        return gravedad, f"{unidad}: {activo}", [problema_servicio(ctx, unidad, props, pid, base, componente,
+                                                                     gravedad, consecuencias)]
+    return "INFO", f"{unidad}: {activo or '?'} (arranque {archivo or '?'})", []
+
+
+def rfkill(tipo):
+    l = []
+    for r in listar(ruta("sys", "class", "rfkill")):
+        b = ruta("sys", "class", "rfkill", r)
+        if leer(os.path.join(b, "type")) == tipo:
+            l.append({"nombre": leer(os.path.join(b, "name")) or r, "soft": leer(os.path.join(b, "soft")) == "1",
+                      "hard": leer(os.path.join(b, "hard")) == "1"})
+    return l
+
+
+def baterias():
+    """Baterias del equipo (no las de un raton o unos auriculares: scope Device)."""
+    l = []
+    for f in listar(ruta("sys", "class", "power_supply")):
+        b = ruta("sys", "class", "power_supply", f)
+        if leer(os.path.join(b, "type")) == "Battery" and (leer(os.path.join(b, "scope")) or "System") != "Device":
+            l.append((f, b))
+    return l
+
+
+def entero(texto):
+    return int(texto) if texto and re.fullmatch(r"-?\d+", texto.strip()) else None
+
+
+# ---------------------------------------------------------------------------
+# HARDWARE
+# ---------------------------------------------------------------------------
+
+SENSORES_CPU = ("coretemp", "k10temp", "zenpower", "cpu_thermal", "x86_pkg_temp")
+
+
+def c_sensores(ctx):
+    lecturas = []
+    for h in listar(ruta("sys", "class", "hwmon")):
+        b = ruta("sys", "class", "hwmon", h)
+        nombre = leer(os.path.join(b, "name")) or h
+        for f in listar(b):
+            v = entero(leer(os.path.join(b, f))) if re.fullmatch(r"temp\d+_input", f) else None
+            if v is not None and -40000 < v < 150000:
+                lecturas.append((nombre, v / 1000))
+    for z in listar(ruta("sys", "class", "thermal")):
+        if z.startswith("thermal_zone"):
+            b = ruta("sys", "class", "thermal", z)
+            v = entero(leer(os.path.join(b, "temp")))
+            if v is not None and -40000 < v < 150000:
+                lecturas.append((leer(os.path.join(b, "type")) or z, v / 1000))
+    if not lecturas:
+        if virtualizacion(ctx):
+            return "NO_APLICA", "Máquina virtual: no tiene sensores de temperatura", []
+        return ("NO_DISPONIBLE", "No hay sensores de temperatura legibles en /sys/class/hwmon ni "
+                "/sys/class/thermal (MONITOR no podrá mostrar temperaturas)", [])
+    cpu = [t for n, t in lecturas if n in SENSORES_CPU]
+    fuentes = len({n for n, _ in lecturas})
+    if not cpu:
+        return "INFO", f"{len(lecturas)} lecturas de {fuentes} sensores, pero ninguno de la CPU (coretemp/k10temp)", []
+    return "OK", f"CPU {max(cpu):.0f} °C; {len(lecturas)} lecturas de {fuentes} sensores", []
+
+
+def c_gpus(ctx):
+    if not existe(ruta("sys", "bus", "pci", "devices")):
+        return "NO_DISPONIBLE", "No se puede leer /sys/bus/pci/devices", []
+    g = gpus()
+    if not g:
+        return "INFO", "No se ve ninguna tarjeta gráfica PCI", []
+    return "OK", "; ".join(nombre_pci(x) for x in g), []
+
+
+RE_OOM = re.compile(r"Out of memory: Killed process \d+ \(([^)]+)\)")
+
+
+def c_memoria(ctx):
+    m = re.search(r"(?m)^oom_kill (\d+)$", leer(ruta("proc", "vmstat"), 1 << 20) or "")
+    if not m:
+        return "NO_DISPONIBLE", "El núcleo no publica oom_kill en /proc/vmstat", []
+    n = int(m.group(1))
+    if n == 0:
+        return "OK", "Ningún programa cerrado por falta de memoria en este arranque", []
+    lineas, _ = ctx.kernel()
+    nombres = unicos([mm.group(1) for l in lineas or [] for mm in [RE_OOM.search(l)] if mm], 6)
+    detectado = [f"/proc/vmstat: oom_kill {n} (programas cerrados por el núcleo por falta de memoria en este arranque)"]
+    detectado += [f"Cerrado por falta de memoria: {x}" for x in nombres]
+    if lineas is None:
+        detectado.append("Qué programas: el registro del núcleo necesita --sudo")
+    p = problema("hardware.memoria_oom", "MEMORY OOM", "WARNING", "MEMORY", detectado,
+                 ["Probablemente un programa usó más memoria de la que había libre (el que se cerró suele ser "
+                  "el que más usaba)",
+                  "Posiblemente hay poca memoria de intercambio (swap o zram) para lo que estabas haciendo"],
+                 "El núcleo cerró esos programas sin preguntar: se pudo perder trabajo sin guardar.",
+                 ["Mira qué programa fue: journalctl -k -b | grep -i 'out of memory'",
+                  "Vigila la memoria en MONITOR (jaime0-salud) y cierra lo que no uses",
+                  "Si se repite con tu uso normal, valora más memoria o un archivo de intercambio"])
+    return "WARNING", f"{n} programas cerrados por falta de memoria en este arranque", [p]
+
+
+RE_FS_ERROR = re.compile(r"(?i)(EXT4-fs error|BTRFS: error|BTRFS critical|I/O error|Remounting filesystem "
+                         r"read-only|forced readonly|XFS .*(corruption|shutdown))")
+
+
+def punto_raiz():
+    texto = leer(ruta("proc", "mounts"), 1 << 20)
+    if texto is None:
+        return None
+    raiz = None
+    for linea in texto.splitlines():
+        p = linea.split()
+        if len(p) >= 4 and p[1] == "/":
+            raiz = {"tipo": p[2], "opciones": p[3].split(",")}
+    return raiz
+
+
+def c_raiz(ctx):
+    montaje, uso = punto_raiz(), uso_disco(ruta())
+    if montaje is None and uso is None:
+        return "NO_DISPONIBLE", "No se pueden leer /proc/mounts ni el espacio de /", []
+    partes, problemas = [], []
+    if montaje:
+        solo_lectura = "ro" in montaje["opciones"] and montaje["tipo"] not in ("squashfs", "iso9660", "erofs")
+        partes.append(f"{montaje['tipo']}, {'SOLO LECTURA' if solo_lectura else 'lectura y escritura'}")
+        if solo_lectura:
+            lineas, _ = ctx.kernel()
+            detectado = [f"/proc/mounts: / ({montaje['tipo']}) está montada en solo lectura (ro)"]
+            detectado += unicos([recortar(l) for l in lineas or [] if RE_FS_ERROR.search(l)], 5)
+            if lineas is None:
+                detectado.append("Registro del núcleo: necesita --sudo para ver la causa")
+            problemas.append(problema(
+                "hardware.raiz_solo_lectura", "STORAGE READ-ONLY", "CRITICAL", "STORAGE", detectado,
+                ["Probablemente el núcleo encontró errores en el sistema de archivos y lo volvió a montar en "
+                 "solo lectura para protegerlo",
+                 "Posible fallo del disco (mira SMART con: jaime0-diagnostico comprobar --sudo)"],
+                "No se puede guardar ni instalar nada en el sistema y muchas aplicaciones fallan.",
+                ["Guarda tu trabajo en un USB u otro disco si puedes",
+                 "Reinicia. Si vuelve a pasar, revisa el disco desde el USB en vivo (fsck sobre la partición "
+                 "sin montar)",
+                 "Detalle: journalctl -k -b | grep -i -e error -e 'read-only'"]))
+    if uso and uso[0] > 0:
+        total, libre = uso
+        pct = 100 * (total - libre) / total
+        partes.append(f"{libre / GIB:.1f} GiB libres de {total / GIB:.0f} GiB ({pct:.0f} % usado)")
+        # El aviso por umbral es de HEALTH (jaime0-servicio). Aqui solo cuando ya rompe cosas.
+        if libre < GIB or pct >= 98:
+            problemas.append(problema(
+                "hardware.raiz_llena", "STORAGE FULL", "ERROR", "STORAGE",
+                [f"Partición raíz: {libre / GIB:.2f} GiB libres de {total / GIB:.0f} GiB ({pct:.1f} % usado)"],
+                ["Probablemente cachés de apt, registros o archivos grandes en el sistema",
+                 "Si el sistema usa Btrfs, posiblemente instantáneas de snapper acumuladas"],
+                "apt, dpkg y jaime0-update fallan al instalar; algunas aplicaciones no pueden guardar.",
+                ["Vacía la caché de paquetes (reparación de abajo o: sudo apt clean)",
+                 "Mira cuánto ocupan los registros: journalctl --disk-usage",
+                 "Con Btrfs: sudo snapper -c root list (y borra las instantáneas viejas)"],
+                reparacion("apt-clean", "Borra los paquetes .deb descargados que guarda apt en "
+                           "/var/cache/apt/archives. No desinstala nada.",
+                           [["sudo", "/usr/bin/apt-get", "clean"]], root=True)))
+    return ("OK", "; ".join(partes), problemas) if partes else ("NO_DISPONIBLE", "sin datos", [])
+
+
+def discos_fisicos():
+    return [d for d in listar(ruta("sys", "block"))
+            if not re.match(r"(loop|ram|zram|dm-|sr|md|nbd|fd)", d)
+            and leer(ruta("sys", "block", d, "removable")) != "1"]
+
+
+def c_smart(ctx):
+    discos = discos_fisicos()
+    if not discos:
+        return "NO_DISPONIBLE", "No se ven discos en /sys/block", []
+    if not ctx.sudo and not es_root():
+        return ("NO_DISPONIBLE", "Leer SMART necesita root: jaime0-diagnostico comprobar --sudo (el servicio de "
+                "Jaime0 ya vigila SMART por UDisks)", [])
+    smartctl = resolver("smartctl")
+    buenos, malos = [], []
+    for d in discos:
+        r = ctx.cmd([smartctl, "-H", "-j", f"/dev/{d}"], tiempo=10, sudo=not es_root())
+        if r.motivo:
+            return "NO_DISPONIBLE", f"smartctl: {r.motivo}", []
+        doc = ultimo_json(r.salida)
+        estado = doc.get("smart_status") if isinstance(doc, dict) else None
+        if isinstance(estado, dict) and isinstance(estado.get("passed"), bool):
+            (buenos if estado["passed"] else malos).append(d)
+    if malos:
+        p = problema("hardware.smart", "DISK SMART", "CRITICAL", "STORAGE",
+                     [f"smartctl -H /dev/{d}: FAILED (el disco informa de fallo)" for d in malos],
+                     ["El propio disco avisa de que falla: probablemente sectores dañados o desgaste de la memoria flash"],
+                     "Riesgo alto de perder datos: el disco puede dejar de funcionar en cualquier momento.",
+                     ["Haz ya una copia de seguridad de tus datos",
+                      f"Detalle: sudo smartctl -a /dev/{malos[0]}",
+                      "Cambia el disco"])
+        return "CRITICAL", f"SMART con fallo: {', '.join(malos)}", [p]
+    if buenos:
+        return "OK", f"SMART correcto: {', '.join(buenos)}", []
+    if virtualizacion(ctx):
+        return "NO_APLICA", "Máquina virtual: los discos virtuales no dan SMART", []
+    return "NO_DISPONIBLE", "Ningún disco devolvió su estado SMART", []
+
+
+def c_bateria(ctx):
+    bats = baterias()
+    if not bats:
+        return "NO_APLICA", "Sin batería (equipo de sobremesa o máquina virtual)", []
+    partes, problemas = [], []
+    for nombre, b in bats:
+        if leer(os.path.join(b, "present")) == "0":
+            partes.append(f"{nombre}: no está puesta")
+            continue
+        lleno = diseno = None
+        for a, d in (("energy_full", "energy_full_design"), ("charge_full", "charge_full_design")):
+            lleno, diseno = entero(leer(os.path.join(b, a))), entero(leer(os.path.join(b, d)))
+            if lleno and diseno:
+                break
+        ciclos = entero(leer(os.path.join(b, "cycle_count")))
+        texto_ciclos = f", {ciclos} ciclos" if ciclos else ""
+        if not lleno or not diseno or diseno <= 0 or lleno > 1.5 * diseno:
+            partes.append(f"{nombre}: salud no disponible (el firmware no da capacidades fiables){texto_ciclos}")
+            continue
+        salud = 100 * lleno / diseno
+        partes.append(f"{nombre}: salud {salud:.0f} %{texto_ciclos}")
+        if salud < 50:
+            problemas.append(problema(
+                f"hardware.bateria_salud.{nombre}", "BATTERY HEALTH", "WARNING", "BATTERY",
+                [f"{nombre}: capacidad máxima {lleno} de {diseno} de fábrica ({salud:.0f} %)",
+                 f"Ciclos de carga: {ciclos}" if ciclos else None],
+                ["Probablemente desgaste normal por ciclos de carga y por el tiempo",
+                 "Posible calibración incorrecta del indicador: una carga completa seguida de una descarga "
+                 "completa puede corregir la lectura"],
+                "La batería dura bastante menos que nueva y puede apagarse antes de lo que indica.",
+                ["Si la autonomía no te basta, valora cambiar la batería",
+                 "Limitar la carga máxima (si el equipo lo permite) alarga su vida"]))
+    return "OK", "; ".join(partes), problemas
+
+
+# ---------------------------------------------------------------------------
+# SYSTEM
+# ---------------------------------------------------------------------------
+
+# Servicios con su propia comprobacion (que explica mejor y repara): no se repiten como
+# "unidad fallida" generica.
+UNIDADES_CON_COMPROBACION = {"NetworkManager.service", "bluetooth.service", "power-profiles-daemon.service"}
+
+
+def comprobar_unidades(ctx, usuario):
+    if usuario and es_root():
+        return "NO_DISPONIBLE", "Se ejecuta como root: las unidades de usuario se comprueban sin sudo", []
+    r = ctx.cmd(["systemctl", *(["--user"] if usuario else []), "--failed", "--no-legend", "--plain",
+                 "--no-pager"], tiempo=6)
+    if r.motivo or (not r.ok and not r.salida.strip()):
+        return "NO_DISPONIBLE", f"systemctl{' --user' if usuario else ''}: {r.explicar()}", []
+    fallidas = []
+    for linea in r.salida.splitlines():
+        p = linea.strip().lstrip("●*").split(None, 4)
+        if p and "." in p[0]:
+            fallidas.append((p[0], p[4] if len(p) > 4 else ""))
+    if not usuario:
+        aparte = [u for u, _ in fallidas if u in UNIDADES_CON_COMPROBACION]
+        fallidas = [(u, d) for u, d in fallidas if u not in UNIDADES_CON_COMPROBACION]
+    else:
+        aparte = []
+    if not fallidas:
+        return "OK", "Ninguna unidad fallida" + (f" (aparte: {', '.join(aparte)}, ver su comprobación)" if aparte else ""), []
+    ambito = "usuario" if usuario else "sistema"
+    sufijo = "--user " if usuario else ""
+    problemas = []
+    for unidad, descripcion in fallidas:
+        props, _ = propiedades_unidad(ctx, unidad, usuario)
+        resultado = (props or {}).get("Result") or "?"
+        detectado = [f"{unidad} ({'unidad de usuario' if usuario else 'unidad del sistema'}): failed",
+                     f"Resultado: {resultado}", *lineas_unidad(ctx, unidad, usuario)]
+        recomendacion = [f"Lee su diario: journalctl {sufijo}-b -u {unidad}"]
+        rep = None
+        if usuario:
+            if unidad.endswith((".service", ".timer", ".socket", ".path")):
+                rep = reparacion("unidad-reiniciar", f"Borra la marca de fallo de {unidad} y la vuelve a arrancar. "
+                                 "Solo esa unidad de tu sesión; no cambia archivos.",
+                                 [["systemctl", "--user", "reset-failed", unidad],
+                                  ["systemctl", "--user", "restart", unidad]])
+            else:
+                rep = reparacion("unidad-reset-failed", f"Borra la marca de fallo de {unidad}. No arregla la causa: "
+                                 "si sigue ahí, volverá a fallar.", [["systemctl", "--user", "reset-failed", unidad]])
+            recomendacion.append("Vuelve a arrancarla (reparación de abajo) y comprueba si se mantiene")
+        else:
+            recomendacion.append(f"Cuando sepas la causa: sudo systemctl restart {unidad}")
+        recomendacion.append("Si es de un programa que no usas, puedes desactivarla: "
+                             f"systemctl {sufijo}disable {unidad}")
+        problemas.append(problema(
+            f"sistema.unidad_{ambito}.{unidad}", "SYSTEMD UNIT", "ERROR", "SYSTEMD", detectado,
+            [CAUSAS_RESULTADO.get(resultado, CAUSA_GENERICA)],
+            f"Lo que hace {unidad}" + (f" ({recortar(descripcion, 80)})" if descripcion else "") + " no está funcionando.",
+            recomendacion, rep))
+    return "ERROR", f"Unidades fallidas: {', '.join(u for u, _ in fallidas)}", problemas
+
+
+def c_unidades_sistema(ctx):
+    return comprobar_unidades(ctx, False)
+
+
+def c_unidades_usuario(ctx):
+    return comprobar_unidades(ctx, True)
+
+
+def diario_sistema(ctx, args, tiempo=10):
+    """(salida, None) si el diario del sistema es legible (sin sudo, o con --sudo); si no,
+    (None, motivo). Leer solo lo propio del usuario NO cuenta como leer el diario."""
+    motivos = []
+    for sudo in [False] + ([True] if ctx.sudo and not es_root() else []):
+        r = ctx.cmd(args, tiempo=tiempo, sudo=sudo)
+        if r.motivo:
+            motivos.append(r.motivo)
+        elif not r.ok:
+            motivos.append(r.explicar())
+        elif re.search(r"not seeing messages|insufficient permissions|No journal files", r.error):
+            motivos.append("sin permiso para leer el diario del sistema")
+        else:
+            return r.salida, None
+    return None, "; ".join(motivos)
+
+
+def c_errores_arranque(ctx):
+    salida, motivo = diario_sistema(ctx, ["journalctl", "-b", "-p", "err", "-o", "json", "--no-pager", "-n", "400"])
+    if salida is None:
+        texto = f"No se puede leer el diario del sistema ({motivo}): eso no quiere decir que no haya errores"
+        if "permiso" in motivo and not ctx.sudo:
+            texto += "; ejecuta: jaime0-diagnostico comprobar --sudo"
+        elif "contraseña" in motivo:
+            texto += "; ejecuta antes «sudo -v» para que --sudo no necesite contraseña"
+        return "NO_DISPONIBLE", texto, []
+    mensajes = []
+    for linea in salida.splitlines():
+        try:
+            d = json.loads(linea)
+        except ValueError:
+            continue
+        msg = d.get("MESSAGE")
+        if isinstance(msg, list):
+            msg = bytes(x for x in msg if isinstance(x, int) and 0 <= x < 256).decode("utf-8", "replace")
+        if not isinstance(msg, str) or not msg.strip():
+            continue
+        prioridad = entero(str(d.get("PRIORITY", "3"))) or 0
+        quien = d.get("SYSLOG_IDENTIFIER") or d.get("_COMM") or "?"
+        mensajes.append((prioridad, recortar(f"{quien}: {msg.strip().splitlines()[0]}")))
+    if not mensajes:
+        return "OK", "Ningún mensaje de error en el diario de este arranque", []
+    distintos = unicos(m for _, m in mensajes)
+    graves = unicos([m for p, m in mensajes if p <= 2], 8)
+    detalle = (f"{len(mensajes)} mensajes de error en este arranque ({len(distintos)} distintos); los últimos: "
+               + " | ".join(distintos[-3:]))
+    if not graves:
+        # Casi todos los equipos tienen alguno (firmware, ACPI): es un dato, no un problema.
+        return "INFO", detalle, []
+    p = problema("sistema.mensajes_criticos", "JOURNAL CRITICAL", "WARNING", "JOURNAL", graves,
+                 ["Depende del mensaje: probablemente un fallo grave de hardware, del núcleo o de un servicio "
+                  "esencial (delante de cada línea va el programa que lo escribió)"],
+                 "Un mensaje crítico suele acompañar a un cierre, un bloqueo o a una pieza que deja de funcionar.",
+                 ["Detalle: journalctl -b -p crit",
+                  "Si se repite en cada arranque, adjunta el informe (jaime0-diagnostico --sudo) a una incidencia"])
+    return "WARNING", detalle, [p]
+
+
+def c_paquetes(ctx):
+    r = ctx.cmd(["dpkg", "--audit"], tiempo=20)
+    if r.motivo:
+        return "NO_DISPONIBLE", f"dpkg: {r.motivo}", []
+    texto = r.salida.rstrip()
+    if not texto.strip():
+        if r.ok:
+            return "OK", "dpkg --audit: ningún paquete roto ni a medio instalar", []
+        return "NO_DISPONIBLE", f"dpkg --audit: {r.explicar()}", []
+    lineas = texto.splitlines()
+    paquetes = unicos([l.split()[0] for l in lineas if l.startswith(" ") and l.strip()])
+    # Primera linea de cada bloque ("The following packages are only half configured, ...").
+    cabeceras = unicos([recortar(l) for n, l in enumerate(lineas)
+                        if l.strip() and not l.startswith(" ") and (n == 0 or not lineas[n - 1].strip())], 4)
+    detectado = [f"dpkg --audit: {len(paquetes)} paquetes afectados", *cabeceras,
+                 *(f"Paquete: {x}" for x in paquetes[:15])]
+    if len(paquetes) > 15:
+        detectado.append(f"... y {len(paquetes) - 15} más")
+    p = problema("sistema.paquetes_rotos", "PACKAGES", "ERROR", "DPKG", detectado,
+                 ["Probablemente una instalación o actualización que se cortó (apagado, falta de espacio o un "
+                  "error en el script de un paquete)"],
+                 "apt se niega a instalar o actualizar nada hasta que se arregle.",
+                 ["Termina la configuración pendiente (reparación de abajo o: sudo dpkg --configure -a)",
+                  "Si falla por dependencias: sudo apt -f install",
+                  "Si falla un paquete concreto, su mensaje de error dice por qué"],
+                 reparacion("dpkg-configurar", "Termina de configurar los paquetes que se quedaron a medias (lo "
+                            "mismo que pide apt). No borra nada; puede tardar y preguntar por archivos de "
+                            "configuración.", [["sudo", "/usr/bin/dpkg", "--configure", "-a"]], root=True))
+    return "ERROR", f"{len(paquetes)} paquetes rotos o a medio instalar", [p]
+
+
+def c_config_hyprland(ctx):
+    env = entorno_hyprland()
+    if env is None:
+        return "NO_DISPONIBLE", "No hay sesión de Hyprland accesible desde aquí", []
+    r = ctx.cmd(["hyprctl", "-j", "configerrors"], env=env, tiempo=5)
+    if not r.ok:
+        return "NO_DISPONIBLE", f"hyprctl configerrors: {r.explicar()}", []
+    datos = ultimo_json(r.salida)
+    if isinstance(datos, list):
+        errores = [str(x) for x in datos]
+    elif isinstance(datos, str):
+        errores = datos.splitlines()
+    else:
+        errores = r.salida.splitlines()
+    errores = [recortar(RE_ANSI.sub("", e)) for e in errores if e and e.strip()]
+    errores = [e for e in errores if e.lower() not in ("no errors", "ok")]
+    if not errores:
+        return "OK", "Hyprland no informa de errores en su configuración", []
+    p = problema("sistema.config_hyprland", "HYPRLAND CONFIG", "WARNING", "HYPRLAND", errores[:10],
+                 ["Probablemente un cambio reciente en ~/.config/hypr/ (hyprland.lua o atajos-usuario.lua) con un "
+                  "error de sintaxis o una opción que esta versión de Hyprland ya no admite"],
+                 "Hyprland se salta lo que tiene error: algunos atajos, reglas o ajustes no se aplican.",
+                 ["Corrige la línea que indica el error",
+                  "Para volver a la de fábrica, guarda la tuya y copia /etc/skel/.config/hypr/hyprland.lua",
+                  "Después recarga: hyprctl reload"],
+                 reparacion("hyprland-recargar", "Vuelve a cargar la configuración de Hyprland. Solo sirve si ya "
+                            "corregiste el archivo: no cambia nada en él.", [["hyprctl", "reload"]]))
+    return "WARNING", f"{len(errores)} errores en la configuración de Hyprland", [p]
+
+
+def quitar_comentarios_jsonc(texto):
+    """JSONC -> JSON: quita // y /* */ fuera de las cadenas (manteniendo los saltos de linea,
+    para que el numero de linea de un error siga valiendo) y las comas finales."""
+    salida, i, n, cadena = [], 0, len(texto), False
+    while i < n:
+        c = texto[i]
+        if cadena:
+            if c == "\\" and i + 1 < n:
+                salida.append(texto[i:i + 2])
+                i += 2
+                continue
+            cadena = c != '"'
+            salida.append(c)
+            i += 1
+        elif c == '"':
+            cadena = True
+            salida.append(c)
+            i += 1
+        elif texto.startswith("//", i):
+            j = texto.find("\n", i)
+            j = n if j < 0 else j
+            salida.append(" " * (j - i))
+            i = j
+        elif texto.startswith("/*", i):
+            j = texto.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            salida.append(re.sub(r"[^\n]", " ", texto[i:j]))
+            i = j
+        else:
+            salida.append(c)
+            i += 1
+    return re.sub(r",(\s*[}\]])", r" \1", "".join(salida))
+
+
+def c_config_waybar(ctx):
+    if es_root():
+        return "NO_DISPONIBLE", "Se ejecuta como root: la configuración de Waybar es de cada usuario", []
+    base = os.path.join(carpeta_config_usuario(), "waybar")
+    archivo = next((os.path.join(base, n) for n in ("config", "config.jsonc")
+                    if os.path.isfile(os.path.join(base, n))), None)
+    if archivo is None:
+        return "NO_APLICA", "Sin configuración propia de Waybar (usa la del sistema)", []
+    try:
+        with open(archivo, encoding="utf-8") as f:
+            texto = f.read(1 << 20)
+    except (OSError, UnicodeDecodeError) as e:
+        return "NO_DISPONIBLE", f"No se puede leer {archivo} ({type(e).__name__})", []
+    try:
+        json.loads(quitar_comentarios_jsonc(texto))
+        return "OK", f"{archivo}: JSON válido", []
+    except ValueError as e:
+        error = (f"{archivo}: JSON no válido en la línea {e.lineno}, columna {e.colno} ({e.msg})"
+                 if isinstance(e, json.JSONDecodeError) else f"{archivo}: JSON no válido")
+    fabrica = ruta("etc", "skel", ".config", "waybar", "config.jsonc")
+    rep = None
+    if os.path.isfile(fabrica):
+        rep = reparacion("waybar-restaurar", "Copia la configuración de fábrica de Waybar sobre la tuya. Antes se "
+                         "guarda una copia de la tuya junto a ella (….antes-de-reparar-FECHA).",
+                         [["cp", sin_raiz(fabrica), archivo]], copia=archivo)
+    p = problema("sistema.config_waybar", "WAYBAR CONFIG", "ERROR", "WAYBAR", [error],
+                 ["Probablemente una edición a mano reciente: una coma de más o de menos, una llave sin cerrar o "
+                  "unas comillas"],
+                 "Waybar no arranca o no muestra la barra.",
+                 ["Corrige la línea indicada", "O vuelve a la de fábrica (reparación de abajo; tu archivo se guarda)",
+                  "Después vuelve a abrir la barra: cierra la sesión y entra de nuevo"], rep)
+    return "ERROR", error, [p]
+
+
+def c_config_ajustes(ctx):
+    if es_root():
+        return "NO_DISPONIBLE", "Se ejecuta como root: los ajustes son de cada usuario", []
+    r = ctx.cmd([resolver("jaime0-ajustes"), "ver", "--json"], tiempo=8)
+    if not r.ok:
+        return "NO_DISPONIBLE", f"jaime0-ajustes: {r.explicar()}", []
+    doc = ultimo_json(r.salida)
+    if not isinstance(doc, dict):
+        return "NO_DISPONIBLE", "jaime0-ajustes ver --json no devolvió datos", []
+    avisos = [recortar(a) for a in doc.get("avisos") or [] if isinstance(a, str)]
+    if not avisos:
+        return "OK", "Ningún ajuste no válido en ~/.config/jaime0/ajustes", []
+    desconocidos = all("no es un ajuste de Jaime0" in a for a in avisos)
+    gravedad = "INFO" if desconocidos else "WARNING"
+    p = problema("sistema.config_ajustes", "SETTINGS", gravedad, "JAIME0-AJUSTES", avisos[:10],
+                 ["Probablemente un ajuste que ya no existe (de una versión anterior)" if desconocidos else
+                  "Probablemente un valor escrito a mano en ~/.config/jaime0/ajustes que no es válido"],
+                 "Se usa el valor predeterminado en su lugar: el cambio que querías no se aplica.",
+                 ["Mira tus ajustes: jaime0-ajustes ver",
+                  "Corrige el valor en ~/.config/jaime0/ajustes o vuelve al de fábrica: jaime0-ajustes restablecer CLAVE"])
+    return gravedad, f"{len(avisos)} avisos de jaime0-ajustes", [p]
+
+
+def objetivos_permisos():
+    """Lo que se ejecuta como root a peticion de un usuario: el ayudante de pkexec, su politica
+    de polkit y el paquete del servicio."""
+    l = []
+    libexec = ruta("usr", "local", "libexec")
+    ayudante = os.path.join(libexec, "jaime0-ufw-estado")
+    if existe(ayudante):
+        l += [libexec, ayudante]
+    l += sorted(glob.glob(ruta("usr", "share", "polkit-1", "actions", "es.jaime0.*")))
+    base = ruta("usr", "local", "lib", "jaime0")
+    if os.path.isdir(base):
+        l.append(base)
+        for carpeta, dirs, archivos in os.walk(base):
+            dirs.sort()
+            l += [os.path.join(carpeta, n) for n in dirs + sorted(archivos)]
+            if len(l) > 3000:
+                break
+    return l
+
+
+def c_permisos(ctx):
+    rutas = objetivos_permisos()
+    if not rutas:
+        return "NO_APLICA", "No están el ayudante, la política de polkit ni /usr/local/lib/jaime0", []
+    malos = []
+    for p in rutas:
+        try:
+            st = stat_ruta(p)
+        except OSError:
+            continue
+        enlace = stat.S_ISLNK(st.st_mode)
+        motivos = []
+        if st.st_uid != 0:
+            motivos.append(f"propietario uid {st.st_uid}")
+        if not enlace and st.st_mode & 0o002:
+            motivos.append("escribible por cualquiera")
+        if not enlace and st.st_mode & 0o020 and getattr(st, "st_gid", 0) != 0:
+            motivos.append(f"escribible por el grupo {st.st_gid}")
+        if motivos:
+            malos.append((sin_raiz(p), enlace, st, motivos))
+    if not malos:
+        return "OK", f"{len(rutas)} rutas de root y no escribibles por otros", []
+    detectado = [f"{p}: {', '.join(m)} (permisos {st.st_mode & 0o7777:04o})" for p, _, st, m in malos[:20]]
+    if len(malos) > 20:
+        detectado.append(f"... y {len(malos) - 20} más")
+    propietario = [p for p, _, st, _ in malos if st.st_uid != 0 or getattr(st, "st_gid", 0) != 0]
+    escritura = [p for p, enlace, st, _ in malos if not enlace and st.st_mode & 0o022]
+    ordenes = []
+    if propietario:
+        ordenes.append(["sudo", "/usr/bin/chown", "-h", "root:root", "--", *propietario])
+    if escritura:
+        ordenes.append(["sudo", "/usr/bin/chmod", "go-w", "--", *escritura])
+    p = problema("sistema.permisos", "PERMISSIONS", "CRITICAL", "PERMISSIONS", detectado,
+                 ["Probablemente una copia o un cambio manual (cp, chmod o chown) sobre archivos de Jaime0",
+                  "Posible manipulación: alguien sin privilegios pudo cambiar código que se ejecuta como root"],
+                 "Un programa sin privilegios podría modificar lo que Jaime0 ejecuta como root (pkexec, polkit): "
+                 "riesgo de escalada de privilegios.",
+                 ["Devuelve la propiedad a root y quita la escritura a otros (reparación de abajo)",
+                  "Después comprueba que su contenido es el de Jaime0: jaime0-update estado (conflictos)"],
+                 reparacion("permisos-root", "Pone como propietario a root y quita el permiso de escritura al grupo "
+                            "y a otros, solo en las rutas listadas. No cambia su contenido.", ordenes, root=True))
+    return "CRITICAL", f"{len(malos)} rutas con propietario o permisos inseguros", [p]
+
+
+def c_update(ctx):
+    r = ctx.cmd([resolver("jaime0-update"), "estado", "--json"], tiempo=10)
+    if r.motivo:
+        return "NO_DISPONIBLE", f"jaime0-update: {r.motivo}", []
+    doc = ultimo_json(r.salida)
+    if not isinstance(doc, dict) or doc.get("ok") is False:
+        return "NO_DISPONIBLE", "jaime0-update estado --json no devolvió datos", []
+    version = doc.get("version_instalada") or "desconocida"
+    if isinstance(doc.get("en_curso"), dict):
+        return "INFO", f"Jaime0 {version}: hay una operación de jaime0-update en curso", []
+    if doc.get("interrumpida"):
+        ultima = doc.get("ultima") if isinstance(doc.get("ultima"), dict) else {}
+        detectado = ["jaime0-update estado: hay una actualización interrumpida", f"Versión instalada: {version}"]
+        if ultima:
+            detectado.append(f"Última operación: {ultima.get('operacion')} {ultima.get('version') or ''} "
+                             f"({ultima.get('resultado')})")
+        p = problema("sistema.update_interrumpida", "UPDATE INTERRUPTED", "ERROR", "UPDATES", detectado,
+                     ["Probablemente se apagó el equipo, se cortó la red o se cerró la terminal mientras se instalaba "
+                      "una actualización de Jaime0"],
+                     "Algunos archivos de Jaime0 pueden haber quedado a medias entre dos versiones.",
+                     ["Deshaz lo que quedó a medias (reparación de abajo o: sudo /usr/local/bin/jaime0-update recuperar)",
+                      "Después vuelve a actualizar: jaime0-update"],
+                     reparacion("update-recuperar", "Deshace la actualización de Jaime0 que se cortó y deja los "
+                                "archivos como estaban antes (con la copia que hizo jaime0-update).",
+                                [["sudo", "/usr/local/bin/jaime0-update", "recuperar"]], root=True))
+        return "ERROR", "Hay una actualización de Jaime0 interrumpida", [p]
+    texto = f"Jaime0 {version}, canal {doc.get('canal') or '?'}"
+    if doc.get("nueva") and isinstance(doc.get("disponible"), dict):
+        texto += f"; hay una versión nueva ({doc['disponible'].get('version')}): ver UPDATES"
+    return "OK", texto, []
+
+
+def c_seguridad(ctx):
+    d = leer_json(os.path.join(dir_estado(), "actualizaciones.json"))
+    if not isinstance(d, dict) or not isinstance(d.get("paquetes"), int):
+        return ("NO_DISPONIBLE", "Aún no hay una comprobación de los paquetes de Debian (la hace «actualizaciones» "
+                "una vez al día)", [])
+    seguridad = [str(x) for x in d.get("seguridad") or [] if isinstance(x, str)]
+    cuando = f" (comprobado {d['comprobado']})" if d.get("comprobado") else ""
+    if not seguridad:
+        if d["paquetes"]:
+            return "INFO", f"{d['paquetes']} paquetes de Debian por actualizar, ninguno de seguridad{cuando}", []
+        return "OK", f"Paquetes de Debian al día{cuando}", []
+    lista = ", ".join(seguridad[:8]) + ("…" if len(seguridad) > 8 else "")
+    p = problema("sistema.seguridad_pendiente", "SECURITY UPDATES", "WARNING", "UPDATES",
+                 [f"{len(seguridad)} paquetes con correcciones de seguridad sin instalar: {lista}",
+                  f"Total por actualizar: {d['paquetes']}{cuando}"],
+                 ["Debian ha publicado correcciones que aún no están instaladas (probablemente desde la última vez "
+                  "que se actualizaron los paquetes)"],
+                 "Esos programas tienen fallos de seguridad conocidos hasta que se actualicen.",
+                 ["Instálalas desde UPDATES en el Control Center", "O en una terminal: sudo apt full-upgrade"])
+    return "WARNING", f"{len(seguridad)} actualizaciones de seguridad de Debian pendientes", [p]
+
+
+# ---------------------------------------------------------------------------
+# GRAPHICS
+# ---------------------------------------------------------------------------
+
+RE_KO_NVIDIA = re.compile(r"^nvidia(-current|-tesla(-\d+)?)?\.ko(\.(xz|zst|gz))?$")
+RE_DKMS = re.compile(r"^(?P<mod>[^/,\s]+)[/,]\s*(?P<ver>[^,:]+)(?:,\s*(?P<k>[^,:]+))?(?:,\s*(?P<arch>[^,:]+))?:\s*(?P<st>.+)$")
+RE_FALLO_NVIDIA = re.compile(r"(?i)(fail|error|reject|verification|required key|mismatch|unable|not found|"
+                             r"no such|taint)")
+MODULOS_GPU = ("i915", "xe", "amdgpu", "radeon", "nouveau", "nvidia", "nvidia_current", "nvidia_drm")
+CLAVE_MOK = ("var", "lib", "dkms", "mok.pub")
+
+
+def nucleos_instalados():
+    return [k for k in listar(ruta("lib", "modules")) if existe(ruta("boot", f"vmlinuz-{k}"))]
+
+
+def clave_nucleo(k):
+    return [int(x) for x in re.findall(r"\d+", k)]
+
+
+def modulo_nvidia_en(k):
+    for carpeta, dirs, archivos in os.walk(ruta("lib", "modules", k)):
+        dirs[:] = [d for d in dirs if d not in ("build", "source")]
+        for f in archivos:
+            if RE_KO_NVIDIA.match(f):
+                return os.path.join(carpeta, f)
+    return None
+
+
+def nvidia_cargado():
+    mods = modulos_cargados()
+    return "nvidia" in mods or "nvidia_current" in mods or existe(ruta("sys", "module", "nvidia"))
+
+
+def estado_dkms(ctx):
+    """({"lineas": [...], "nucleos": {k: [estados]}}, None) o (None, motivo)."""
+    r = ctx.cmd([resolver("dkms"), "status"], tiempo=10)
+    if r.motivo or (not r.ok and not r.salida.strip()):
+        return None, r.explicar()
+    lineas = [l.strip() for l in r.salida.splitlines() if "nvidia" in l.lower()]
+    nucleos = {}
+    for l in lineas:
+        m = RE_DKMS.match(l)
+        if m and m.group("k"):
+            nucleos.setdefault(m.group("k").strip(), []).append(m.group("st").strip())
+    return {"lineas": lineas, "nucleos": nucleos}, None
+
+
+def paquete_nvidia(ctx):
+    """True/False si el paquete del modulo esta instalado; None si no se sabe."""
+    r = ctx.cmd(["dpkg-query", "-W", "-f", "${Package} ${db:Status-Abbrev}\n", "nvidia-kernel-dkms",
+                 "nvidia-open-kernel-dkms"], tiempo=6)
+    if r.motivo:
+        return None
+    return any(len(l.split()) >= 2 and l.split()[1][1:2] == "i" for l in r.salida.splitlines())
+
+
+def estado_mok(ctx, clave):
+    """registrada, pendiente, sin_registrar o None (no se sabe)."""
+    r = ctx.cmd(["mokutil", "--test-key", clave], tiempo=5)
+    texto = (r.salida + r.error).lower()
+    if "already enrolled" in texto:
+        return "registrada"
+    if "not enrolled" in texto:
+        r2 = ctx.cmd(["mokutil", "--list-new"], tiempo=5)
+        return "pendiente" if r2.ok and r2.salida.strip() else "sin_registrar"
+    return None
+
+
+def reparacion_dkms(k, hay_clave):
+    if hay_clave:
+        return reparacion("nvidia-dkms-compilar", f"Compila e instala con DKMS el módulo de NVIDIA para el núcleo {k}, "
+                          "firmado con la clave que ya tienes (no hay que volver a registrarla). Tarda unos minutos; "
+                          "después hay que reiniciar.", [["sudo", "/usr/sbin/dkms", "autoinstall", "-k", k]], root=True)
+    if existe(ruta("usr", "local", "bin", "jaime0-nvidia")):
+        return reparacion("nvidia-recompilar", "Crea una clave de firma nueva y compila y firma el módulo de NVIDIA "
+                          "para todos los núcleos instalados (jaime0-nvidia recompilar). Con Secure Boot habrá que "
+                          "registrar la clave nueva (jaime0-nvidia registrar) y reiniciar.",
+                          [["sudo", "/usr/local/bin/jaime0-nvidia", "recompilar"]], root=True)
+    return None
+
+
+def c_nvidia(ctx):
+    if not existe(ruta("sys", "bus", "pci", "devices")):
+        return "NO_DISPONIBLE", "No se puede leer /sys/bus/pci/devices", []
+    todas = gpus()
+    nv = [g for g in todas if g["vendor"] == "0x10de"]
+    if not nv:
+        return "NO_APLICA", "No hay gráfica NVIDIA en este equipo", []
+    if existe(ruta("run", "live", "medium")):
+        return "INFO", "Sesión en vivo: el controlador de NVIDIA se prepara al instalar el sistema", []
+    k = leer(ruta("proc", "sys", "kernel", "osrelease"))
+    if not k:
+        return "NO_DISPONIBLE", "No se sabe qué núcleo está en uso (/proc/sys/kernel/osrelease)", []
+    unica = len(nv) == len(todas)
+    grav = "ERROR" if unica else "WARNING"
+    consecuencia = ("La NVIDIA es la única gráfica: el escritorio va sin aceleración (dibujo por software), lento y "
+                    "con más consumo." if unica else
+                    "La NVIDIA no se puede usar: prime-run y los programas que la piden fallan o van con la Intel.")
+    sb = secure_boot() if existe(ruta("sys", "firmware", "efi")) else "no aplica (BIOS)"
+    sb_activo = sb.startswith("activado")
+    clave = ruta(*CLAVE_MOK)
+    hay_clave = existe(clave)
+    nouveau = "nouveau" in modulos_cargados()
+    lineas_k, _ = ctx.kernel()
+    pistas = unicos([recortar(l) for l in lineas_k or [] if "nvidia" in l.lower() and RE_FALLO_NVIDIA.search(l)], 5)
+    paquete = paquete_nvidia(ctx)
+    problemas = []
+
+    def p_nouveau():
+        return problema("graficos.nvidia_nouveau", "NVIDIA NOUVEAU", "WARNING", "NVIDIA",
+                        ["Módulo nouveau cargado (/proc/modules)", f"Módulo nvidia cargado: {'sí' if nvidia_cargado() else 'no'}"],
+                        ["Probablemente falta la lista negra de nouveau o el initramfs no se regeneró tras instalar el "
+                         "controlador de NVIDIA",
+                         "Posiblemente se arrancó un núcleo sin el módulo de NVIDIA y nouveau ocupó la tarjeta"],
+                        "nouveau y el controlador de NVIDIA se pisan: la NVIDIA no funciona bien o no funciona.",
+                        ["Regenera el initramfs: sudo /usr/sbin/update-initramfs -u y reinicia",
+                         "Comprueba que /etc/modprobe.d tiene «blacklist nouveau» (lo pone el paquete de NVIDIA)"])
+
+    if nvidia_cargado():
+        version = leer(ruta("sys", "module", "nvidia", "version")) or "?"
+        estado, detalle = "OK", f"Módulo nvidia {version} cargado (núcleo {k})"
+        if nouveau:
+            problemas.append(p_nouveau())
+        tiene_modulo = True
+    else:
+        detalle = f"El módulo de NVIDIA no está cargado (núcleo {k})"
+        estado = grav
+        ko = modulo_nvidia_en(k)
+        dk, dk_error = estado_dkms(ctx)
+        instalado_dkms = any(s.startswith("installed") for s in ((dk or {}).get("nucleos", {}).get(k) or []))
+        tiene_modulo = bool(ko or instalado_dkms)
+        cabeceras = existe(ruta("lib", "modules", k, "build"))
+        if not tiene_modulo:
+            otros = [x for x in nucleos_instalados() if x != k and modulo_nvidia_en(x)]
+            detectado = [f"Núcleo en uso: {k}", "Módulo nvidia cargado: no",
+                         f"Módulo de NVIDIA para {k}: no está en /lib/modules/{k}"]
+            if dk is None:
+                detectado.append(f"dkms: {dk_error}")
+            else:
+                detectado += [f"dkms status: {l}" for l in dk["lineas"][:6]] or ["dkms status: ninguna entrada de NVIDIA"]
+            detectado.append(f"Cabeceras del núcleo (/lib/modules/{k}/build): {'instaladas' if cabeceras else 'no instaladas'}")
+            if otros:
+                detectado.append(f"Núcleos instalados que sí tienen el módulo: {', '.join(otros)}")
+            detectado += pistas
+            causas = []
+            if paquete is False:
+                causas.append("Posiblemente el controlador de NVIDIA (paquete nvidia-kernel-dkms) no está instalado")
+            if not cabeceras:
+                causas.append(f"Probablemente faltan las cabeceras de este núcleo (linux-headers-{k}): sin ellas DKMS no "
+                              "puede compilar el módulo")
+            if otros:
+                causas.append("Probablemente se actualizó el núcleo y el módulo no se construyó para el nuevo")
+            causas += ["Posible fallo de compilación de DKMS para este núcleo",
+                       "Posible incompatibilidad del controlador de NVIDIA con esta versión del núcleo (núcleo más "
+                       "nuevo que el controlador)"]
+            recomendacion = []
+            rep = None
+            if cabeceras and paquete is not False and dk is not None:
+                rep = reparacion_dkms(k, hay_clave)
+                recomendacion.append("Compila el módulo para este núcleo (reparación de abajo) y reinicia")
+            if not cabeceras:
+                recomendacion.append(f"Instala las cabeceras: sudo apt install linux-headers-{k} (DKMS compila el módulo "
+                                     "al instalarlas) y reinicia")
+            if paquete is False:
+                recomendacion.append("Instala el controlador de NVIDIA (ver docs/nvidia.md)")
+            recomendacion.append("Si la compilación falla, el motivo está en /var/lib/dkms/nvidia-current/VERSIÓN/build/make.log")
+            if otros:
+                recomendacion.append("Mientras tanto puedes arrancar un núcleo que sí lo tiene: GRUB → Opciones avanzadas")
+            recomendacion.append("Resumen del estado: jaime0-nvidia")
+            problemas.append(problema("graficos.nvidia_modulo_kernel", "NVIDIA DRIVER", grav, "NVIDIA", detectado, causas,
+                                      "El módulo de NVIDIA no está disponible para el núcleo actual. " + consecuencia,
+                                      recomendacion, rep))
+        else:
+            mok = estado_mok(ctx, clave) if sb_activo and hay_clave else None
+            base_detectado = [f"Núcleo en uso: {k}", "Módulo nvidia cargado: no",
+                              f"Módulo disponible: {sin_raiz(ko) if ko else 'sí (dkms: installed)'}", f"Secure Boot: {sb}"]
+            if sb_activo and not hay_clave:
+                problemas.append(problema(
+                    "graficos.nvidia_clave", "NVIDIA SIGNING KEY", grav, "NVIDIA",
+                    base_detectado + [f"Clave de firma {sin_raiz(clave)}: no existe"] + pistas,
+                    ["Probablemente la clave de firma propia de esta instalación no se creó o se borró (la ISO trae el "
+                     "módulo sin clave)"],
+                    "Con Secure Boot el firmware no deja cargar el módulo sin una firma registrada. " + consecuencia,
+                    ["Crea la clave y firma el módulo (reparación de abajo)",
+                     "Después regístrala una vez: jaime0-nvidia registrar, y reinicia"],
+                    reparacion_dkms(k, False)))
+            elif sb_activo and mok in ("pendiente", "sin_registrar"):
+                pendiente = mok == "pendiente"
+                problemas.append(problema(
+                    "graficos.nvidia_mok", "NVIDIA SECURE BOOT", grav, "NVIDIA",
+                    base_detectado + [f"Clave {sin_raiz(clave)}: " + ("pendiente de registrar (falta el paso del "
+                                      "reinicio)" if pendiente else "no registrada en el firmware")] + pistas,
+                    ["Probablemente no se completó el paso de la pantalla azul (MokManager) al reiniciar" if pendiente else
+                     "Probablemente la clave del módulo aún no se ha registrado (se hace una vez)"],
+                    "Con Secure Boot el firmware no deja cargar el módulo firmado con una clave sin registrar. " + consecuencia,
+                    (["Reinicia y en la pantalla azul elige Enroll MOK > Continue > Yes, escribe la clave y Reboot"]
+                     if pendiente else ["Regístrala una vez: jaime0-nvidia registrar",
+                                        "Reinicia y en la pantalla azul elige Enroll MOK > Continue > Yes"])))
+            elif nouveau:
+                problemas.append(p_nouveau())
+            else:
+                cmdline = (leer(ruta("proc", "cmdline")) or "").split()
+                nombre_mod = re.sub(r"\.ko.*$", "", os.path.basename(ko)) if ko else "nvidia"
+                causas = ["Posible error al cargarlo: mira las líneas del registro del núcleo"]
+                if "nomodeset" in cmdline:
+                    causas.insert(0, "Probablemente se arrancó en modo seguro (nomodeset)")
+                if sb_activo and mok is None:
+                    causas.append("Posible firma no aceptada por Secure Boot (no se pudo comprobar la clave con mokutil)")
+                problemas.append(problema(
+                    "graficos.nvidia_no_cargado", "NVIDIA DRIVER", grav, "NVIDIA",
+                    base_detectado + (pistas or ["Registro del núcleo: sin líneas de NVIDIA visibles"
+                                                 + (" (necesita --sudo)" if lineas_k is None else "")]),
+                    causas, consecuencia,
+                    ["Prueba a cargarlo (reparación de abajo) y mira el error si falla",
+                     "Detalle: journalctl -b -k | grep -i nvidia", "Resumen del estado: jaime0-nvidia"],
+                    reparacion("nvidia-cargar", f"Carga el módulo de NVIDIA ({nombre_mod}) ya instalado. No compila ni "
+                               "cambia nada en el disco.", [["sudo", "/usr/sbin/modprobe", nombre_mod]], root=True)))
+    if tiene_modulo and paquete is not False:
+        nuevos = [x for x in nucleos_instalados() if clave_nucleo(x) > clave_nucleo(k) and not modulo_nvidia_en(x)]
+        if nuevos:
+            x = max(nuevos, key=clave_nucleo)
+            cab = existe(ruta("lib", "modules", x, "build"))
+            problemas.append(problema(
+                "graficos.nvidia_nucleo_nuevo", "NVIDIA NEXT KERNEL", "WARNING", "NVIDIA",
+                [f"Núcleo instalado más nuevo que el actual: {x}", f"Módulo de NVIDIA para {x}: no está",
+                 f"Cabeceras de {x}: {'instaladas' if cab else 'no instaladas'}"],
+                ["Probablemente faltan sus cabeceras (linux-headers-" + x + ")" if not cab else
+                 "Posible fallo de compilación de DKMS para ese núcleo",
+                 "Posible incompatibilidad del controlador de NVIDIA con ese núcleo"],
+                f"Al arrancar {x} (el predeterminado de GRUB), la NVIDIA no funcionará.",
+                ([] if cab else [f"Instala sus cabeceras: sudo apt install linux-headers-{x}"])
+                + ["Compila el módulo para ese núcleo antes de reiniciar (reparación de abajo)" if cab else
+                   "DKMS compila el módulo al instalar las cabeceras"],
+                reparacion_dkms(x, hay_clave) if cab and hay_clave else None))
+    return estado, detalle, problemas
+
+
+def c_sesion(ctx):
+    procesos = procesos_en_marcha()
+    env = entorno_hyprland()
+    tipo = os.environ.get("XDG_SESSION_TYPE") or "-"
+    if env is None:
+        if "Hyprland" in procesos:
+            return "INFO", "Hyprland está en marcha, pero su socket no es accesible desde aquí (¿otro usuario?)", []
+        return "NO_DISPONIBLE", "No hay sesión de Hyprland (se ejecuta desde una consola o por SSH)", []
+    r = ctx.cmd(["hyprctl", "version"], env=env, tiempo=5)
+    if r.ok and r.salida.strip():
+        return "OK", f"{recortar(r.salida.strip().splitlines()[0], 100)}; sesión {tipo}", []
+    if "Hyprland" not in procesos:
+        return "NO_DISPONIBLE", "Hyprland no está en marcha (queda un socket de una sesión anterior)", []
+    p = problema("graficos.hyprctl", "HYPRLAND IPC", "WARNING", "HYPRLAND",
+                 [f"Proceso Hyprland: en marcha", f"hyprctl version: {r.explicar()}"],
+                 ["Posiblemente Hyprland está bloqueado o muy ocupado",
+                  "Posible socket de otra sesión (si hay varias abiertas)"],
+                 "La barra, el Control Center y los atajos que usan hyprctl no responden.",
+                 ["Espera unos segundos y vuelve a comprobar", "Si el escritorio no responde, cierra la sesión (SUPER + M "
+                  "o desde una consola: loginctl terminate-user $USER)"])
+    return "WARNING", f"hyprctl no responde ({r.explicar()})", [p]
+
+
+def c_monitores(ctx):
+    env = entorno_hyprland()
+    if env is None:
+        return "NO_DISPONIBLE", "No hay sesión de Hyprland accesible", []
+    r = ctx.cmd(["hyprctl", "monitors", "all", "-j"], env=env, tiempo=5)
+    monitores = ultimo_json(r.salida) if r.ok else None
+    if not isinstance(monitores, list):
+        return "NO_DISPONIBLE", f"hyprctl monitors: {r.explicar() if not r.ok else 'respuesta no válida'}", []
+    activos = [m for m in monitores if isinstance(m, dict) and not m.get("disabled")]
+    desactivados = [str(m.get("name")) for m in monitores if isinstance(m, dict) and m.get("disabled")]
+    nombres = {m.get("name") for m in monitores if isinstance(m, dict)}
+    conectados = []
+    for c in listar(ruta("sys", "class", "drm")):
+        m = re.fullmatch(r"card\d+-(.+)", c)
+        if m and not m.group(1).startswith("Writeback") and leer(ruta("sys", "class", "drm", c, "status")) == "connected":
+            conectados.append(m.group(1))
+    sin_usar = [c for c in conectados if c not in nombres]
+    partes = [f"{len(activos)} activos: " + ", ".join(
+        f"{m.get('name')} {m.get('width')}x{m.get('height')} a {float(m.get('refreshRate') or 0):.0f} Hz" for m in activos)]
+    if desactivados:
+        partes.append(f"desactivados: {', '.join(desactivados)} (puede ser a propósito: tapa cerrada o configuración)")
+    if sin_usar:
+        partes.append(f"conectados pero sin usar por Hyprland: {', '.join(sin_usar)} (en este portátil, la salida HDMI "
+                      "depende de la NVIDIA)")
+    return ("INFO" if desactivados or sin_usar else "OK"), "; ".join(partes), []
+
+
+def c_aceleracion(ctx):
+    v = virtualizacion(ctx)
+    if v:
+        return ("INFO", f"Máquina virtual ({v}): Jaime0 dibuja por software (LIBGL_ALWAYS_SOFTWARE); es lo esperado "
+                "y no es un problema", [])
+    if "nomodeset" in (leer(ruta("proc", "cmdline")) or "").split():
+        p = problema("graficos.modo_seguro", "GRAPHICS SAFE MODE", "WARNING", "GRAPHICS",
+                     ["/proc/cmdline contiene nomodeset"],
+                     ["Probablemente se arrancó con la entrada «Modo seguro» de GRUB (o se añadió nomodeset a mano), "
+                      "quizá porque el arranque normal falló"],
+                     "Sin aceleración: todo se dibuja con la CPU, más lento y con más consumo; la NVIDIA no funciona.",
+                     ["Reinicia con la entrada normal de GRUB",
+                      "Si el arranque normal falla, ejecuta este diagnóstico desde aquí y revisa GRAPHICS"])
+        return "WARNING", "Arrancado con nomodeset (modo seguro): sin aceleración", [p]
+    g = gpus()
+    if not g:
+        return "NO_DISPONIBLE", "No se ve ninguna gráfica PCI en /sys/bus/pci", []
+    cargados = [m for m in MODULOS_GPU if modulo_presente(m)]
+    if cargados:
+        return "OK", f"Controladores de gráfica cargados: {', '.join(cargados)}", []
+    lineas, _ = ctx.kernel()
+    pistas = unicos([recortar(l) for l in lineas or [] if RE_FIRMWARE.search(l)
+                     and re.search(r"(?i)i915|xe|amdgpu|radeon|nouveau|drm", l)], 5)
+    p = problema("graficos.sin_aceleracion", "GRAPHICS DRIVER", "WARNING", "GRAPHICS",
+                 [f"Gráficas: {'; '.join(nombre_pci(x) for x in g)}",
+                  "Ningún controlador de gráfica cargado (i915, xe, amdgpu, nouveau, nvidia...)", *pistas],
+                 ["Probablemente el controlador no se cargó: firmware que falta o un núcleo sin soporte para este chip"],
+                 "Sin aceleración: todo se dibuja con la CPU, más lento y con más consumo.",
+                 ["Detalle: journalctl -b -k | grep -i -e drm -e firmware",
+                  "Instala el firmware que falte (firmware-misc-nonfree, firmware-amd-graphics) y reinicia"])
+    return "WARNING", "Ningún controlador de gráfica cargado", [p]
+
+
+# ---------------------------------------------------------------------------
+# CONNECTIVITY
+# ---------------------------------------------------------------------------
+
+def c_networkmanager(ctx):
+    estado, detalle, problemas = comprobar_servicio(
+        ctx, "NetworkManager.service", "conectividad.networkmanager", "NETWORKMANAGER", "NETWORK", "ERROR",
+        "Sin NetworkManager no hay Wi-Fi ni red cableada gestionada, y el indicador de red de la barra no funciona.")
+    if estado == "NO_DISPONIBLE" and detalle.endswith("no está instalado"):
+        return "NO_APLICA", "NetworkManager no está instalado (la red la gestiona otro programa)", []
+    return estado, detalle, problemas
+
+
+def c_conectividad(ctx):
+    r = ctx.cmd(["nmcli", "-t", "-f", "STATE,CONNECTIVITY", "general"], tiempo=5)
+    if not r.ok or not r.salida.strip():
+        return "NO_DISPONIBLE", f"nmcli: {r.explicar()}", []
+    estado, _, conectividad = r.salida.strip().splitlines()[0].rpartition(":")
+    if estado == "asleep":
+        return "INFO", "Red desactivada (modo avión o «nmcli networking off»)", []
+    if estado in ("disconnected", "disconnecting", "connecting"):
+        return "INFO", f"Sin conexión activa ({estado})", []
+    tipos = ctx.cmd(["nmcli", "-t", "-f", "TYPE,DEVICE", "connection", "show", "--active"], tiempo=5)
+    activas = [l.replace("802-11-wireless", "wifi").replace("802-3-ethernet", "ethernet").replace(":", " en ")
+               for l in tipos.salida.splitlines() if l.strip() and not l.startswith(("loopback", "bridge"))]
+    texto_activas = f" ({', '.join(activas)})" if activas else ""
+    if conectividad == "full":
+        return "OK", f"Conectado a Internet{texto_activas}", []
+    if conectividad == "unknown":
+        return "OK", f"Conectado{texto_activas}; la comprobación de Internet de NetworkManager está desactivada", []
+    if conectividad == "portal":
+        p = problema("conectividad.portal", "NETWORK CAPTIVE PORTAL", "INFO", "NETWORK",
+                     [f"nmcli general: {estado}, conectividad portal", *(f"Conexión activa: {a}" for a in activas)],
+                     ["Probablemente es una red con página de acceso (hotel, tren, biblioteca)"],
+                     "No hay Internet hasta que inicies sesión en esa página.",
+                     ["Abre el navegador: debería aparecer la página de acceso de la red"])
+        return "INFO", "Red con portal de acceso: falta iniciar sesión", [p]
+    p = problema("conectividad.limitada", "NETWORK LIMITED", "WARNING", "NETWORK",
+                 [f"nmcli general: {estado}, conectividad {conectividad}", *(f"Conexión activa: {a}" for a in activas)],
+                 ["Probablemente el router no tiene salida a Internet o el DNS no responde",
+                  "Posible red con página de acceso que NetworkManager no ha reconocido"],
+                 "Hay red local pero no Internet: navegador, actualizaciones y correo no funcionan.",
+                 ["Comprueba si otro dispositivo de la misma red tiene Internet",
+                  "Desconecta y vuelve a conectar la red (o reinicia el router)",
+                  "Detalle: nmcli general; nmcli device show"])
+    return "WARNING", f"Conectividad {conectividad}{texto_activas}", [p]
+
+
+def interfaces_wifi():
+    return [i for i in listar(ruta("sys", "class", "net"))
+            if existe(ruta("sys", "class", "net", i, "wireless")) or existe(ruta("sys", "class", "net", i, "phy80211"))]
+
+
+def c_wifi(ctx):
+    if not existe(ruta("sys", "class", "net")):
+        return "NO_DISPONIBLE", "No se puede leer /sys/class/net", []
+    interfaces = interfaces_wifi()
+    if not interfaces:
+        chips = [d for d in dispositivos_pci() if d["clase"].startswith("0x0280")]
+        if not chips or virtualizacion(ctx):
+            return "NO_APLICA", "Este equipo no tiene Wi-Fi", []
+        lineas, _ = ctx.kernel()
+        pistas = unicos([recortar(l) for l in lineas or [] if RE_FIRMWARE.search(l) or "iwlwifi" in l.lower()], 5)
+        if lineas is None:
+            pistas = ["Registro del núcleo: necesita --sudo para ver la causa"]
+        p = problema("conectividad.wifi_sin_interfaz", "WIFI DRIVER", "WARNING", "WIFI",
+                     [*(f"Chip inalámbrico PCI: {nombre_pci(c)}" for c in chips),
+                      "Interfaces Wi-Fi en /sys/class/net: ninguna", *pistas],
+                     ["Probablemente falta el firmware del chip (en Intel, el paquete firmware-iwlwifi)",
+                      "Posible controlador que no se cargó o que no admite este chip con este núcleo"],
+                     "No hay Wi-Fi.",
+                     ["Instala el firmware (sudo apt install firmware-iwlwifi en Intel, o el que nombre el registro) y "
+                      "reinicia", "Detalle: journalctl -b -k | grep -i -e firmware -e iwlwifi"])
+        return "WARNING", "Hay un chip Wi-Fi pero ninguna interfaz Wi-Fi", [p]
+    rf = rfkill("wlan")
+    estado_ifs = ", ".join(f"{i} ({leer(ruta('sys', 'class', 'net', i, 'operstate')) or '?'})" for i in interfaces)
+    if any(r["hard"] for r in rf):
+        p = problema("conectividad.wifi_bloqueo_hardware", "WIFI BLOCKED", "WARNING", "WIFI",
+                     [f"Interfaces: {estado_ifs}", "rfkill wlan: bloqueado por hardware"],
+                     ["Probablemente la tecla de modo avión o de Wi-Fi del teclado (o un interruptor del portátil)",
+                      "Posible ajuste de la BIOS que apaga la radio"],
+                     "No hay Wi-Fi hasta desbloquearlo: ningún programa puede encenderlo.",
+                     ["Pulsa la tecla de modo avión o Wi-Fi del teclado", "Revisa en la BIOS que la red inalámbrica esté activada"])
+        return "WARNING", f"{estado_ifs}; bloqueado por hardware", [p]
+    if any(r["soft"] for r in rf):
+        p = problema("conectividad.wifi_bloqueo_software", "WIFI OFF", "INFO", "WIFI",
+                     [f"Interfaces: {estado_ifs}", "rfkill wlan: bloqueado por software"],
+                     ["Probablemente se apagó a propósito (modo avión o desde la barra)"],
+                     "No hay Wi-Fi mientras siga apagado.",
+                     ["Enciéndelo desde la barra o con la reparación de abajo"],
+                     reparacion("wifi-encender", "Enciende la radio Wi-Fi (lo mismo que el interruptor de la barra).",
+                                [["nmcli", "radio", "wifi", "on"]]))
+        return "INFO", f"{estado_ifs}; apagado (bloqueo por software)", [p]
+    return "OK", estado_ifs, []
+
+
+def interfaces_usb_bluetooth():
+    base = ruta("sys", "bus", "usb", "devices")
+    return [d for d in listar(base) if ":" in d
+            and (leer(os.path.join(base, d, "bInterfaceClass")) or "").lower() == "e0"
+            and leer(os.path.join(base, d, "bInterfaceSubClass")) == "01"
+            and leer(os.path.join(base, d, "bInterfaceProtocol")) == "01"]
+
+
+def c_bluetooth(ctx):
+    adaptadores = [a for a in listar(ruta("sys", "class", "bluetooth")) if re.fullmatch(r"hci\d+", a)]
+    if not adaptadores:
+        if interfaces_usb_bluetooth() and not virtualizacion(ctx):
+            lineas, _ = ctx.kernel()
+            pistas = unicos([recortar(l) for l in lineas or [] if re.search(r"(?i)bluetooth|btusb|btintel|btrtl", l)
+                             and (RE_FIRMWARE.search(l) or RE_FALLO.search(l))], 5)
+            p = problema("conectividad.bluetooth_sin_adaptador", "BLUETOOTH ADAPTER", "WARNING", "BLUETOOTH",
+                         ["Dispositivo USB de Bluetooth presente", "Adaptadores en /sys/class/bluetooth: ninguno", *pistas],
+                         ["Probablemente falta el firmware del adaptador (en Intel va en firmware-iwlwifi)",
+                          "Posible controlador btusb que no se cargó"],
+                         "No hay Bluetooth.",
+                         ["Instala el firmware que nombre el registro y reinicia",
+                          "Detalle: journalctl -b -k | grep -i bluetooth"])
+            return "WARNING", "Hay un dispositivo Bluetooth pero ningún adaptador", [p]
+        return "NO_APLICA", "Este equipo no tiene Bluetooth", []
+    problemas = []
+    rf = rfkill("bluetooth")
+    partes = [", ".join(adaptadores)]
+    if any(r["hard"] for r in rf):
+        partes.append("bloqueado por hardware")
+        problemas.append(problema(
+            "conectividad.bluetooth_bloqueo_hardware", "BLUETOOTH BLOCKED", "WARNING", "BLUETOOTH",
+            ["rfkill bluetooth: bloqueado por hardware"],
+            ["Probablemente la tecla de modo avión del teclado o un ajuste de la BIOS"],
+            "No hay Bluetooth hasta desbloquearlo.",
+            ["Pulsa la tecla de modo avión del teclado", "Revisa en la BIOS que el Bluetooth esté activado"]))
+    elif any(r["soft"] for r in rf):
+        partes.append("apagado (bloqueo por software)")
+        problemas.append(problema(
+            "conectividad.bluetooth_bloqueo_software", "BLUETOOTH OFF", "INFO", "BLUETOOTH",
+            ["rfkill bluetooth: bloqueado por software"],
+            ["Probablemente se apagó a propósito (modo avión o desde la barra)"],
+            "No hay Bluetooth mientras siga apagado.",
+            ["Enciéndelo con la reparación de abajo o desde la barra"],
+            reparacion("bluetooth-desbloquear", "Quita el bloqueo por software de la radio Bluetooth.",
+                       [["/usr/sbin/rfkill", "unblock", "bluetooth"]])))
+    estado, detalle, p_serv = comprobar_servicio(
+        ctx, "bluetooth.service", "conectividad.bluetooth_servicio", "BLUETOOTH SERVICE", "BLUETOOTH", "WARNING",
+        "Sin bluetooth.service no se pueden emparejar ni usar dispositivos Bluetooth.")
+    partes.append(detalle)
+    problemas += p_serv
+    if estado == "OK" and not rf_bloqueado(rf):
+        r = ctx.cmd(["bluetoothctl", "show"], tiempo=4)
+        if r.ok and re.search(r"(?m)^\s*Powered:\s*no", r.salida):
+            partes.append("apagado (se enciende desde la barra o con: bluetoothctl power on)")
+    # anotar() sube el estado a la gravedad del peor problema.
+    return ("OK" if estado == "OK" and not problemas else "INFO"), "; ".join(partes), problemas
+
+
+def rf_bloqueado(rf):
+    return any(r["soft"] or r["hard"] for r in rf)
+
+
+# ---------------------------------------------------------------------------
+# POWER
+# ---------------------------------------------------------------------------
+
+CAUSAS_DEGRADADO = {
+    "high-operating-temperature": "El equipo informa de temperatura alta y limita el rendimiento (probablemente "
+                                  "ventilación tapada o mucha carga seguida)",
+    "lap-detected": "Probablemente el equipo detecta que está sobre las piernas y limita el rendimiento por seguridad",
+}
+
+
+def c_perfiles(ctx):
+    estado, detalle, problemas = comprobar_servicio(
+        ctx, "power-profiles-daemon.service", "energia.perfiles_servicio", "POWER PROFILES", "POWER PROFILES",
+        "WARNING", "Sin power-profiles-daemon no se puede cambiar el perfil de energía (ni desde la barra ni desde "
+                   "los perfiles de Jaime0).", inactivo_es_problema=False)
+    if estado != "OK":
+        return estado, detalle, problemas
+    r = ctx.cmd(["powerprofilesctl"], tiempo=5)
+    if not r.ok:
+        return "NO_DISPONIBLE", f"powerprofilesctl: {r.explicar()}", []
+    activo = re.search(r"(?m)^\*\s*([\w-]+):", r.salida)
+    degradado = re.search(r"Degraded:\s*yes\s*\(([^)]*)\)", r.salida)
+    texto = f"Perfil activo: {activo.group(1) if activo else '?'}"
+    if not degradado:
+        return "OK", texto, []
+    motivo = degradado.group(1).strip()
+    p = problema("energia.perfil_limitado", "POWER PROFILE LIMITED", "INFO", "POWER PROFILES",
+                 [f"powerprofilesctl: perfil de rendimiento limitado ({motivo})"],
+                 [CAUSAS_DEGRADADO.get(motivo, f"Posiblemente el firmware limita el rendimiento ({motivo})")],
+                 "El perfil de rendimiento no da todo lo que puede mientras dure.",
+                 ["Deja el equipo sobre una superficie dura y despejada", "Mira la temperatura en MONITOR"])
+    return "INFO", f"{texto}; rendimiento limitado ({motivo})", [p]
+
+
+ESTADOS_BATERIA = {"Charging": "cargando", "Discharging": "descargando", "Full": "llena",
+                   "Not charging": "sin cargar (puede ser un límite de carga)", "Unknown": "desconocido"}
+
+
+def c_cargador(ctx):
+    bats = baterias()
+    if not bats:
+        return "NO_APLICA", "Sin batería (equipo de sobremesa o máquina virtual)", []
+    fuentes = []
+    for f in listar(ruta("sys", "class", "power_supply")):
+        b = ruta("sys", "class", "power_supply", f)
+        if leer(os.path.join(b, "type")) in ("Mains", "USB", "USB_C") and leer(os.path.join(b, "online")) in ("0", "1"):
+            fuentes.append(leer(os.path.join(b, "online")) == "1")
+    partes = [("Corriente: conectada" if any(fuentes) else "Corriente: desconectada") if fuentes
+              else "Cargador: no aparece en /sys/class/power_supply"]
+    for nombre, b in bats:
+        cap = leer(os.path.join(b, "capacity"))
+        st = leer(os.path.join(b, "status")) or "Unknown"
+        partes.append(f"{nombre} {cap or '?'} %, {ESTADOS_BATERIA.get(st, st)}")
+    return "OK", "; ".join(partes), []
+
+
+RE_SUSPENSION = re.compile(r"PM: (suspend|hibernation) entry")
+RE_SUSPENSION_FALLO = re.compile(r"PM: Device \S+ failed to (suspend|resume)|PM: dpm_run_callback\(\).*returns -\d+|"
+                                 r"Freezing of tasks failed|PM: (suspend|hibernation) .*failed|"
+                                 r"PM: failed to (suspend|resume)")
+RE_DESPERTAR_TEMPRANO = re.compile(r"PM: Some devices failed to suspend, or early wake event detected")
+
+
+def c_suspension(ctx):
+    lineas, origen = ctx.kernel()
+    if lineas is None:
+        return "NO_DISPONIBLE", ("El registro del núcleo no es legible: no se puede saber si hubo fallos al suspender"
+                                 + ("; ejecuta: jaime0-diagnostico comprobar --sudo" if not ctx.sudo else "")), []
+    veces = sum(1 for l in lineas if RE_SUSPENSION.search(l))
+    fallos = unicos([recortar(l) for l in lineas if RE_SUSPENSION_FALLO.search(l)], 8)
+    tempranos = sum(1 for l in lineas if RE_DESPERTAR_TEMPRANO.search(l))
+    if not veces and not fallos:
+        return "OK", "Sin suspensiones en este arranque", []
+    texto = f"{veces} suspensiones en este arranque"
+    if not fallos:
+        if tempranos:
+            return "INFO", f"{texto}; {tempranos} se cancelaron por un despertar temprano (una tecla o el ratón)", []
+        return "OK", f"{texto}, sin fallos", []
+    nvidia = any("nvidia" in l.lower() for l in fallos)
+    causas = ["Probablemente un dispositivo o controlador que no admite bien la suspensión (es el que aparece en "
+              "las líneas)"]
+    if nvidia:
+        causas.insert(0, "Probablemente el controlador de NVIDIA (aparece en las líneas)")
+    p = problema("energia.suspension", "SUSPEND", "WARNING", "SUSPEND", [f"Suspensiones en este arranque: {veces}", *fallos],
+                 causas, "El equipo puede no suspenderse (y seguir gastando batería) o volver con algo sin funcionar.",
+                 ["Detalle: journalctl -b -k | grep -i 'PM:'",
+                  "Si se repite, adjunta el informe (jaime0-diagnostico --sudo) a una incidencia"])
+    return "WARNING", f"{texto}; con fallos", [p]
+
+
+# ---------------------------------------------------------------------------
+# Ejecucion, documento JSON e historial
+# ---------------------------------------------------------------------------
+
+COMPROBACIONES = (
+    ("hardware.sensores", "Sensores de temperatura", c_sensores),
+    ("hardware.graficas", "Tarjetas gráficas", c_gpus),
+    ("hardware.memoria", "Memoria (cierres por falta de memoria)", c_memoria),
+    ("hardware.raiz", "Partición raíz", c_raiz),
+    ("hardware.smart", "Salud de los discos (SMART)", c_smart),
+    ("hardware.bateria", "Salud de la batería", c_bateria),
+    ("sistema.unidades_sistema", "Unidades del sistema fallidas", c_unidades_sistema),
+    ("sistema.unidades_usuario", "Unidades de usuario fallidas", c_unidades_usuario),
+    ("sistema.errores_arranque", "Errores del arranque actual", c_errores_arranque),
+    ("sistema.paquetes", "Paquetes (dpkg --audit)", c_paquetes),
+    ("sistema.config_hyprland", "Configuración de Hyprland", c_config_hyprland),
+    ("sistema.config_waybar", "Configuración de Waybar", c_config_waybar),
+    ("sistema.config_ajustes", "Ajustes de Jaime0", c_config_ajustes),
+    ("sistema.permisos", "Permisos de lo que se ejecuta como root", c_permisos),
+    ("sistema.actualizacion", "Actualizaciones de Jaime0", c_update),
+    ("sistema.seguridad", "Actualizaciones de seguridad de Debian", c_seguridad),
+    ("graficos.nvidia", "Controlador NVIDIA", c_nvidia),
+    ("graficos.sesion", "Sesión Wayland / Hyprland", c_sesion),
+    ("graficos.monitores", "Salidas de vídeo", c_monitores),
+    ("graficos.aceleracion", "Aceleración gráfica", c_aceleracion),
+    ("conectividad.networkmanager", "NetworkManager", c_networkmanager),
+    ("conectividad.internet", "Conectividad", c_conectividad),
+    ("conectividad.wifi", "Wi-Fi", c_wifi),
+    ("conectividad.bluetooth", "Bluetooth", c_bluetooth),
+    ("energia.perfiles", "Perfiles de energía (power-profiles-daemon)", c_perfiles),
+    ("energia.cargador", "Batería y cargador", c_cargador),
+    ("energia.suspension", "Suspensión y reanudación", c_suspension),
+)
+
+
+def ejecutar_comprobaciones(ctx, areas=None):
+    for cid, nombre, funcion in COMPROBACIONES:
+        if areas and cid.split(".")[0] not in areas:
+            continue
+        try:
+            estado, detalle, problemas = funcion(ctx)
+        except Exception as e:  # una comprobacion rota nunca tumba el diagnostico
+            estado, detalle, problemas = "NO_DISPONIBLE", f"Error interno en esta comprobación ({type(e).__name__})", []
+        ctx.anotar(cid, nombre, estado, detalle, problemas)
+
+
+def limpiar_obj(x, datos):
+    if isinstance(x, str):
+        return limpiar(x, *datos)
+    if isinstance(x, list):
+        return [limpiar_obj(y, datos) for y in x]
+    if isinstance(x, dict):
+        return {k: (v if k.startswith("_") else limpiar_obj(v, datos)) for k, v in x.items()}
+    return x
+
+
+def clave_problema(p):
+    return (ORDEN_GRAVEDAD.get(p["gravedad"], 9), ORDEN_AREA.get(p["area"], 9), p["id"])
+
+
+def resultado_limpio(ctx, datos=None):
+    """(comprobaciones por area, problemas ordenados, ids de comprobaciones concluyentes), sin datos personales."""
+    datos = datos or datos_locales()
+    areas = {a: limpiar_obj(ctx.comprobaciones[a], datos) for a, _ in AREAS}
+    problemas = sorted((limpiar_obj(p, datos) for p in ctx.problemas), key=clave_problema)
+    # Solo una comprobacion que ha llegado a mirar puede dar un problema por resuelto: si ahora
+    # no se pudo comprobar (sin --sudo, sin sesion grafica...), lo anterior sigue como estaba.
+    concluyentes = {c["id"] for l in areas.values() for c in l if c["estado"] != "NO_DISPONIBLE"}
+    return areas, problemas, concluyentes
+
+
+def resumen(areas, problemas):
+    r = {g: 0 for g in GRAVEDADES}
+    r.update(NO_DISPONIBLE=0, NO_APLICA=0)
+    for p in problemas:
+        r[p["gravedad"]] += 1
+    for lista in areas.values():
+        for c in lista:
+            if c["estado"] in ("NO_DISPONIBLE", "NO_APLICA"):
+                r[c["estado"]] += 1
+    return r
+
+
+CAMPOS_PROBLEMA = ("id", "titulo", "gravedad", "componente", "area", "detectado", "causas_probables",
+                   "consecuencias", "recomendacion", "reparacion")
+
+
+def documento_comprobar(areas, problemas, t, duracion, historial):
+    lista = []
+    for p in problemas:
+        q = {k: p[k] for k in CAMPOS_PROBLEMA}
+        h = historial.get(p["id"]) or {}
+        q.update(veces=h.get("veces", 1), primera_vez=h.get("primera_vez", t), ultima_vez=h.get("ultima_vez", t))
+        lista.append(q)
+    return {"ok": True, "v": VERSION_DIAGNOSTICO, "t": t, "duracion": round(duracion, 1),
+            "resumen": resumen(areas, problemas),
+            "areas": [{"id": a, "nombre": n, "comprobaciones": areas[a]} for a, n in AREAS if areas[a]],
+            "problemas": lista}
+
+
+class Cerrojo:
+    """Un solo escritor del historial a la vez (el servicio y una terminal pueden coincidir)."""
+
+    def __init__(self, carpeta):
+        self.carpeta = carpeta
+
+    def __enter__(self):
+        os.makedirs(self.carpeta, mode=0o700, exist_ok=True)
+        self.f = open(os.path.join(self.carpeta, ".diagnosticos.cerrojo"), "a")
+        if fcntl is not None:
+            fcntl.flock(self.f, fcntl.LOCK_EX)
+        return self
+
+    def __exit__(self, *exc):
+        self.f.close()
+
+
+def escribir_atomico(destino, texto):
+    carpeta = os.path.dirname(destino)
+    fd, temporal = tempfile.mkstemp(dir=carpeta, prefix=".diagnosticos-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(texto)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(temporal, 0o600)
+        os.replace(temporal, destino)
+    except BaseException:
+        try:
+            os.unlink(temporal)
+        except OSError:
+            pass
+        raise
+
+
+def archivos_historial():
+    d = dir_estado()
+    return d, os.path.join(d, "diagnosticos.jsonl"), os.path.join(d, "diagnosticos.json")
+
+
+def leer_problemas_historial(archivo):
+    datos = leer_json(archivo)
+    problemas = datos.get("problemas") if isinstance(datos, dict) else None
+    return {k: v for k, v in problemas.items() if isinstance(v, dict)} if isinstance(problemas, dict) else {}
+
+
+def leer_ejecuciones(archivo):
+    l = []
+    try:
+        with open(archivo, encoding="utf-8") as f:
+            for linea in f:
+                try:
+                    d = json.loads(linea)
+                except ValueError:
+                    continue
+                if isinstance(d, dict):
+                    l.append(d)
+    except OSError:
+        pass
+    return l
+
+
+def actualizar_historial(t, problemas, concluyentes, ejecucion=None, reparado=None):
+    """Anota lo detectado (primera y ultima vez, veces), da por resuelto lo que una comprobacion
+    concluyente ya no ve y, si se pide, guarda la ejecucion o una reparacion. Devuelve los
+    problemas recordados. Nunca falla por el historial: si no se puede escribir, sigue."""
+    carpeta, f_ejecuciones, f_problemas = archivos_historial()
+    try:
+        with Cerrojo(carpeta):
+            memoria = leer_problemas_historial(f_problemas)
+            vistos = {p["id"] for p in problemas}
+            for p in problemas:
+                e = memoria.get(p["id"])
+                if e is None:
+                    e = memoria[p["id"]] = {"primera_vez": t, "veces": 0, "reparaciones": []}
+                e.update(titulo=p["titulo"], gravedad=p["gravedad"], comprobacion=p.get("_comprobacion"),
+                         ultima_vez=t, estado="activo", resuelto_en=None)
+                if ejecucion is not None or not e["veces"]:
+                    e["veces"] = int(e.get("veces") or 0) + 1
+            for pid, e in memoria.items():
+                if e.get("estado") == "activo" and pid not in vistos and e.get("comprobacion") in concluyentes:
+                    e["estado"], e["resuelto_en"] = "resuelto", t
+            if reparado is not None:
+                pid, entrada = reparado
+                e = memoria.setdefault(pid, {"primera_vez": t, "ultima_vez": t, "veces": 1, "estado": "activo",
+                                             "resuelto_en": None, "titulo": pid, "gravedad": "INFO"})
+                e["reparaciones"] = (list(e.get("reparaciones") or []) + [entrada])[-LIMITE_REPARACIONES:]
+            # Se olvida lo resuelto hace mucho y, si aun asi son demasiados, lo mas antiguo.
+            memoria = {k: v for k, v in memoria.items()
+                       if not (v.get("estado") == "resuelto" and (v.get("resuelto_en") or t) < t - OLVIDAR_RESUELTOS)}
+            if len(memoria) > LIMITE_PROBLEMAS:
+                memoria = dict(sorted(memoria.items(), key=lambda kv: kv[1].get("ultima_vez") or 0)[-LIMITE_PROBLEMAS:])
+            escribir_atomico(f_problemas, json.dumps({"v": VERSION_DIAGNOSTICO, "problemas": memoria},
+                                                     ensure_ascii=False, sort_keys=True) + "\n")
+            if ejecucion is not None:
+                lineas = leer_ejecuciones(f_ejecuciones)[-(LIMITE_EJECUCIONES - 1):] + [ejecucion]
+                escribir_atomico(f_ejecuciones, "".join(json.dumps(x, ensure_ascii=False, separators=(",", ":")) + "\n"
+                                                       for x in lineas))
+            return memoria
+    except OSError as e:
+        print(f"{PROGRAMA}: no se pudo guardar el historial en {carpeta}: {e.strerror or e}", file=sys.stderr)
+        return {}
+
+
+def diagnosticar(sudo=False, areas=None):
+    """Comprueba y devuelve (areas, problemas, concluyentes, t, duracion, contexto); todo menos el
+    contexto (con las ordenes reales de las reparaciones) ya sin datos personales."""
+    inicio, t = time.monotonic(), int(time.time())
+    ctx = Contexto(sudo)
+    ejecutar_comprobaciones(ctx, areas)
+    areas_l, problemas, concluyentes = resultado_limpio(ctx)
+    return areas_l, problemas, concluyentes, t, time.monotonic() - inicio, ctx
+
+
+# ---------------------------------------------------------------------------
+# Salida en texto
+# ---------------------------------------------------------------------------
+
+ETIQUETAS = {"OK": "OK", "INFO": "INFO", "WARNING": "AVISO", "ERROR": "ERROR", "CRITICAL": "CRÍTICO",
+             "NO_DISPONIBLE": "NO DISPONIBLE", "NO_APLICA": "NO APLICA"}
+
+
+def fecha(t):
+    return datetime.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M") if t else "-"
+
+
+def texto_problema(p, con_reparacion=True):
+    l = [f"[{ETIQUETAS.get(p['gravedad'], p['gravedad'])}] {p['titulo']}   ({p['id']})"]
+    l.append("  Detectado:")
+    l += [f"    - {x}" for x in p["detectado"]]
+    l.append("  Causas probables (sin confirmar):")
+    l += [f"    - {x}" for x in p["causas_probables"]]
+    l.append(f"  Consecuencias: {p['consecuencias']}")
+    l.append("  Qué hacer:")
+    l += [f"    {n}. {x}" for n, x in enumerate(p["recomendacion"], 1)]
+    rep = p.get("reparacion")
+    if con_reparacion and rep:
+        l.append(f"  Reparación disponible: jaime0-diagnostico reparar {p['id']}")
+        l.append(f"    {rep['descripcion']}")
+        l += [f"    $ {o}" for o in rep["ordenes"]]
+    if p.get("veces", 1) > 1:
+        l.append(f"  Visto {p['veces']} veces desde {fecha(p.get('primera_vez'))}")
+    return l
+
+
+def texto_comprobar(doc):
+    r = doc["resumen"]
+    l = [f"Diagnóstico de Jaime0 · {fecha(doc['t'])} · {doc['duracion']} s",
+         "Resumen: " + ", ".join(f"{r[g]} {g}" for g in GRAVEDADES)
+         + f"; {r['NO_DISPONIBLE']} no disponibles, {r['NO_APLICA']} no aplican", ""]
+    ancho = max(len(e) for e in ETIQUETAS.values()) + 2
+    for area in doc["areas"]:
+        l.append(area["nombre"])
+        for c in area["comprobaciones"]:
+            l.append(f"  {('[' + ETIQUETAS.get(c['estado'], c['estado']) + ']').ljust(ancho)} {c['nombre']}: {c['detalle']}")
+        l.append("")
+    if doc["problemas"]:
+        l.append("PROBLEMAS")
+        for p in doc["problemas"]:
+            l += texto_problema(p) + [""]
+    else:
+        l += ["Ningún problema detectado.", ""]
+    if any(c["estado"] == "NO_DISPONIBLE" and "--sudo" in c["detalle"] for a in doc["areas"] for c in a["comprobaciones"]):
+        l += ["Algunas comprobaciones necesitan permisos: jaime0-diagnostico comprobar --sudo", ""]
+    return "\n".join(l)
+
+
+# ---------------------------------------------------------------------------
+# Ordenes: comprobar, historial y reparar
+# ---------------------------------------------------------------------------
+
+def imprimir_json(doc):
+    print(json.dumps(doc, ensure_ascii=False, separators=(",", ":")))
+
+
+def cmd_comprobar(args):
+    como_json, sudo = "--json" in args, "--sudo" in args
+    otras = [a for a in args if a not in ("--json", "--sudo")]
+    if otras:
+        mensaje = f"opción desconocida para comprobar: {otras[0]}"
+        if como_json:
+            imprimir_json({"ok": False, "error": mensaje})
+        else:
+            print(f"{PROGRAMA}: {mensaje}", file=sys.stderr)
+        return 2
+    try:
+        areas, problemas, concluyentes, t, duracion, _ = diagnosticar(sudo)
+    except Exception as e:  # el consumidor (Control Center) siempre recibe una linea JSON
+        mensaje = f"error interno al diagnosticar ({type(e).__name__})"
+        if como_json:
+            imprimir_json({"ok": False, "error": mensaje})
+        else:
+            print(f"{PROGRAMA}: {mensaje}", file=sys.stderr)
+        return 1
+    doc_previo = documento_comprobar(areas, problemas, t, duracion, {})
+    ejecucion = {"t": t, "duracion": doc_previo["duracion"], "resumen": doc_previo["resumen"],
+                 "problemas": [{"id": p["id"], "gravedad": p["gravedad"]} for p in problemas]}
+    memoria = actualizar_historial(t, problemas, concluyentes, ejecucion=ejecucion)
+    doc = documento_comprobar(areas, problemas, t, duracion, memoria)
+    if como_json:
+        imprimir_json(doc)
+    else:
+        print(texto_comprobar(doc))
+    return 0
+
+
+def cmd_historial(args):
+    como_json, n = False, 20
+    i = 0
+    while i < len(args):
+        if args[i] == "--json":
+            como_json = True
+        elif args[i] == "-n" and i + 1 < len(args) and args[i + 1].isdigit():
+            n = max(1, int(args[i + 1]))
+            i += 1
+        else:
+            mensaje = f"opción desconocida para historial: {args[i]}"
+            if como_json or "--json" in args:
+                imprimir_json({"ok": False, "error": mensaje})
+            else:
+                print(f"{PROGRAMA}: {mensaje}", file=sys.stderr)
+            return 2
+        i += 1
+    _, f_ejecuciones, f_problemas = archivos_historial()
+    memoria = leer_problemas_historial(f_problemas)
+    orden = sorted(memoria.items(), key=lambda kv: (kv[1].get("estado") != "activo",
+                                                    ORDEN_GRAVEDAD.get(kv[1].get("gravedad"), 9),
+                                                    -(kv[1].get("ultima_vez") or 0)))
+    problemas = [{"id": pid, "titulo": e.get("titulo"), "gravedad": e.get("gravedad"),
+                  "primera_vez": e.get("primera_vez"), "ultima_vez": e.get("ultima_vez"), "veces": e.get("veces", 0),
+                  "estado": e.get("estado"), "resuelto_en": e.get("resuelto_en"),
+                  "reparaciones": [{"t": r.get("t"), "resultado": r.get("resultado")}
+                                   for r in e.get("reparaciones") or [] if isinstance(r, dict)]}
+                 for pid, e in orden]
+    ejecuciones = [{"t": e.get("t"), "resumen": e.get("resumen")} for e in reversed(leer_ejecuciones(f_ejecuciones)[-n:])]
+    if como_json:
+        imprimir_json({"ok": True, "problemas": problemas, "ejecuciones": ejecuciones})
+        return 0
+    if not problemas and not ejecuciones:
+        print("Aún no hay diagnósticos guardados. Ejecuta: jaime0-diagnostico comprobar")
+        return 0
+    print("PROBLEMAS")
+    for p in problemas:
+        estado = "activo" if p["estado"] == "activo" else f"resuelto el {fecha(p['resuelto_en'])}"
+        print(f"  [{ETIQUETAS.get(p['gravedad'], p['gravedad'])}] {p['titulo']} ({p['id']}): {estado}; "
+              f"{p['veces']} veces, de {fecha(p['primera_vez'])} a {fecha(p['ultima_vez'])}")
+        for r in p["reparaciones"]:
+            print(f"      reparación {fecha(r['t'])}: {r['resultado']}")
+    print("\nEJECUCIONES")
+    for e in ejecuciones:
+        r = e.get("resumen") or {}
+        print(f"  {fecha(e['t'])}: " + ", ".join(f"{r.get(g, 0)} {g}" for g in GRAVEDADES))
+    return 0
+
+
+def terminal_interactiva():
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def ejecutar_orden(argv):
+    """Una orden de una reparacion, a la vista (sudo puede pedir la contrasena). Codigo de salida."""
+    try:
+        return subprocess.run(argv, timeout=TIEMPO_REPARACION).returncode
+    except FileNotFoundError:
+        print(f"No existe {argv[0]}", file=sys.stderr)
+        return 127
+    except subprocess.TimeoutExpired:
+        print(f"No terminó en {TIEMPO_REPARACION} s", file=sys.stderr)
+        return 124
+
+
+def buscar_problema(problemas, pid):
+    return next((p for p in problemas if p["id"] == pid), None)
+
+
+def cmd_reparar(args):
+    sudo = "--sudo" in args
+    resto = [a for a in args if a != "--sudo"]
+    if len(resto) != 1 or resto[0].startswith("-"):
+        print(f"Uso: {PROGRAMA} reparar ID [--sudo]   (los ID salen en: {PROGRAMA} comprobar)", file=sys.stderr)
+        return 2
+    pid = resto[0]
+    area = pid.split(".")[0]
+    if area not in ORDEN_AREA:
+        print(f"{PROGRAMA}: «{pid}» no es un ID de problema (los ID salen en: {PROGRAMA} comprobar)", file=sys.stderr)
+        return 2
+    print(f"Comprobando {dict(AREAS)[area]} de nuevo...")
+    _, problemas, concluyentes, t, _, ctx = diagnosticar(sudo, {area})
+    actual = buscar_problema(problemas, pid)
+    if actual is None:
+        origen = leer_problemas_historial(archivos_historial()[2]).get(pid, {}).get("comprobacion")
+        actualizar_historial(t, problemas, concluyentes)
+        sin_hacer = [c for c in ctx.comprobaciones[area] if c["estado"] == "NO_DISPONIBLE"]
+        if origen and origen not in concluyentes:
+            print(f"El problema {pid} no se ha podido comprobar ahora (prueba con --sudo o desde la sesión "
+                  "gráfica). No se hace nada.")
+        elif not origen and sin_hacer:
+            print(f"{pid}: No se detecta ahora, pero algunas comprobaciones de {dict(AREAS)[area]} no se pudieron "
+                  "hacer (prueba con --sudo o desde la sesión gráfica). No se hace nada.")
+        else:
+            print(f"El problema {pid} ya no se detecta: no se hace nada.")
+        return 0
+    print()
+    print("\n".join(texto_problema(actual, con_reparacion=False)))
+    print()
+    if not actual.get("reparacion"):
+        print("Este problema no tiene reparación automática: sigue los pasos de «Qué hacer».")
+        return 1
+    # Las ordenes y la copia se muestran y se ejecutan tal cual, sin limpiar (es tu terminal).
+    datos = datos_locales()
+    rep_real = next(p for p in ctx.problemas if limpiar(p["id"], *datos) == pid)["reparacion"]
+    print(f"Reparación: {rep_real['descripcion']}")
+    if rep_real["copia"]:
+        print(f"Se modifica: {rep_real['copia']} (antes se guarda una copia)")
+    print("Órdenes que se van a ejecutar" + (" (con sudo: puede pedir tu contraseña)" if rep_real["root"] else "") + ":")
+    for o in rep_real["ordenes"]:
+        print(f"  $ {o}")
+    if not terminal_interactiva():
+        print("Sin terminal interactiva: no se hace nada. Ejecútalo en una terminal: "
+              f"{PROGRAMA} reparar {pid}")
+        return 1
+    try:
+        respuesta = input("¿Aplicar la reparación? [s/N] ").strip().lower()
+    except EOFError:
+        respuesta = ""
+    if respuesta not in ("s", "si", "sí", "y", "yes"):
+        print("Cancelado: no se ha cambiado nada.")
+        return 1
+    if rep_real["copia"] and os.path.exists(rep_real["copia"]):
+        destino = f"{rep_real['copia']}.antes-de-reparar-{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        try:
+            shutil.copy2(rep_real["copia"], destino)
+        except OSError as e:
+            print(f"No se pudo hacer la copia ({e.strerror or e}): no se cambia nada.")
+            return 1
+        print(f"Copia guardada en {destino}")
+    fallo = None
+    for o in rep_real["ordenes"]:
+        print(f"$ {o}")
+        codigo = ejecutar_orden(shlex.split(o))
+        if codigo != 0:
+            fallo = f"«{o}» terminó con código {codigo}"
+            break
+    print(f"\nComprobando {dict(AREAS)[area]} de nuevo...")
+    _, problemas2, concluyentes2, t2, _, _ = diagnosticar(sudo, {area})
+    sigue = buscar_problema(problemas2, pid) is not None
+    resultado = "fallo" if fallo and sigue else ("sigue" if sigue else "resuelto")
+    actualizar_historial(t2, problemas2, concluyentes2,
+                         reparado=(pid, {"t": t2, "resultado": resultado, "reparacion": rep_real["id"],
+                                         **({"detalle": limpiar(fallo)} if fallo else {})}))
+    if resultado == "resuelto":
+        print(f"Resuelto: {pid} ya no se detecta." + (f" (Aviso: {fallo}.)" if fallo else ""))
+        return 0
+    print(f"No resuelto: {pid} se sigue detectando." + (f" {fallo}." if fallo else "")
+          + " Revisa los pasos de «Qué hacer».")
+    return 1
+
+
 AYUDA = """Uso: jaime0-diagnostico [--pantalla] [--sudo]
+       jaime0-diagnostico comprobar [--json] [--sudo]
+       jaime0-diagnostico historial [--json] [-n N]
+       jaime0-diagnostico reparar ID [--sudo]
 
 Genera un informe de hardware y compatibilidad para adjuntarlo a una incidencia de
 Jaime0 en GitHub. No recoge direcciones MAC ni IP, redes Wi-Fi, nombre de usuario ni
@@ -872,10 +2840,24 @@ de equipo, números de serie ni el contenido de tus archivos.
   --sudo          usa "sudo -n" para leer el registro del kernel (no pide contraseña;
                   si sudo la necesita, ejecuta antes "sudo -v")
   -h, --help      muestra esta ayuda
+
+  comprobar       diagnóstico interpretado: hardware, sistema, gráficos, conectividad
+                  y energía; cada problema con causas probables y qué hacer
+  historial       problemas vistos (primera y última vez, resueltos, reparaciones) y
+                  últimas ejecuciones (-n N, 20 por defecto)
+  reparar ID      vuelve a comprobar ese problema, enseña las órdenes exactas y, si
+                  confirmas en la terminal, aplica su reparación
 """
+
+SUBORDENES = {"comprobar": cmd_comprobar, "historial": cmd_historial, "reparar": cmd_reparar}
 
 
 def main(argv):
+    if argv and argv[0] in SUBORDENES:
+        if any(a in ("-h", "--help", "--ayuda") for a in argv[1:]):
+            print(AYUDA, end="")
+            return 0
+        return SUBORDENES[argv[0]](argv[1:])
     opciones = {"pantalla": False, "sudo": False}
     for a in argv:
         if a in ("-h", "--help", "--ayuda"):

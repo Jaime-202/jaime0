@@ -95,6 +95,18 @@ Item {
                         font.pixelSize: Tema.letra
                     }
                 }
+                // Problemas del ultimo diagnostico (DIAGNOSTICS los explica; aqui solo se avisa).
+                Text {
+                    readonly property var d: vista.estado ? vista.estado.diagnostico : null
+                    visible: !!(d && d.total > 0)
+                    width: parent.width
+                    elide: Text.ElideRight
+                    text: d && d.total > 0 ? "△ DIAGNOSTICS  " + d.principales.map(p => p.gravedad + " " + p.titulo).join(" · ")
+                                             + (d.total > d.principales.length ? " · +" + (d.total - d.principales.length) : "") + "   (tecla 9)" : ""
+                    color: d && d.principales.length && (d.principales[0].gravedad === "CRITICAL" || d.principales[0].gravedad === "ERROR") ? Tema.rojo : Tema.ambar
+                    font.family: Tema.mono
+                    font.pixelSize: Tema.letraMini
+                }
             }
         }
 

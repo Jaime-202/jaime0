@@ -78,7 +78,7 @@ El comando `atajos` muestra la lista real y permite añadir los tuyos (`atajos a
 
 ### Control Center
 
-Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`8` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
+Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`9` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
 
 ![Control Center: SYSTEM](capturas/cc-sistema.png)
 
@@ -89,9 +89,10 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 | **PROFILES** | Perfiles: BALANCED, PERFORMANCE, POWER SAVER (ahorro), FOCUS (no molestar), MULTIMEDIA (sin bloqueo) y CUSTOM (el tuyo). Siempre se puede volver atrás | `jaime0-perfil poner focus`, `jaime0-perfil anterior` |
 | **AUTOMATION** | Reglas «cuando pase esto → haz esto» (p. ej. batería baja → ahorro). Funcionan con la ventana cerrada | `jaime0-reglas lista` |
 | **PRIVACY & SECURITY** | Cortafuegos, puertos abiertos, conexiones, micrófono y cámara en uso, telemetría | `jaime0-privacidad` |
-| **HEALTH** | Gráficas e histórico, incidencias y modo diagnóstico | `jaime0-salud incidencias` |
+| **HEALTH** | Gráficas e histórico, incidencias y vista detallada | `jaime0-salud incidencias` |
 | **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos y el atajo | `jaime0-ajustes` |
 | **UPDATES** | Versión instalada y disponible de Jaime0 (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
+| **DIAGNOSTICS** | Busca problemas reales (servicios caídos, configuración rota, permisos, gráficos, disco…) y explica cada uno: qué se ha visto, causas posibles, consecuencias y qué hacer. Las reparaciones enseñan las órdenes, piden confirmación y guardan copia | `jaime0-diagnostico comprobar` |
 
 | PERFORMANCE | PROFILES |
 |---|---|
@@ -155,6 +156,7 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 ### Si algo falla
 
 - **No arranca el escritorio:** en GRUB, **Opciones avanzadas** → **(modo seguro)**. Jaime0 muestra la causa más probable y una consola para repararlo.
+- **Algo no funciona y no sabes por qué:** `jaime0-diagnostico comprobar --sudo` revisa hardware, sistema, gráficos, red y energía, y explica cada problema con su causa probable y qué hacer; algunos se reparan con `jaime0-diagnostico reparar ID`, que enseña las órdenes y pide confirmación. Ver [docs/diagnostico.md](docs/diagnostico.md).
 - **Informe del equipo** para una incidencia, sin datos personales (ni MAC, ni IP, ni usuario, ni números de serie):
 
   ```bash
@@ -170,6 +172,7 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 | [ajustes.md](docs/ajustes.md) | Todos los ajustes, ancladas y widgets |
 | [nvidia.md](docs/nvidia.md) | La gráfica NVIDIA y Secure Boot |
 | [actualizaciones.md](docs/actualizaciones.md) / [recuperacion.md](docs/recuperacion.md) | Actualizar, instantáneas, cortafuegos y zram |
+| [diagnostico.md](docs/diagnostico.md) | Qué comprueba `jaime0-diagnostico comprobar`, cómo leer un problema y sus reparaciones |
 | [compilar.md](docs/compilar.md) | Compilar la ISO y estructura del repositorio |
 | [pruebas.md](docs/pruebas.md) | Qué se ha probado, qué falta y problemas conocidos |
 

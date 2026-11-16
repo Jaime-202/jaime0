@@ -203,5 +203,78 @@ class PruebasAvisoBarra(unittest.TestCase):
             S.avisar_barra()
 
 
+def doc_diagnostico(*problemas, t=1000):
+    return {"ok": True, "v": 1, "t": t, "duracion": 2.0,
+            "resumen": {"CRITICAL": 0, "ERROR": 0, "WARNING": 0, "INFO": 0, "NO_DISPONIBLE": 0, "NO_APLICA": 0},
+            "areas": [], "problemas": [{"id": i, "titulo": i.upper(), "gravedad": g} for i, g in problemas]}
+
+
+class Proceso:
+    def __init__(self, salida="", rc=0, err=""):
+        self.stdout, self.returncode, self.stderr = salida, rc, err
+
+
+class PruebasDiagnosticoServicio(Base):
+    """Fase 5: el servicio lanza jaime0-diagnostico en su hilo, recuerda el resultado y lo
+    resume para SYSTEM. Nunca repara nada."""
+
+    def test_resumen_para_system(self):
+        d = doc_diagnostico(("a", "INFO"), ("b", "WARNING"), ("c", "CRITICAL"), ("d", "ERROR"), ("e", "WARNING"))
+        r = S.resumen_diagnostico(d)
+        self.assertEqual([p["id"] for p in r["principales"]], ["c", "d", "b"])
+        self.assertEqual(r["total"], 4)                      # el INFO no es una alerta
+        self.assertIsNone(S.resumen_diagnostico({"ok": False, "error": "x"}))
+        self.assertIsNone(S.resumen_diagnostico(None))
+
+    def test_un_diagnostico_a_la_vez_y_resultado(self):
+        pendiente, hechos = [], []
+        salida = json.dumps(doc_diagnostico(("nvidia", "WARNING")))
+        dg = S.Diagnosticador(ejecutar=lambda *a, **k: Proceso(salida), buscar=lambda n: "/bin/" + n,
+                              lanzar=pendiente.append, al_terminar=hechos.append)
+        self.assertTrue(dg.ejecutar_diagnostico())
+        self.assertIsNotNone(dg.desde)
+        self.assertFalse(dg.ejecutar_diagnostico(), "ya hay uno en marcha")
+        pendiente.pop()()
+        self.assertIsNone(dg.desde)
+        self.assertEqual(dg.ultimo["problemas"][0]["id"], "nvidia")
+        self.assertEqual(hechos[0]["ok"], True)
+        self.assertTrue(dg.ejecutar_diagnostico(), "terminado: se puede volver a lanzar")
+
+    def test_error_y_programa_ausente(self):
+        dg = S.Diagnosticador(ejecutar=lambda *a, **k: Proceso("", 1, "fallo al leer"), buscar=lambda n: "/bin/" + n,
+                              lanzar=lambda fn: fn())
+        res = []
+        dg.ejecutar_diagnostico(res.append)
+        self.assertEqual(res[0], {"ok": False, "error": "fallo al leer"})
+        self.assertIsNone(dg.ultimo)
+        sin = S.Diagnosticador(buscar=lambda n: None, lanzar=lambda fn: fn())
+        sin.ejecutar_diagnostico(res.append)
+        self.assertEqual(res[1]["error"], "falta jaime0-diagnostico")
+
+    def test_solo_avisa_de_problemas_nuevos_y_lo_resume_en_estado(self):
+        sv = self.servicio()
+        sv.instante = instante()
+        sv.publicar("ONLINE", [])
+        eventos = []
+        sv.evento = lambda texto, *a, **k: eventos.append(texto)
+        sv.diagnosticador.ultimo = doc_diagnostico(("nvidia", "WARNING"))
+        sv._diagnostico_hecho(sv.diagnosticador.ultimo)          # primera vez: sin avisos
+        sv.diagnosticador.ultimo = doc_diagnostico(("nvidia", "WARNING"), ("disco", "CRITICAL"))
+        sv._diagnostico_hecho(sv.diagnosticador.ultimo)
+        self.assertEqual(eventos, ["Diagnóstico: DISCO"])
+        with open(os.path.join(self.rt, "estado.json"), encoding="utf-8") as f:
+            d = json.load(f)["diagnostico"]
+        self.assertEqual((d["total"], d["principales"][0]["id"]), (2, "disco"))
+
+    def test_ordenes_del_socket(self):
+        sv = self.servicio()
+        self.assertEqual(json.loads(S.procesar_linea('{"orden":"diagnostico"}', sv))["ultimo"], None)
+        self.assertFalse(json.loads(S.procesar_linea('{"orden":"diagnostico_ejecutar"}', sv))["ok"])
+        sv.diagnosticador.lanzar = lambda fn: None            # se queda "en marcha"
+        self.assertIsNone(S.procesar_linea('{"orden":"diagnostico_ejecutar"}', sv, lambda t: None))
+        r = json.loads(S.procesar_linea('{"orden":"diagnostico_ejecutar"}', sv, lambda t: None))
+        self.assertEqual(r, {"ok": False, "error": "ya hay un diagnóstico en marcha"})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,7 +4,7 @@
 #
 # Orden (cada modulo solo importa de alguno de los anteriores; no hay ciclos):
 #   base, medicion, historico, incidencias, sistema, perfiles, privacidad, estado, reglas,
-#   actualizaciones, api, servicio
+#   actualizaciones, diagnostico, api, servicio
 # La cabecera de cada modulo dice de cuales depende exactamente.
 #
 # Cada modulo declara en __all__ todo lo que define (tambien los nombres con guion bajo que

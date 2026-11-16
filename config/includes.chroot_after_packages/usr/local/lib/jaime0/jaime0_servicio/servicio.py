@@ -38,6 +38,7 @@ from .reglas import (
     FuenteHyprland
 )
 from .actualizaciones import estado_actualizaciones, Comprobador
+from .diagnostico import Diagnosticador, resumen_diagnostico
 from .api import procesar_linea
 
 __all__ = [
@@ -119,6 +120,9 @@ class Servicio:
         # Actualizaciones (fase 4): estado sin red por el hilo de efectos; comprobar con red, en
         # su propio hilo (Comprobador). Instalar nunca pasa por el servicio.
         self.comprobador = Comprobador()
+        # Diagnostics (fase 5): jaime0-diagnostico en su propio hilo; el resultado vuelve al bucle.
+        self.diagnosticador = Diagnosticador(al_terminar=lambda doc: self.al_bucle(self._diagnostico_hecho, doc))
+        self._problemas_vistos = None       # ids de la ultima vez (para avisar solo de los nuevos)
         self.aviso_lanzar = self._lanzar_aviso  # las pruebas lo sustituyen
         self.reglas_ejecutar = subprocess.run   # las pruebas lo sustituyen
         ejecutar_reglas = lambda *a, **k: self.reglas_ejecutar(*a, **k)
@@ -204,6 +208,29 @@ class Servicio:
     def al_bucle(self, fn, *a):
         """Ejecuta fn(*a) en el bucle principal (desde otro hilo)."""
         self.efectos.al_bucle(fn, *a)
+
+    def _diagnostico_hecho(self, doc):
+        """En el bucle: problemas nuevos a la actividad y estado.json al dia (SYSTEM)."""
+        if not isinstance(doc, dict) or not doc.get("ok"):
+            return
+        actuales = {p.get("id"): p for p in doc.get("problemas") or []
+                    if isinstance(p, dict) and p.get("gravedad") in ("CRITICAL", "ERROR", "WARNING")}
+        if self._problemas_vistos is not None:
+            for pid in sorted(set(actuales) - self._problemas_vistos):
+                p = actuales[pid]
+                self.evento(f"Diagnóstico: {p.get('titulo')}", "diagnostico",
+                            "WARNING" if p.get("gravedad") == "WARNING" else "CRITICAL", None, "diagnostico")
+        self._problemas_vistos = set(actuales)
+        if self.instante is not None and self.estado is not None:
+            self.publicar(self.estado, self.motivos)
+
+    def _diagnostico_periodico(self):
+        self.diagnosticador.ejecutar_diagnostico()
+        return True
+
+    def _diagnostico_inicial(self):
+        self.diagnosticador.ejecutar_diagnostico()
+        return False
 
     def actualizaciones_doc(self):
         doc = estado_actualizaciones()
@@ -291,6 +318,7 @@ class Servicio:
                 "privacidad": self.privacidad, "actividad": list(self.actividad),
                 "incidencias_abiertas": self.incidencias_estado.abiertas(),
                 "disponible": self.historico.disponibilidad(self.anillo, self.reloj()),
+                "diagnostico": resumen_diagnostico(self.diagnosticador.ultimo),
                 "servicio": {"pid": os.getpid(), "desde": self.desde, "intervalo": self.intervalo_actual(),
                              "efectos": self.efectos.estado()}}
 
@@ -763,6 +791,9 @@ class Servicio:
             GLib.timeout_add_seconds(DISPOSITIVOS_CADA_RAPIDO, self._priv_periodico)
             GLib.timeout_add_seconds(SMART_CADA, self._smart_periodico)
             GLib.timeout_add_seconds(VOLCADO_CADA, self._volcado_periodico)
+            # Diagnostico: a los 2 min de arrancar (con la sesion ya en marcha) y cada 6 h.
+            GLib.timeout_add_seconds(120, self._diagnostico_inicial)
+            GLib.timeout_add_seconds(6 * 3600, self._diagnostico_periodico)
             self._fuente = GLib.timeout_add(1000, self._tick)   # primera muestra con 1 s de deltas
             self._intervalo_programado = 1
             salir = lambda *_: (self._bucle.quit(), GLib.SOURCE_REMOVE)[1]

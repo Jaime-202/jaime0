@@ -183,7 +183,7 @@ Item {
                     Text {
                         id: textoDiag
                         anchors.centerIn: parent
-                        text: "DIAGNOSTIC MODE"
+                        text: "DETAILED VIEW"
                         color: salud.diagnostico ? Tema.fondo : Tema.cian
                         font.family: Tema.mono
                         font.pixelSize: Tema.letraMini
@@ -262,7 +262,8 @@ Item {
             }
         }
 
-        // ZONA SECUNDARIA — HARDWARE DIAGNOSTICS (o el detalle de DIAGNOSTIC MODE)
+        // ZONA SECUNDARIA — HARDWARE (o la vista detallada de las metricas: DETAILED VIEW; los
+        // problemas interpretados estan en DIAGNOSTICS)
         Loader {
             Layout.fillWidth: true
             Layout.fillHeight: true

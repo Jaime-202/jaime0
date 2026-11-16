@@ -1974,7 +1974,7 @@ class PruebasPaquete(unittest.TestCase):
     """jaime0-servicio es un lanzador del paquete jaime0_servicio (usr/local/lib/jaime0)."""
 
     ORDEN = ("base", "medicion", "historico", "incidencias", "sistema", "perfiles", "privacidad",
-             "estado", "reglas", "actualizaciones", "api", "servicio")
+             "estado", "reglas", "actualizaciones", "diagnostico", "api", "servicio")
     PAQUETE = BIN.parent / "lib/jaime0/jaime0_servicio"
 
     def arbol(self, modulo):

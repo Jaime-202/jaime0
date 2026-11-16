@@ -114,6 +114,23 @@ def procesar_linea(linea, ctx, responder=None):
             if not ctx.comprobador.comprobar(lambda doc: ctx.al_bucle(responder, json.dumps(doc, ensure_ascii=False))):
                 return json.dumps({"ok": False, "error": "ya hay una comprobación en marcha"})
             return None
+        if orden == "diagnostico":
+            return json.dumps(ctx.diagnosticador.documento(), ensure_ascii=False)
+        if orden == "diagnostico_ejecutar":
+            # Unos segundos de comprobaciones: en su propio hilo, uno a la vez; contesta al acabar.
+            if responder is None:
+                return json.dumps({"ok": False, "error": "esta orden contesta al terminar: hace falta el socket"})
+            if not ctx.diagnosticador.ejecutar_diagnostico(
+                    lambda doc: ctx.al_bucle(responder, json.dumps(doc, ensure_ascii=False))):
+                return json.dumps({"ok": False, "error": "ya hay un diagnóstico en marcha"})
+            return None
+        if orden == "diagnostico_historial":
+            efectos = getattr(ctx, "efectos", None)
+            if responder is None or efectos is None or not efectos.activo():
+                return json.dumps(ctx.diagnosticador.historial(), ensure_ascii=False)
+            efectos.enviar(ctx.diagnosticador.historial, lambda doc: responder(json.dumps(doc, ensure_ascii=False)),
+                           "orden diagnostico_historial")
+            return None
         if orden == "privacidad_historial":
             limite = peticion.get("limite", 50)
             if not isinstance(limite, int) or isinstance(limite, bool) or limite < 1:

@@ -10,6 +10,7 @@ Qué hace Jaime0 para volver atrás cuando algo sale mal, qué no puede hacer y 
 | La gráfica no deja arrancar el escritorio | Entrada **Modo seguro** en el menú de arranque (`nomodeset`) y consola de reparación | Arranque |
 | La NVIDIA no funciona | `jaime0-nvidia` dice qué falta; el escritorio sigue en la Intel | Solo lo abierto con `prime-run` |
 | Has estropeado tu configuración | Copia el archivo de `/etc/skel/.config/...` sobre el tuyo, o `jaime0-ajustes restablecer CLAVE` | Archivo a archivo |
+| No sabes qué falla | `jaime0-diagnostico comprobar --sudo` explica cada problema y `reparar ID` aplica las reparaciones seguras: ver [diagnostico.md](diagnostico.md) | Lo que comprueba |
 
 ## Btrfs con instantáneas
 
