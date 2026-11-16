@@ -91,6 +91,12 @@ ESQUEMA = {
     "cc_intervalo_rapido":   {"tipo": "opcion", "opciones": ["1", "2", "5"], "grupo": "Control Center", "etiqueta": "Frecuencia con el Control Center abierto (s)"},
     "cc_notificar":          {"tipo": "opcion", "opciones": ["todas", "criticas", "ninguna"], "grupo": "Control Center", "etiqueta": "Avisos de incidencias en el escritorio"},
     "control_atajo":         {"tipo": "atajo", "grupo": "Control Center", "etiqueta": "Atajo del Control Center"},
+    # Energia (POWER en el Control Center): inactividad y suspension. Se aplican con hypridle
+    # (generado/hypridle.conf), salvo que ~/.config/hypr/hypridle.conf este personalizado.
+    "inactividad_bloqueo":    {"tipo": "entero", "min": 0, "max": 120, "grupo": "Energía", "etiqueta": "Bloquear tras inactividad (min, 0 = nunca)"},
+    "inactividad_pantalla":   {"tipo": "entero", "min": 0, "max": 120, "grupo": "Energía", "etiqueta": "Apagar la pantalla tras inactividad (min, 0 = nunca)"},
+    "inactividad_suspender":  {"tipo": "entero", "min": 0, "max": 240, "grupo": "Energía", "etiqueta": "Suspender tras inactividad (min, 0 = nunca)"},
+    "suspender_con_cargador": {"tipo": "sino", "grupo": "Energía", "etiqueta": "Suspender también con el cargador conectado"},
 }
 
 # Parejas (menor, mayor) que deben cumplir menor < mayor. En la bateria el aviso es el
@@ -120,6 +126,8 @@ RESERVA = {
     "umbral_disco_critico": "95", "umbral_bateria_aviso": "15", "umbral_bateria_critico": "5",
     "historial_dias": "90", "cc_intervalo": "10", "cc_intervalo_rapido": "2",
     "cc_notificar": "criticas", "control_atajo": "SUPER+I",
+    "inactividad_bloqueo": "10", "inactividad_pantalla": "11", "inactividad_suspender": "30",
+    "suspender_con_cargador": "si",
 }
 # Ciudad: letras de cualquier idioma, espacios y signos de nombres de lugar.
 CIUDAD = re.compile(r"^[^\W\d_](?:[^\W_]|[ .,'’()-])*$")
@@ -377,6 +385,35 @@ def css_animaciones(nivel):
     return "/* Animaciones: sutil. Se queda con las transiciones discretas del tema. */\n"
 
 
+def hypridle_conf(valores):
+    """hypridle.conf con los tiempos de inactividad. 0 minutos = esa accion no se hace. El
+    aviso al motor de reglas (evento "inactivo" a los 5 min) va siempre."""
+    def bloque(segundos, al_vencer, al_volver=None):
+        lineas = ["listener {", f"    timeout = {segundos}", f"    on-timeout = {al_vencer}"]
+        if al_volver:
+            lineas.append(f"    on-resume = {al_volver}")
+        return "\n".join(lineas + ["}", ""])
+    encender = "hyprctl dispatch 'hl.dsp.dpms({ action = \"enable\" })'"
+    apagar = "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'"
+    texto = "\n".join([
+        f"# Generado por {PROGRAMA}: no lo edites (inactividad_* y suspender_con_cargador).",
+        "general {",
+        "    lock_cmd = bloquear",
+        "    before_sleep_cmd = loginctl lock-session || bloquear",
+        f"    after_sleep_cmd = {encender}",
+        "    ignore_dbus_inhibit = false",
+        "}", ""]) + bloque(300, "jaime0-reglas evento inactivo", "jaime0-reglas evento activo")
+    if int(valores["inactividad_bloqueo"]):
+        texto += bloque(60 * int(valores["inactividad_bloqueo"]), "loginctl lock-session || bloquear")
+    if int(valores["inactividad_pantalla"]):
+        texto += bloque(60 * int(valores["inactividad_pantalla"]), apagar, encender)
+    if int(valores["inactividad_suspender"]):
+        # "inactividad suspender" no suspende si hay un cargador conectado y no se quiere.
+        suspender = "systemctl suspend" if valores["suspender_con_cargador"] == "si" else "inactividad suspender"
+        texto += bloque(60 * int(valores["inactividad_suspender"]), suspender)
+    return texto
+
+
 def generar():
     """Rehace ~/.config/jaime0/generado. Devuelve los nombres de lo que ha cambiado."""
     valores, _, temas, avisos = efectivos()
@@ -416,6 +453,8 @@ def generar():
                     "border_size = 1\nbar_padding = 5\nanchor = bottom center\nmargin = 96\n"
                     "border_color = 26343aff\nbackground_color = 101519ff\n"
                     f"bar_color = {acento.lstrip('#')}ff\noverflow_mode = nowrap\n"),
+        # Inactividad y suspension (hypridle, lanzado por "inactividad").
+        "hypridle.conf": hypridle_conf(valores),
         # Pantalla de bloqueo (hyprlock), que lo lee cada vez que se abre.
         "hyprlock.conf": f"# Generado por {PROGRAMA}: no lo edites.\n"
                          f"$acento = rgb({acento.lstrip('#')})\n$imagen = {valores['fondo']}\n",
@@ -458,6 +497,10 @@ def aplicar():
         subprocess.run(["jaime0-widgets", "sincronizar"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if "anclas" in cambiados and shutil.which("jaime0-anclar"):
         subprocess.run(["jaime0-anclar", "refrescar"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if "hypridle.conf" in cambiados and en_marcha("hypridle"):
+        # hypridle no relee su archivo: se reinicia (inactividad elige que archivo usa).
+        subprocess.run(["pkill", "-x", "-u", str(os.getuid()), "hypridle"])
+        lanzar(["inactividad"])
     if "fondo" in cambiados and en_marcha("swaybg"):
         with open(os.path.join(carpeta_generado(), "fondo"), encoding="utf-8") as f:
             fondo = f.read().strip()

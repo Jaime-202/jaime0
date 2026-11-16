@@ -1233,7 +1233,10 @@ class PruebasServicioFase3(Base):
         self.assertIn(("cargador", "INFO"), tipos)
         self.assertIn(("perfil", "INFO"), tipos)
         for e in sv.eventos:
-            self.assertEqual(sorted(e), ["gravedad", "proceso", "t", "texto", "tipo"])
+            # El cambio del perfil de energia lleva ademas su valor (energia.comparar_perfiles).
+            extra = ["valor"] if e["texto"].startswith("Perfil de energía") else []
+            self.assertEqual(sorted(e), sorted(["gravedad", "proceso", "t", "texto", "tipo"] + extra))
+        self.assertEqual([e["valor"] for e in sv.eventos if "valor" in e], ["power-saver"])
 
     def test_pico_de_cpu_con_el_proceso_en_el_servicio(self):
         sv = self.servicio()
@@ -1974,7 +1977,7 @@ class PruebasPaquete(unittest.TestCase):
     """jaime0-servicio es un lanzador del paquete jaime0_servicio (usr/local/lib/jaime0)."""
 
     ORDEN = ("base", "medicion", "historico", "incidencias", "sistema", "perfiles", "privacidad",
-             "estado", "reglas", "actualizaciones", "diagnostico", "api", "servicio")
+             "estado", "reglas", "actualizaciones", "diagnostico", "energia", "api", "servicio")
     PAQUETE = BIN.parent / "lib/jaime0/jaime0_servicio"
 
     def arbol(self, modulo):

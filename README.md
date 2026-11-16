@@ -73,12 +73,12 @@ El comando `atajos` muestra la lista real y permite añadir los tuyos (`atajos a
 | Lanzador (`SUPER + Espacio`) | Atajos (`SUPER + F1`, con buscador) |
 |---|---|
 | ![Lanzador de aplicaciones](capturas/lanzador.png) | ![Lista de atajos filtrada por SUPER](capturas/atajos.png) |
-| **Notificaciones** (`SUPER + N`): no molestar y volumen | **Bloqueo** (`SUPER + L`, o sola tras 10 min sin uso) |
+| **Notificaciones** (`SUPER + N`): no molestar y volumen | **Bloqueo** (`SUPER + L`, o sola tras 10 min sin uso; se cambia en POWER) |
 | ![Centro de notificaciones](capturas/notificaciones.png) | ![Pantalla de bloqueo](capturas/bloqueo.png) |
 
 ### Control Center
 
-Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`9` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
+Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`9` y `0` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
 
 ![Control Center: SYSTEM](capturas/cc-sistema.png)
 
@@ -93,6 +93,7 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 | **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos y el atajo | `jaime0-ajustes` |
 | **UPDATES** | Versión instalada y disponible de Jaime0 (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
 | **DIAGNOSTICS** | Busca problemas reales (servicios caídos, configuración rota, permisos, gráficos, disco…) y explica cada uno: qué se ha visto, causas posibles, consecuencias y qué hacer. Las reparaciones enseñan las órdenes, piden confirmación y guardan copia | `jaime0-diagnostico comprobar` |
+| **POWER** | Batería en detalle (salud, ciclos, consumo, autonomía), gráficas (integrada, NVIDIA y qué programas la usan), perfil de energía, tiempos de bloqueo y suspensión, e histórico de consumo por perfil. Cada dato dice si es medido, calculado o estimado | `jaime0-ajustes poner inactividad_suspender 30` |
 
 | PERFORMANCE | PROFILES |
 |---|---|
@@ -173,6 +174,7 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 | [nvidia.md](docs/nvidia.md) | La gráfica NVIDIA y Secure Boot |
 | [actualizaciones.md](docs/actualizaciones.md) / [recuperacion.md](docs/recuperacion.md) | Actualizar, instantáneas, cortafuegos y zram |
 | [diagnostico.md](docs/diagnostico.md) | Qué comprueba `jaime0-diagnostico comprobar`, cómo leer un problema y sus reparaciones |
+| [energia.md](docs/energia.md) | La sección POWER: de dónde sale cada dato, NVIDIA, quién manda en cada ajuste e inactividad |
 | [compilar.md](docs/compilar.md) | Compilar la ISO y estructura del repositorio |
 | [pruebas.md](docs/pruebas.md) | Qué se ha probado, qué falta y problemas conocidos |
 

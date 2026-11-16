@@ -21,10 +21,10 @@ from .medicion import leer, nvidia_activa, temperatura_nvidia, Muestreador, arma
 from .historico import leer_jsonl, anexar_jsonl, reescribir_jsonl, Historico
 from .incidencias import nuevo_evento, Detector, NOMBRES_COMPONENTE, Incidencias
 from .sistema import (
-    cargar_umbrales, _gi, consultar_fallidas, consultar_unidad_activa, vigilar_perfil,
+    leer_ajustes, cargar_umbrales, _gi, consultar_fallidas, consultar_unidad_activa, vigilar_perfil,
     consultar_smart, vigilar_suspension, vigilar_archivos, avisar_barra
 )
-from .perfiles import SistemaReal, MotorPerfiles
+from .perfiles import SistemaReal, MotorPerfiles, textos_cambios
 from .privacidad import (
     DISPOSITIVOS_CADA_RAPIDO, leer_conf_ufw, estado_cortafuegos, consultar_ufw_reglas,
     puertos_expuestos, consultar_puertos, dispositivos_en_uso, info_flatpak,
@@ -39,6 +39,10 @@ from .reglas import (
 )
 from .actualizaciones import estado_actualizaciones, Comprobador
 from .diagnostico import Diagnosticador, resumen_diagnostico
+from .energia import (
+    detalle_bateria, graficas, cpu_energia, suspension, inactividad, tiempo_con_cargador,
+    comparar_perfiles, reglas_energia
+)
 from .api import procesar_linea
 
 __all__ = [
@@ -179,7 +183,7 @@ class Servicio:
         os.makedirs(d, mode=0o700, exist_ok=True)
         return d
 
-    def evento(self, texto, tipo=None, gravedad="INFO", proceso=None, origen=None):
+    def evento(self, texto, tipo=None, gravedad="INFO", proceso=None, origen=None, valor=None):
         """Anota en la actividad y, si lleva tipo, tambien como evento para las graficas."""
         t = int(time.time())
         act = {"t": t, "texto": texto}
@@ -187,7 +191,7 @@ class Servicio:
             act["origen"] = origen
         self.actividad.append(act)
         if tipo:
-            self.eventos.append(nuevo_evento(t, tipo, gravedad, texto, proceso, origen))
+            self.eventos.append(nuevo_evento(t, tipo, gravedad, texto, proceso, origen, valor))
 
     def recargar_umbrales(self):
         """Lee los umbrales (jaime0-ajustes: un subproceso) y los aplica, en el acto. En
@@ -236,6 +240,37 @@ class Servicio:
         doc = estado_actualizaciones()
         doc["comprobando_desde"] = self.comprobador.en_curso()
         return doc
+
+    # -- energia (POWER) -----------------------------------------------------------
+    def energia_instantanea(self):
+        """En el bucle: copia de lo que vive en el (anillo, minutos y reglas) para energia_doc."""
+        self.reglas._asegurar()
+        actual = self.historico._minuto_en_curso()
+        return {"ahora": self.reloj(), "anillo": list(self.anillo),
+                "minutos": list(self.historico.minutos) + ([actual] if actual else []),
+                "reglas": reglas_energia(self.reglas.reglas),
+                "cargador": (self.instante or {}).get("cargador")}
+
+    def energia_doc(self, foto):
+        """En el hilo de efectos (lee sysfs, /proc, logind, jaime0-ajustes y, si la NVIDIA ya
+        esta despierta, nvidia-smi). Solo lee: los cambios van por PROFILES y jaime0-ajustes."""
+        ahora, minutos = foto["ahora"], foto["minutos"]
+        perfil = self.perfiles.doc_estado(self.energia)
+        perfiles = []
+        for d in self.perfiles.definiciones():
+            aj = d.get("ajustes") or {}
+            perfiles.append({"id": d["id"], "nombre": d["nombre"], "energia": aj.get("energia"),
+                             "inhibe": aj.get("inhibir_inactividad") == "si",
+                             "cambios": textos_cambios(aj), "descripcion": d.get("descripcion")})
+        activo = next((p for p in perfiles if p["id"] == perfil["activo"]), None)
+        return {"ok": True, "v": VERSION_DATOS, "t": int(ahora), "cargador": foto["cargador"],
+                "bateria": detalle_bateria(foto["anillo"]), "graficas": graficas(), "cpu": cpu_energia(),
+                "suspension": suspension(), "inactividad": dict(inactividad(leer_ajustes()),
+                                                                inhibida_por=activo["nombre"] if activo and activo["inhibe"] else None),
+                "perfil": perfil, "perfiles": perfiles, "reglas": foto["reglas"],
+                "historial": {"desde": int(minutos[0]["t"]) if minutos else None,
+                              "cargador_24h": tiempo_con_cargador(minutos, ahora - 86400),
+                              "perfiles": comparar_perfiles(minutos)}}
 
     def intervalo_normal(self):
         return max(1, int(self.umbrales.get("intervalo_normal", INTERVALO_NORMAL)))
@@ -374,7 +409,7 @@ class Servicio:
         if valor == self.energia:
             return
         if self.energia is not None or valor is not None:
-            self.evento(f"Perfil de energía: {valor or 'N/D'}", "perfil")
+            self.evento(f"Perfil de energía: {valor or 'N/D'}", "perfil", valor=valor)
         self.energia = valor
         self.efectos.enviar(lambda: self.perfiles.retencion_obsoleta(valor), descripcion="retención de energía")
         self._perfil_cambiado()

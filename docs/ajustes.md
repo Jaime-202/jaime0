@@ -60,6 +60,10 @@ Al aplicar, se recarga Hyprland (`hyprctl reload`), Waybar relee su configuraci�
 | `cc_intervalo_rapido` | `1` / `2` / `5` | `2` | Segundos entre medidas con la ventana del Control Center abierta |
 | `cc_notificar` | `todas` / `criticas` / `ninguna` | `criticas` | Avisos de escritorio de incidencias nuevas |
 | `control_atajo` | atajo | `SUPER+I` | Atajo que abre el Control Center (modificadores y una tecla) |
+| `inactividad_bloqueo` | 0-120 (0 = nunca) | `10` | Minutos sin actividad hasta bloquear la sesión |
+| `inactividad_pantalla` | 0-120 (0 = nunca) | `11` | Minutos sin actividad hasta apagar la pantalla |
+| `inactividad_suspender` | 0-240 (0 = nunca) | `30` | Minutos sin actividad hasta suspender |
+| `suspender_con_cargador` | `si` / `no` | `si` | Con `no`, no se suspende por inactividad con el cargador conectado. Los cuatro se aplican con hypridle salvo que hayas personalizado `~/.config/hypr/hypridle.conf` (ver [energia.md](energia.md)) |
 | `barra_altura` | 20-48 | `26` | Altura de Waybar |
 | `barra_posicion` | `arriba` / `abajo` | `arriba` | Posición de Waybar |
 | `anclas` | Hasta 6 identificadores de aplicación (nombre del `.desktop`) | `kitty thunar` | Aplicaciones ancladas en el centro de la barra. Mejor con `jaime0-anclar` |

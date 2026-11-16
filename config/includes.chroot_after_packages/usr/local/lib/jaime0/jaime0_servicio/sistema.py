@@ -18,7 +18,7 @@ from .base import (
 __all__ = [
     "UDISKS", "IFACE_DRIVE", "IFACE_ATA", "IFACE_NVME", "AVISOS_NVME", "kelvin_a_celsius",
     "parsear_smart", "CARPETA_PROGRAMAS", "programa_hermano", "umbrales_desde_ajustes",
-    "cargar_umbrales", "_gi",
+    "leer_ajustes", "cargar_umbrales", "_gi",
     "SYSTEMD", "PPD", "_llamar", "consultar_fallidas", "consultar_unidad_activa",
     "vigilar_perfil", "consultar_smart", "vigilar_suspension", "vigilar_archivos",
     "avisar_barra", "ruta_socket2", "firma_hyprland", "entorno_hyprland"
@@ -126,18 +126,23 @@ def umbrales_desde_ajustes(doc):
     return u
 
 
-def cargar_umbrales(ejecutar=None):
-    """Umbrales de jaime0-ajustes (subproceso con timeout de 5 s) o los de fabrica si falla."""
+def leer_ajustes(ejecutar=None):
+    """'jaime0-ajustes ver --json' (subproceso con timeout de 5 s), o None si falla."""
     ejecutar = ejecutar or subprocess.run
     try:
         programa = programa_hermano("jaime0-ajustes")
         if not programa:
-            return dict(UMBRALES)
+            return None
         r = ejecutar([sys.executable, "-I", programa, "ver", "--json"],
                      capture_output=True, text=True, timeout=5)
-        return umbrales_desde_ajustes(json.loads(r.stdout) if r.returncode == 0 else None)
+        return json.loads(r.stdout) if r.returncode == 0 else None
     except (OSError, ValueError, subprocess.TimeoutExpired):
-        return dict(UMBRALES)
+        return None
+
+
+def cargar_umbrales(ejecutar=None):
+    """Umbrales de jaime0-ajustes o los de fabrica si falla."""
+    return umbrales_desde_ajustes(leer_ajustes(ejecutar))
 
 
 # ---------------------------------------------------------------------------

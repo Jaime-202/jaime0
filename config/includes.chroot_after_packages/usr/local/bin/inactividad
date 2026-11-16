@@ -1,11 +1,38 @@
 #!/bin/sh
-# Bloqueo, pantalla apagada y suspension por inactividad: hypridle con
-# ~/.config/hypr/hypridle.conf. No actua en la sesion en vivo, donde el usuario no conoce
-# la clave. Si hypridle no esta instalado (sistema actualizado a medias), se usa swayidle
-# con los mismos tiempos.
+# Bloqueo, pantalla apagada y suspension por inactividad con hypridle. No actua en la sesion
+# en vivo, donde el usuario no conoce la clave.
+#
+#   inactividad             arranca hypridle
+#   inactividad suspender   suspende, salvo con el cargador conectado (lo usa hypridle
+#                           cuando suspender_con_cargador = no)
+#
+# Los tiempos son ajustes de Jaime0 (inactividad_*, POWER en el Control Center) y
+# jaime0-ajustes los escribe en ~/.config/jaime0/generado/hypridle.conf. Si has cambiado tu
+# ~/.config/hypr/hypridle.conf (ya no es el de /etc/skel), manda el tuyo y esos ajustes no se
+# aplican. Si hypridle no esta instalado (sistema actualizado a medias), se usa swayidle con
+# los tiempos de siempre.
+
+cargador_conectado() {
+    for f in /sys/class/power_supply/*; do
+        [ "$(cat "$f/type" 2>/dev/null)" = Mains ] && [ "$(cat "$f/online" 2>/dev/null)" = 1 ] && return 0
+    done
+    return 1
+}
+
+if [ "$1" = suspender ]; then
+    cargador_conectado && exit 0
+    exec systemctl suspend
+fi
+
 [ -d /run/live/medium ] && exit 0
 
 if command -v hypridle >/dev/null 2>&1; then
+    PROPIO="$HOME/.config/hypr/hypridle.conf"
+    GENERADO="${XDG_CONFIG_HOME:-$HOME/.config}/jaime0/generado/hypridle.conf"
+    if [ ! -e "$PROPIO" ] || cmp -s "$PROPIO" /etc/skel/.config/hypr/hypridle.conf; then
+        [ -r "$GENERADO" ] || jaime0-ajustes generar >/dev/null 2>&1
+        [ -r "$GENERADO" ] && exec hypridle -c "$GENERADO"
+    fi
     exec hypridle
 fi
 

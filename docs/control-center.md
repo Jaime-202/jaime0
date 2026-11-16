@@ -2,7 +2,7 @@
 
 Estado: **Fases 1 a 8 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con sus 7 secciones (SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH y SETTINGS), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Probado de punta a punta en un sistema instalado desde una ISO nueva (fase 8); queda lo que solo existe en el portátil.
 
-Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [actualizaciones.md](actualizaciones.md)) y **DIAGNOSTICS** (sección 09, ver [diagnostico.md](diagnostico.md)); las teclas van de `1` a `9`.
+Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [actualizaciones.md](actualizaciones.md)) y **DIAGNOSTICS** (sección 09, ver [diagnostico.md](diagnostico.md)) y **POWER** (sección 10, tecla `0`, ver [energia.md](energia.md)); las teclas van de `1` a `9` y `0`.
 
 ## DIAGNOSTICS (evolución, fase 5)
 

@@ -122,7 +122,9 @@ def muestra_desde_instante(inst):
             "presion": ram.get("presion"), "temp": cpu.get("temp"), "gpu_temp": gpu.get("temp"),
             "bateria": bat.get("nivel"), "vatios": bat.get("vatios"),
             "lectura": raiz_disco.get("lectura"), "escritura": raiz_disco.get("escritura"),
-            "disco": pct(raiz_disco.get("usado"), raiz_disco.get("total"))}
+            "disco": pct(raiz_disco.get("usado"), raiz_disco.get("total")),
+            # 1 conectado, 0 no; la media de un minuto es la fraccion del minuto con cargador.
+            "cargador": {True: 1, False: 0}.get(inst.get("cargador"))}
 
 
 def anillo_agregar(anillo, inst):

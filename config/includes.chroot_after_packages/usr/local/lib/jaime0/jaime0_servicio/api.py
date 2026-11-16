@@ -114,6 +114,16 @@ def procesar_linea(linea, ctx, responder=None):
             if not ctx.comprobador.comprobar(lambda doc: ctx.al_bucle(responder, json.dumps(doc, ensure_ascii=False))):
                 return json.dumps({"ok": False, "error": "ya hay una comprobación en marcha"})
             return None
+        if orden == "energia":
+            # La foto del bucle (anillo, minutos, reglas) se toma aqui; lo que lee el sistema va
+            # al hilo de efectos.
+            foto = ctx.energia_instantanea()
+            calcular = lambda: ctx.energia_doc(foto)
+            efectos = getattr(ctx, "efectos", None)
+            if responder is None or efectos is None or not efectos.activo():
+                return json.dumps(calcular(), ensure_ascii=False)
+            efectos.enviar(calcular, lambda doc: responder(json.dumps(doc, ensure_ascii=False)), "orden energia")
+            return None
         if orden == "diagnostico":
             return json.dumps(ctx.diagnosticador.documento(), ensure_ascii=False)
         if orden == "diagnostico_ejecutar":

@@ -31,7 +31,8 @@ ShellRoot {
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" },
         { id: "UPDATES", titulo: "UPDATE MANAGER" },
-        { id: "DIAGNOSTICS", titulo: "SYSTEM DIAGNOSTICS" }
+        { id: "DIAGNOSTICS", titulo: "SYSTEM DIAGNOSTICS" },
+        { id: "POWER", titulo: "POWER MANAGER" }
     ]
 
     function leerJson(vista) {
@@ -145,7 +146,8 @@ ShellRoot {
             focus: true
             Keys.onEscapePressed: Qt.quit()
             Keys.onPressed: evento => {
-                const n = evento.key - Qt.Key_1;
+                // 1-9 y 0 (la decima seccion).
+                const n = evento.key === Qt.Key_0 ? 9 : evento.key - Qt.Key_1;
                 if (n >= 0 && n < raiz.secciones.length) {
                     raiz.seccion = n;
                     evento.accepted = true;
@@ -336,7 +338,7 @@ ShellRoot {
                     anchors.bottomMargin: 12
                     x: 16
                     width: parent.width - 32
-                    text: "1–" + raiz.secciones.length + "  sección\nESC  cerrar"
+                    text: "1–9, 0  sección\nESC  cerrar"
                     color: Tema.apagado
                     font.family: Tema.mono
                     font.pixelSize: Tema.letraMini
@@ -360,7 +362,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes, vistaActualizaciones, vistaDiagnosticos][raiz.seccion]
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes, vistaActualizaciones, vistaDiagnosticos, vistaEnergia][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -419,6 +421,10 @@ ShellRoot {
                 Component {
                     id: vistaDiagnosticos
                     Diagnosticos {}
+                }
+                Component {
+                    id: vistaEnergia
+                    Energia { instante: raiz.instante }
                 }
             }
 

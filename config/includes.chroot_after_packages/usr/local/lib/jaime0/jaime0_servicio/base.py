@@ -48,7 +48,7 @@ UMBRAL_PICO_RAM = 90.0
 SALTO_TEMPERATURA = 15.0    # grados entre muestras consecutivas
 RANGOS = {"5m": 300, "1h": 3600, "24h": 86400}      # "historia" no tiene ventana fija
 METRICAS = ("cpu", "ram", "swap", "presion", "temp", "gpu_temp", "bateria", "vatios",
-            "lectura", "escritura", "disco")
+            "lectura", "escritura", "disco", "cargador")
 
 # Umbrales unicos del estado global (ver evaluar). Por defecto; los de jaime0-ajustes los
 # sustituyen (ver cargar_umbrales).

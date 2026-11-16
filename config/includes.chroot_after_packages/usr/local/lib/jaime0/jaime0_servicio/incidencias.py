@@ -16,11 +16,14 @@ __all__ = [
 # Eventos de actividad (marcadores de las graficas)
 # ---------------------------------------------------------------------------
 
-def nuevo_evento(t, tipo, gravedad, texto, proceso=None, origen=None):
-    """Evento de las graficas. 'origen' (usuario|regla|inicio) solo lo llevan los cambios de perfil."""
+def nuevo_evento(t, tipo, gravedad, texto, proceso=None, origen=None, valor=None):
+    """Evento de las graficas. 'origen' (usuario|regla|inicio) solo lo llevan los cambios de perfil
+    y 'valor' los del perfil de energia (balanced, performance o power-saver: ver energia)."""
     ev = {"t": int(t), "tipo": tipo, "gravedad": gravedad, "texto": texto, "proceso": proceso}
     if origen:
         ev["origen"] = origen
+    if valor:
+        ev["valor"] = valor
     return ev
 
 

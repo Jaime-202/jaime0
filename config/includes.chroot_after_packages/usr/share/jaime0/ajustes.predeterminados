@@ -59,6 +59,13 @@ cc_intervalo = 10
 cc_intervalo_rapido = 2
 cc_notificar = criticas
 control_atajo = SUPER+I
+# Energia: minutos de inactividad hasta bloquear, apagar la pantalla y suspender (0 = nunca;
+# bloqueo y pantalla 0-120, suspension 0-240). suspender_con_cargador = no: con el cargador
+# conectado no se suspende por inactividad.
+inactividad_bloqueo = 10
+inactividad_pantalla = 11
+inactividad_suspender = 30
+suspender_con_cargador = si
 
 # Temas de acento: tema.NOMBRE = #rrggbb. "acento" acepta un nombre o un color #rrggbb.
 tema.verde = #54e58a
