@@ -713,7 +713,7 @@ class PruebasApi(Base):
         sv = self.sv_completo()
         with mock.patch.object(S.privacidad_mod, "nombres_de_grupos", return_value=["sudo", "audio"]):
             r = json.loads(S.procesar_linea(json.dumps({"orden": "privacidad"}), sv))
-        self.assertEqual(sorted(r), ["conexiones", "cortafuegos", "dispositivos", "estado", "flatpak",
+        self.assertEqual(sorted(r), ["categorias", "conexiones", "cortafuegos", "dispositivos", "estado", "flatpak",
                                      "historial", "ok", "privilegios", "puertos", "servicios", "telemetria", "v"])
         self.assertTrue(r["ok"])
         self.assertEqual(r["v"], 1)

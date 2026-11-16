@@ -4,6 +4,19 @@ Estado: **Fases 1 a 8 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaim
 
 Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [actualizaciones.md](actualizaciones.md)) y **DIAGNOSTICS** (sección 09, ver [diagnostico.md](diagnostico.md)) y **POWER** (sección 10, tecla `0`, ver [energia.md](energia.md)); las teclas van de `1` a `9` y `0`.
 
+## Una responsabilidad por sección (evolución, fase 7)
+
+| Sección | Responde a | No repite |
+|---|---|---|
+| SYSTEM | ¿Cómo está el sistema ahora? Estado global, perfil, CPU, memoria, temperatura, disco, batería, privacidad, servicios importantes (red, energía, cortafuegos, Bluetooth, sonido), actualizaciones pendientes, alertas (con la de DIAGNOSTICS) y actividad reciente | Procesos (antes «TOP PROCESSES»: ahora en PERFORMANCE) |
+| PERFORMANCE | ¿Qué está pasando ahora? Núcleos y frecuencias, carga de 5 min y carga media 1/5/15, memoria, disco, red, GPU, picos recientes y la tabla de procesos: ordenar por CPU, RAM, nombre o PID, buscar, ver el detalle (orden completa, usuario, padre, hilos, memoria, inicio) y en ámbar los que gastan mucho | El perfil de energía (está en PROFILES y POWER) y el histórico (HEALTH). No hay acciones sobre procesos: es solo lectura |
+| HEALTH | ¿Cómo evoluciona y qué problemas presenta? Gráficas por rango, temperaturas, almacenamiento, batería, incidencias y SENSORS & TRENDS (mínimo, media y pico de cada métrica en el rango, todos los sensores y los eventos) | Núcleos y procesos (la antigua vista detallada los repetía) |
+| PRIVACY & SECURITY | ACTIVE SECURITY, APPLICATION PERMISSIONS y SYSTEM VISIBILITY, con los estados `ACTIVE`, `WARNING`, `DISABLED`, `UNAVAILABLE` y `NOT APPLICABLE` | Lo no comprobable o lo que el equipo no tiene va siempre a SYSTEM VISIBILITY: ni es un problema ni cuenta como protección |
+| AUTOMATION | Reglas activas y desactivadas, últimas y próximas ejecuciones, errores, conflictos e historial (fase 3) | |
+| SETTINGS | Preferencias del Control Center: animaciones, frecuencia, umbrales, avisos y atajo | Inactividad y suspensión (POWER), actualizaciones (UPDATES), diagnósticos (DIAGNOSTICS) |
+
+Nuevo en el servicio: órdenes `procesos` (todos los de la última muestra) y `proceso` (detalle de uno, solo lectura de `/proc`); `red` (KB/s recibidos y enviados, sin `lo`) y `cpu.carga` (`/proc/loadavg`) en el instante; `servicios` en `estado.json` (una llamada a `systemctl show` por ámbito cada 60 s); y `categorias` en la orden `privacidad`, con AppArmor (`/sys/module/apparmor`) y Secure Boot (variable EFI, legible sin root) además de lo que ya se comprobaba.
+
 ## DIAGNOSTICS (evolución, fase 5)
 
 | Zona | Contenido |

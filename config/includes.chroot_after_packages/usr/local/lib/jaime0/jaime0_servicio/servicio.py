@@ -21,7 +21,7 @@ from .medicion import leer, nvidia_activa, temperatura_nvidia, Muestreador, arma
 from .historico import leer_jsonl, anexar_jsonl, reescribir_jsonl, Historico
 from .incidencias import nuevo_evento, Detector, NOMBRES_COMPONENTE, Incidencias
 from .sistema import (
-    leer_ajustes, cargar_umbrales, _gi, consultar_fallidas, consultar_unidad_activa, vigilar_perfil,
+    leer_ajustes, cargar_umbrales, estado_unidades, _gi, consultar_fallidas, consultar_unidad_activa, vigilar_perfil,
     consultar_smart, vigilar_suspension, vigilar_archivos, avisar_barra
 )
 from .perfiles import SistemaReal, MotorPerfiles, textos_cambios
@@ -29,7 +29,7 @@ from .privacidad import (
     DISPOSITIVOS_CADA_RAPIDO, leer_conf_ufw, estado_cortafuegos, consultar_ufw_reglas,
     puertos_expuestos, consultar_puertos, dispositivos_en_uso, info_flatpak,
     grupos_privilegiados, servicios_privacidad, telemetria, eventos_privacidad,
-    HistorialPrivacidad
+    HistorialPrivacidad, categorias_privacidad, estado_apparmor, estado_secure_boot
 )
 from .estado import evaluar, resumen_privacidad, anillo_agregar
 from .reglas import (
@@ -143,6 +143,7 @@ class Servicio:
             incidencia=lambda linea: self.anotar_incidencias([linea]), evento=self.evento,
             notificar=self._perfil_cambiado)
         self.fallidas = None
+        self.servicios = None               # SERVICIOS_IMPORTANTES con su estado (refresco lento)
         self.privacidad = resumen_privacidad(None)
         self.priv_ejecutar = subprocess.run     # las pruebas lo sustituyen
         self.priv_historial = HistorialPrivacidad(
@@ -354,6 +355,7 @@ class Servicio:
                 "incidencias_abiertas": self.incidencias_estado.abiertas(),
                 "disponible": self.historico.disponibilidad(self.anillo, self.reloj()),
                 "diagnostico": resumen_diagnostico(self.diagnosticador.ultimo),
+                "servicios": self.servicios,
                 "servicio": {"pid": os.getpid(), "desde": self.desde, "intervalo": self.intervalo_actual(),
                              "efectos": self.efectos.estado()}}
 
@@ -479,6 +481,7 @@ class Servicio:
             self.priv_recalcular()
 
         self.efectos.enviar(self.perfiles.refrescar_degradado, descripcion="perfil degradado")
+        self.efectos.enviar(estado_unidades, lambda r: setattr(self, "servicios", r), "servicios importantes")
         consultar_fallidas(con_fallidas)
         if leer("etc", "ufw", "ufw.conf") is not None:
             consultar_unidad_activa("ufw.service", con_ufw)
@@ -574,6 +577,7 @@ class Servicio:
                     "servicios": servicios_privacidad(ejecutar),
                     "telemetria": telemetria(ejecutar),
                     "historial": self.priv_historial.ultimos(20)})
+        doc["categorias"] = categorias_privacidad(doc, estado_apparmor(), estado_secure_boot())
         return doc
 
     def ufw_reglas_doc(self, reservado=False):

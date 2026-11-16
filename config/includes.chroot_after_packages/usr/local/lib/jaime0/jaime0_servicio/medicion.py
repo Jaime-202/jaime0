@@ -15,7 +15,8 @@ __all__ = [
     "estado_nvidia", "nvidia_activa", "temperatura_nvidia", "uso_disco", "puntos_de_disco",
     "parsear_diskstats", "io_disco", "dispositivo_raiz", "ESTADOS_BATERIA", "leer_bateria",
     "leer_cargador", "leer_uptime", "tics_por_segundo", "leer_procesos", "ram_proceso",
-    "procesos_top", "Muestreador", "armar_instante"
+    "procesos_top", "carga_media", "tamano_pagina", "ESTADOS_PROCESO", "lista_procesos", "detalle_proceso", "parsear_net_dev", "io_red",
+    "Muestreador", "armar_instante"
 ]
 
 
@@ -299,7 +300,8 @@ def tics_por_segundo():
 
 
 def leer_procesos():
-    """{pid: (tics_cpu, nombre)} de /proc/[pid]/stat. Tolera procesos que desaparecen."""
+    """{pid: (tics_cpu, nombre, estado, hilos, rss_paginas)} de /proc/[pid]/stat. Tolera
+    procesos que desaparecen."""
     d = {}
     for p in glob.glob(ruta("proc", "[0-9]*")):
         pid = os.path.basename(p)
@@ -310,7 +312,8 @@ def leer_procesos():
                 t = f.read()
             nombre = t[t.index("(") + 1:t.rindex(")")]
             c = t[t.rindex(")") + 1:].split()
-            d[int(pid)] = (int(c[11]) + int(c[12]), nombre)   # utime + stime
+            entero = lambda i: int(c[i]) if len(c) > i else None
+            d[int(pid)] = (int(c[11]) + int(c[12]), nombre, c[0], entero(17), entero(21))   # utime + stime
         except (OSError, ValueError, IndexError):
             continue
     return d
@@ -333,7 +336,8 @@ def procesos_top(antes, ahora, dt, cuantos=5):
         return None
     tics = tics_por_segundo()
     lista = []
-    for pid, (t, nombre) in ahora.items():
+    for pid, p in ahora.items():
+        t, nombre = p[0], p[1]
         if pid in antes:
             cpu = (t - antes[pid][0]) / tics / dt * 100.0
             if cpu > 0:
@@ -343,17 +347,120 @@ def procesos_top(antes, ahora, dt, cuantos=5):
             for cpu, pid, nombre in lista[:cuantos]]
 
 
+def carga_media():
+    """[1, 5, 15] minutos de /proc/loadavg (procesos ejecutandose o esperando), o None."""
+    try:
+        return [float(x) for x in (leer("proc", "loadavg") or "").split()[:3]] or None
+    except ValueError:
+        return None
+
+
+def tamano_pagina():
+    try:
+        return os.sysconf("SC_PAGE_SIZE")
+    except (AttributeError, ValueError, OSError):
+        return 4096
+
+
+ESTADOS_PROCESO = {"R": "ejecutando", "S": "esperando", "D": "esperando disco", "Z": "zombi",
+                   "T": "parado", "t": "parado", "I": "inactivo"}
+
+
+def lista_procesos(antes, ahora, dt):
+    """Todos los procesos con su CPU entre dos muestras (100 % = un nucleo), RAM en MiB (RSS),
+    hilos y estado, de mas a menos CPU. Un proceso nuevo (sin muestra previa) sale con CPU None."""
+    if not ahora:
+        return []
+    tics, pagina = tics_por_segundo(), tamano_pagina()
+    salida = []
+    for pid, p in ahora.items():
+        t, nombre, estado, hilos, rss = (tuple(p) + (None,) * 5)[:5]
+        cpu = None
+        if antes and pid in antes and dt > 0:
+            cpu = round(max(0.0, (t - antes[pid][0]) / tics / dt * 100.0), 1)
+        salida.append({"pid": pid, "nombre": nombre, "cpu": cpu,
+                       "ram": None if rss is None else round(rss * pagina / 1048576.0, 1),
+                       "hilos": hilos, "estado": ESTADOS_PROCESO.get(estado, estado)})
+    salida.sort(key=lambda x: (x["cpu"] if x["cpu"] is not None else -1, x["ram"] or 0), reverse=True)
+    return salida
+
+
+def detalle_proceso(pid):
+    """Orden completa, usuario, padre, hilos, memoria e inicio de un proceso, o None si ya no
+    existe. Solo lee /proc: nada se cambia."""
+    status = leer("proc", str(pid), "status")
+    if status is None:
+        return None
+    campos = {}
+    for linea in status.splitlines():
+        if ":" in linea:
+            k, v = linea.split(":", 1)
+            campos[k] = v.strip()
+    orden = (leer("proc", str(pid), "cmdline") or "").replace("\x00", " ").strip()
+    uid = (campos.get("Uid") or "").split()
+    usuario = uid[0] if uid else None
+    try:
+        import pwd
+        usuario = pwd.getpwuid(int(uid[0])).pw_name
+    except (ImportError, KeyError, ValueError, IndexError):
+        pass
+    inicio = None
+    stat = leer("proc", str(pid), "stat")
+    if stat and ")" in stat:
+        c = stat[stat.rindex(")") + 1:].split()
+        try:
+            arranque = leer_uptime()
+            if arranque is not None:
+                inicio = int(time.time() - arranque + int(c[19]) / tics_por_segundo())
+        except (IndexError, ValueError):
+            pass
+    def numero(clave):
+        primero = (campos.get(clave) or "").split()[:1]
+        return int(primero[0]) if primero and primero[0].isdigit() else None
+
+    mib = lambda kb: None if kb is None else round(kb / 1024.0, 1)
+    return {"pid": int(pid), "nombre": campos.get("Name"), "orden": orden or None, "usuario": usuario,
+            "padre": numero("PPid"), "hilos": numero("Threads"), "estado": campos.get("State"),
+            "ram_mib": mib(numero("VmRSS")), "swap_mib": mib(numero("VmSwap")), "inicio": inicio}
+
+
+def parsear_net_dev(texto):
+    """{interfaz: (bytes_recibidos, bytes_enviados)} de /proc/net/dev, sin 'lo'."""
+    d = {}
+    for linea in (texto or "").splitlines()[2:]:
+        if ":" not in linea:
+            continue
+        nombre, resto = linea.split(":", 1)
+        c = resto.split()
+        if nombre.strip() != "lo" and len(c) >= 9 and c[0].isdigit() and c[8].isdigit():
+            d[nombre.strip()] = (int(c[0]), int(c[8]))
+    return d
+
+
+def io_red(antes, ahora, dt):
+    """{"rx", "tx"} en KB/s (10^3 B) sumando las interfaces comunes, o None."""
+    if not antes or not ahora or dt <= 0:
+        return None
+    comunes = set(antes) & set(ahora)
+    if not comunes:
+        return None
+    kb = lambda i: round(max(0, sum(ahora[n][i] - antes[n][i] for n in comunes)) / 1000.0 / dt, 1)
+    return {"rx": kb(0), "tx": kb(1)}
+
+
 class Muestreador:
     """Guarda la lectura anterior para calcular los porcentajes por diferencias."""
 
     def __init__(self):
         self.previa = None
+        self.lista = []             # todos los procesos de la ultima muestra (orden "procesos")
 
     def crudo(self):
         return {"mono": time.monotonic(),
                 "cpu": parsear_cpu_stat(leer("proc", "stat")),
                 "procs": leer_procesos(),
-                "disk": parsear_diskstats(leer("proc", "diskstats"))}
+                "disk": parsear_diskstats(leer("proc", "diskstats")),
+                "net": parsear_net_dev(leer("proc", "net", "dev"))}
 
     def base(self):
         self.previa = self.crudo()
@@ -370,7 +477,7 @@ class Muestreador:
         cpu = {"total": porcentaje_cpu(total_a, total_b),
                "nucleos": [porcentaje_cpu(nuc_a.get(n), nuc_b[n]) for n in indices] if antes else None,
                "mhz": mhz if any(m is not None for m in mhz) else None,
-               "temp": temperatura_cpu(temps)}
+               "temp": temperatura_cpu(temps), "carga": carga_media()}
         dev = dispositivo_raiz()
         lectura = escritura = None
         if antes and dev:
@@ -381,7 +488,9 @@ class Muestreador:
             if u:
                 u["lectura"], u["escritura"] = (lectura, escritura) if punto == "/" else (None, None)
                 discos.append(u)
+        self.lista = lista_procesos(antes["procs"] if antes else None, ahora["procs"], dt)
         return {"cpu": cpu, "ram": leer_ram(), "temp": temps,
+                "red": io_red(antes.get("net") if antes else None, ahora["net"], dt),
                 "gpu": {"nvidia": estado_nvidia(), "temp": None},
                 "disco": discos or None, "bateria": leer_bateria(), "cargador": leer_cargador(),
                 "uptime": leer_uptime(),

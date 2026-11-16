@@ -26,7 +26,8 @@ __all__ = [
     "parsear_ss", "puertos_expuestos", "agrupar_conexiones", "consultar_puertos",
     "_nombre_aplicacion", "_entero", "parsear_pw_dump", "camaras_en_uso", "dispositivos_en_uso",
     "info_flatpak", "nombres_de_grupos", "grupos_privilegiados", "servicios_privacidad",
-    "ciudad_del_tiempo", "telemetria", "eventos_privacidad", "HistorialPrivacidad"
+    "ciudad_del_tiempo", "telemetria", "ESTADOS_PRIVACIDAD", "EFIVAR_SECURE_BOOT", "estado_apparmor",
+    "estado_secure_boot", "_elemento", "_cortafuegos", "_puertos", "categorias_privacidad", "eventos_privacidad", "HistorialPrivacidad"
 ]
 
 
@@ -487,6 +488,158 @@ def telemetria(ejecutar=None, ciudad=_AUTO):
     else:
         lista.append({"elemento": "Brave", "estado": "NO INSTALADO", "texto": "No instalado"})
     return lista
+
+
+# -- categorias (evolucion, fase 7) ------------------------------------------------
+# ACTIVE SECURITY (protecciones y lo que se expone a la red), APPLICATION PERMISSIONS (lo que
+# pueden usar las aplicaciones) y SYSTEM VISIBILITY (lo que no se puede comprobar o no aplica).
+# Estados: ACTIVE (comprobado y en marcha), WARNING (comprobado y merece atencion), DISABLED
+# (existe pero esta apagado), UNAVAILABLE (no se pudo comprobar) y NOT_APPLICABLE (este equipo
+# no lo tiene). Un elemento UNAVAILABLE o NOT_APPLICABLE va siempre a SYSTEM VISIBILITY: no se
+# confunde con un problema de seguridad ni cuenta como proteccion.
+
+ESTADOS_PRIVACIDAD = ("ACTIVE", "WARNING", "DISABLED", "UNAVAILABLE", "NOT_APPLICABLE")
+EFIVAR_SECURE_BOOT = "SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+
+
+def estado_apparmor():
+    """True/False segun el modulo AppArmor del nucleo; None si no se puede leer."""
+    valor = leer("sys", "module", "apparmor", "parameters", "enabled")
+    return None if valor is None else valor.strip().upper().startswith("Y")
+
+
+def estado_secure_boot():
+    """True/False de la variable EFI (legible sin root); "no_efi" en un arranque BIOS; None si
+    no se pudo leer."""
+    if not os.path.isdir(ruta("sys", "firmware", "efi")):
+        return "no_efi"
+    try:
+        with open(ruta("sys", "firmware", "efi", "efivars", EFIVAR_SECURE_BOOT), "rb") as f:
+            datos = f.read()
+        return bool(datos) and datos[-1] == 1
+    except OSError:
+        return None
+
+
+def _elemento(ident, nombre, estado, texto, detalle=None):
+    return {"id": ident, "nombre": nombre, "estado": estado, "texto": texto, "detalle": detalle or []}
+
+
+def _cortafuegos(cf):
+    politicas = cf.get("politicas") or {}
+    nombre = "Cortafuegos (UFW)"
+    if not cf.get("instalado"):
+        return _elemento("cortafuegos", nombre, "UNAVAILABLE", "UFW no está instalado")
+    if cf.get("activo"):
+        if politicas.get("entrante") == "ACCEPT":
+            return _elemento("cortafuegos", nombre, "WARNING", "Activo, pero la entrada está permitida por defecto")
+        return _elemento("cortafuegos", nombre, "ACTIVE", "Activo: entrante {}, saliente {}".format(
+            politicas.get("entrante") or "N/D", politicas.get("saliente") or "N/D"))
+    activado = parsear_conf(leer("etc", "ufw", "ufw.conf")).get("ENABLED", "").lower() == "yes"
+    if activado and cf.get("unidad_activa") is None:
+        return _elemento("cortafuegos", nombre, "UNAVAILABLE",
+                         "Activado en su configuración, pero no se pudo consultar su servicio")
+    if activado:
+        return _elemento("cortafuegos", nombre, "WARNING", "Activado en su configuración, pero su servicio no está en marcha")
+    return _elemento("cortafuegos", nombre, "DISABLED", "Instalado pero desactivado")
+
+
+def _puertos(puertos, cf):
+    nombre = "Puertos abiertos a la red"
+    if puertos is None:
+        return _elemento("puertos", nombre, "UNAVAILABLE", "No se pudieron consultar (ss)")
+    expuestos = [p for p in puertos if p.get("expuesto")]
+    if not expuestos:
+        return _elemento("puertos", nombre, "ACTIVE", "Ningún programa escucha conexiones de la red")
+    filtra = cf.get("activo") and (cf.get("politicas") or {}).get("entrante") != "ACCEPT"
+    detalle = ["{} {} · {}".format(p.get("protocolo"), p.get("puerto"), p.get("proceso") or "proceso de otro usuario")
+               for p in expuestos]
+    return _elemento("puertos", nombre, "WARNING", "{} abierto(s): {}".format(
+        len(expuestos), "UFW los bloquea salvo que una regla lo permita" if filtra else "ningún cortafuegos los filtra"),
+        detalle)
+
+
+def categorias_privacidad(doc, apparmor=None, secure_boot=None):
+    """Clasifica el documento de la orden "privacidad" en las tres categorias, con un estado
+    por elemento y la cuenta de cada estado."""
+    cf = doc.get("cortafuegos") or {}
+    activa = [_cortafuegos(cf), _puertos(doc.get("puertos"), cf)]
+    if apparmor is None:
+        activa.append(_elemento("apparmor", "AppArmor", "UNAVAILABLE", "No se pudo leer el estado del módulo"))
+    else:
+        activa.append(_elemento("apparmor", "AppArmor", "ACTIVE" if apparmor else "DISABLED",
+                                "Limita lo que pueden hacer los programas que tienen perfil" if apparmor
+                                else "El módulo del núcleo está desactivado"))
+    if secure_boot == "no_efi":
+        activa.append(_elemento("secure_boot", "Secure Boot", "NOT_APPLICABLE", "El equipo arranca en modo BIOS (sin UEFI)"))
+    elif secure_boot is None:
+        activa.append(_elemento("secure_boot", "Secure Boot", "UNAVAILABLE", "No se pudo leer la variable del firmware"))
+    else:
+        activa.append(_elemento("secure_boot", "Secure Boot", "ACTIVE" if secure_boot else "DISABLED",
+                                "El firmware solo arranca sistemas y módulos firmados" if secure_boot
+                                else "El firmware arranca cualquier sistema (no es un problema por sí solo)"))
+    for s in doc.get("servicios") or []:
+        nombre = str(s.get("nombre"))
+        estado = {"activo": "WARNING" if nombre == "ssh" else "ACTIVE", "inactivo": "DISABLED",
+                  "no instalado": "NOT_APPLICABLE"}.get(s.get("estado"), "UNAVAILABLE")
+        prefijo = {"ACTIVE": "En marcha. ", "WARNING": "En marcha. ", "DISABLED": "Parado. "}.get(estado, "")
+        texto = "No se pudo consultar" if estado == "UNAVAILABLE" else prefijo + (s.get("texto") or "")
+        activa.append(_elemento("servicio_" + nombre, "Servicio " + nombre, estado, texto.strip()))
+    telem = doc.get("telemetria") or []
+    envia = any(t.get("elemento") == "popularity-contest" and t.get("estado") == "ACTIVO" for t in telem)
+    conectan = [t for t in telem if t.get("estado") == "ACTIVO" and t.get("elemento") != "popularity-contest"]
+    activa.append(_elemento(
+        "telemetria", "Telemetría", "WARNING" if envia else "ACTIVE",
+        "popularity-contest envía estadísticas de paquetes a Debian" if envia else
+        "Jaime0 no envía nada" + ("; {} elemento(s) se conectan a internet".format(len(conectan)) if conectan else ""),
+        ["{}: {}".format(t.get("elemento"), t.get("texto")) for t in telem]))
+
+    permisos = []
+    flatpak = doc.get("flatpak") or {}
+    if flatpak.get("estado") == "AVAILABLE":
+        apps = flatpak.get("aplicaciones") or []
+        permisos.append(_elemento("flatpak", "Aplicaciones Flatpak", "ACTIVE",
+                                  "{} aplicación(es) aisladas con sus permisos".format(len(apps)),
+                                  ["{}: {}".format(a.get("aplicacion"), "; ".join(a.get("permisos") or []) or "permisos no legibles")
+                                   for a in apps]))
+    elif os.path.exists(ruta("usr", "bin", "flatpak")):
+        permisos.append(_elemento("flatpak", "Aplicaciones Flatpak", "UNAVAILABLE", flatpak.get("texto") or "No se pudo consultar"))
+    else:
+        permisos.append(_elemento("flatpak", "Aplicaciones Flatpak", "NOT_APPLICABLE", "Flatpak no está instalado"))
+    permisos.append(_elemento("carpetas", "Acceso a carpetas por aplicación", "UNAVAILABLE",
+                              "Los programas de Debian no tienen permisos por aplicación: usan el acceso de tu "
+                              "usuario a tus carpetas y dispositivos."))
+    disp = doc.get("dispositivos") or {}
+    for clave, nombre in (("microfono", "Micrófono"), ("camara", "Cámara"), ("pantalla", "Pantalla compartida")):
+        uso = disp.get(clave)
+        if uso is None:
+            permisos.append(_elemento(clave, nombre, "UNAVAILABLE", "No se puede comprobar en este sistema"))
+        elif uso:
+            quien = ", ".join(str(x.get("aplicacion")) + (" ({})".format(x["pid"]) if x.get("pid") else "") for x in uso)
+            permisos.append(_elemento(clave, nombre, "WARNING", "En uso por " + quien))
+        else:
+            permisos.append(_elemento(clave, nombre, "ACTIVE", "Vigilado: ahora no lo usa nadie"))
+    grupos = (doc.get("privilegios") or {}).get("grupos") or []
+    docker = any(g.get("grupo") == "docker" for g in grupos)
+    permisos.append(_elemento("privilegios", "Privilegios de tu usuario", "WARNING" if docker else "ACTIVE",
+                              "{} grupo(s) con poder{}".format(len(grupos), " (docker equivale a administrador)" if docker else ""),
+                              [g.get("texto") for g in grupos]))
+
+    visibilidad = []
+    if cf.get("instalado"):
+        visibilidad.append(_elemento("reglas_ufw", "Reglas del cortafuegos", "UNAVAILABLE",
+                                     "Solo se leen con tu contraseña (VER REGLAS, solo lectura)"))
+    if any(p.get("proceso") is None for p in doc.get("puertos") or []) or \
+            any(c.get("proceso") is None for c in doc.get("conexiones") or []):
+        visibilidad.append(_elemento("otros_usuarios", "Procesos de otros usuarios", "UNAVAILABLE",
+                                     "Sin root no se ve qué programa del sistema u otro usuario usa un puerto o una conexión"))
+    salida = {"activa": [], "permisos": [], "visibilidad": visibilidad}
+    for destino, lista in (("activa", activa), ("permisos", permisos)):
+        for e in lista:
+            (salida["visibilidad"] if e["estado"] in ("UNAVAILABLE", "NOT_APPLICABLE") else salida[destino]).append(e)
+    todos = salida["activa"] + salida["permisos"] + salida["visibilidad"]
+    salida["cuenta"] = {e: sum(1 for x in todos if x["estado"] == e) for e in ESTADOS_PRIVACIDAD}
+    return salida
 
 
 # -- historial de acciones relevantes ----------------------------------------------

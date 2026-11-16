@@ -18,7 +18,7 @@ from .base import (
 __all__ = [
     "UDISKS", "IFACE_DRIVE", "IFACE_ATA", "IFACE_NVME", "AVISOS_NVME", "kelvin_a_celsius",
     "parsear_smart", "CARPETA_PROGRAMAS", "programa_hermano", "umbrales_desde_ajustes",
-    "leer_ajustes", "cargar_umbrales", "_gi",
+    "leer_ajustes", "cargar_umbrales", "SERVICIOS_IMPORTANTES", "parsear_show", "estado_unidades", "_gi",
     "SYSTEMD", "PPD", "_llamar", "consultar_fallidas", "consultar_unidad_activa",
     "vigilar_perfil", "consultar_smart", "vigilar_suspension", "vigilar_archivos",
     "avisar_barra", "ruta_socket2", "firma_hyprland", "entorno_hyprland"
@@ -124,6 +124,60 @@ def umbrales_desde_ajustes(doc):
         if isinstance(a, dict) and a.get("clave") == "cc_notificar" and a.get("valor") in OPCIONES_NOTIFICAR:
             u["notificar"] = a["valor"]
     return u
+
+
+# Servicios que SYSTEM ensena (nombre, unidad, de usuario). Uno que no esta instalado sale como
+# tal, no como fallo.
+SERVICIOS_IMPORTANTES = (
+    ("Red", "NetworkManager.service", False),
+    ("Energía", "power-profiles-daemon.service", False),
+    ("Cortafuegos", "ufw.service", False),
+    ("Bluetooth", "bluetooth.service", False),
+    ("Sonido", "pipewire.service", True),
+)
+
+
+def parsear_show(texto):
+    """Bloques de 'systemctl show -p Id -p LoadState -p ActiveState u1 u2...' -> {Id: estado}."""
+    estados = {}
+    for bloque in (texto or "").split("\n\n"):
+        d = dict(l.split("=", 1) for l in bloque.splitlines() if "=" in l)
+        if not d.get("Id"):
+            continue
+        if d.get("LoadState") == "not-found":
+            estado = "no instalado"
+        elif d.get("ActiveState") == "active":
+            estado = "activo"
+        elif d.get("ActiveState") == "failed":
+            estado = "fallido"
+        elif d.get("ActiveState") in ("activating", "reloading"):
+            estado = "arrancando"
+        elif d.get("ActiveState"):
+            estado = "inactivo"
+        else:
+            estado = "desconocido"
+        estados[d["Id"]] = estado
+    return estados
+
+
+def estado_unidades(servicios=SERVICIOS_IMPORTANTES, ejecutar=None):
+    """Estado de cada servicio con una llamada a systemctl por ambito (sistema y usuario).
+    Lo que no se pudo consultar queda como "desconocido"."""
+    ejecutar = ejecutar or subprocess.run
+    estados = {}
+    for usuario in (False, True):
+        unidades = [u for _, u, de_usuario in servicios if de_usuario == usuario]
+        if not unidades:
+            continue
+        orden = ["systemctl"] + (["--user"] if usuario else []) + ["show", "-p", "Id", "-p", "LoadState",
+                                                                   "-p", "ActiveState"] + unidades
+        try:
+            r = ejecutar(orden, capture_output=True, text=True, timeout=5)
+            estados.update(parsear_show(r.stdout))
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return [{"nombre": n, "unidad": u, "usuario": de_usuario, "estado": estados.get(u, "desconocido")}
+            for n, u, de_usuario in servicios]
 
 
 def leer_ajustes(ejecutar=None):

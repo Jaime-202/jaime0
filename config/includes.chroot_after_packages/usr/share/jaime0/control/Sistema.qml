@@ -29,6 +29,21 @@ Item {
         const f = new Date(t * 1000);
         return String(f.getHours()).padStart(2, "0") + ":" + String(f.getMinutes()).padStart(2, "0") + ":" + String(f.getSeconds()).padStart(2, "0");
     }
+    // Servicios importantes (estado.json) y actualizaciones (orden "actualizaciones", sin red).
+    readonly property var serviciosMal: estado && estado.servicios ? estado.servicios.filter(x => x.estado === "fallido") : []
+    property var actualizaciones: null
+    function textoJaime0() {
+        const a = actualizaciones;
+        if (!a) return "Jaime0: N/D";
+        if (!a.jaime0) return "Jaime0: " + (a.error_jaime0 ? "no se puede saber" : "N/D");
+        if (a.jaime0.nueva && a.jaime0.disponible) return "Jaime0: " + a.jaime0.disponible.version + " disponible";
+        return "Jaime0: " + (a.jaime0.version_instalada || "?") + (a.jaime0.disponible ? " · al día" : " · sin comprobar");
+    }
+    Consulta { id: consultaAct; onRespuesta: d => { if (d.ok !== false) vista.actualizaciones = d; } }
+    Component.onCompleted: consultaAct.pedir({ orden: "actualizaciones" })
+    // Sin datos (servicio aun arrancando): reintenta cada 10 s; despues, cada 5 min.
+    Timer { interval: vista.actualizaciones ? 300000 : 10000; running: true; repeat: true; onTriggered: consultaAct.pedir({ orden: "actualizaciones" }) }
+
     function nombrePerfil(p) {
         return { "balanced": "BALANCED", "performance": "PERFORMANCE", "power-saver": "POWER SAVER" }[p] || (p ? p.toUpperCase() : "N/D");
     }
@@ -364,40 +379,41 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             ident: "09"
-            etiqueta: "TOP PROCESSES"
+            etiqueta: "SERVICES · UPDATES"
+            acento: vista.serviciosMal.length ? Tema.rojo : Tema.cian
             Column {
                 width: parent.width
-                spacing: 4
+                spacing: 3
                 Repeater {
-                    model: vista.instante && vista.instante.procesos ? vista.instante.procesos : []
+                    model: vista.estado && vista.estado.servicios ? vista.estado.servicios : []
                     Row {
                         required property var modelData
                         width: parent.width
+                        Text { width: 110; text: modelData.nombre; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
                         Text {
-                            width: parent.width - 120
-                            text: modelData.nombre
-                            color: Tema.texto
-                            font.family: Tema.mono
-                            font.pixelSize: Tema.letraMini
-                            elide: Text.ElideRight
-                        }
-                        Text {
-                            width: 60
-                            horizontalAlignment: Text.AlignRight
-                            text: Number(modelData.cpu).toFixed(1) + "%"
-                            color: Tema.verde
-                            font.family: Tema.mono
-                            font.pixelSize: Tema.letraMini
-                        }
-                        Text {
-                            width: 60
-                            horizontalAlignment: Text.AlignRight
-                            text: modelData.ram !== null ? Math.round(modelData.ram) + "M" : "N/D"
-                            color: Tema.cian
-                            font.family: Tema.mono
-                            font.pixelSize: Tema.letraMini
+                            text: modelData.estado.toUpperCase()
+                            // Parado no es un fallo (p. ej. Bluetooth sin adaptador): solo "fallido" es rojo.
+                            color: modelData.estado === "activo" ? Tema.verde : modelData.estado === "fallido" ? Tema.rojo
+                                 : modelData.estado === "arrancando" ? Tema.cian : Tema.secundario
+                            font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                     }
+                }
+                Text { visible: !(vista.estado && vista.estado.servicios); text: "Consultando servicios…"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                Item { width: 1; height: 2 }
+                Text {
+                    width: parent.width
+                    text: vista.textoJaime0()
+                    color: vista.actualizaciones && vista.actualizaciones.jaime0 && vista.actualizaciones.jaime0.nueva ? Tema.cian : Tema.texto
+                    font.family: Tema.mono; font.pixelSize: Tema.letraMini; elide: Text.ElideRight
+                }
+                Text {
+                    width: parent.width
+                    readonly property var d: vista.actualizaciones ? vista.actualizaciones.debian : null
+                    text: !vista.actualizaciones ? "Debian: N/D" : !d ? "Debian: sin comprobar todavía"
+                          : "Debian: " + d.paquetes + " paquete(s)" + (d.seguridad.length ? ", " + d.seguridad.length + " de seguridad" : "")
+                    color: d && d.seguridad.length ? Tema.ambar : Tema.texto
+                    font.family: Tema.mono; font.pixelSize: Tema.letraMini; elide: Text.ElideRight
                 }
             }
         }

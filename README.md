@@ -84,12 +84,12 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 
 | Sección | Para qué sirve | En la terminal |
 |---|---|---|
-| **SYSTEM** | Resumen: estado general, CPU, memoria, disco, batería, temperatura y actividad reciente | `jaime0-salud` |
-| **PERFORMANCE** | Núcleos, carga, memoria, presión y procesos que más gastan | |
+| **SYSTEM** | «¿Cómo está mi sistema ahora?»: estado general, perfil, CPU, memoria, temperatura, disco, batería, privacidad, servicios importantes, actualizaciones pendientes, alertas y actividad reciente | `jaime0-salud` |
+| **PERFORMANCE** | Lo que pasa ahora: núcleos, carga, memoria, disco, red, GPU, picos y todos los procesos (ordenar, buscar y ver el detalle; solo lectura) | |
 | **PROFILES** | Perfiles: BALANCED, PERFORMANCE, POWER SAVER (ahorro), FOCUS (no molestar), MULTIMEDIA (sin bloqueo) y CUSTOM (el tuyo). Siempre se puede volver atrás | `jaime0-perfil poner focus`, `jaime0-perfil anterior` |
 | **AUTOMATION** | Reglas «cuando pase esto → haz esto» (p. ej. batería baja → ahorro). Funcionan con la ventana cerrada | `jaime0-reglas lista` |
-| **PRIVACY & SECURITY** | Cortafuegos, puertos abiertos, conexiones, micrófono y cámara en uso, telemetría | `jaime0-privacidad` |
-| **HEALTH** | Gráficas e histórico, incidencias y vista detallada | `jaime0-salud incidencias` |
+| **PRIVACY & SECURITY** | Tres bloques: ACTIVE SECURITY (cortafuegos, puertos, AppArmor, Secure Boot, servicios, telemetría), APPLICATION PERMISSIONS (micrófono, cámara, pantalla, privilegios, Flatpak) y SYSTEM VISIBILITY (lo que no se puede comprobar o no aplica, que nunca cuenta como problema) | `jaime0-privacidad` |
+| **HEALTH** | Cómo evoluciona el sistema: gráficas e histórico, temperaturas, almacenamiento, batería, incidencias y SENSORS & TRENDS (mínimo, media y pico del rango) | `jaime0-salud incidencias` |
 | **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos y el atajo | `jaime0-ajustes` |
 | **UPDATES** | Versión instalada y disponible de Jaime0 (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
 | **DIAGNOSTICS** | Busca problemas reales (servicios caídos, configuración rota, permisos, gráficos, disco…) y explica cada uno: qué se ha visto, causas posibles, consecuencias y qué hacer. Las reparaciones enseñan las órdenes, piden confirmación y guardan copia | `jaime0-diagnostico comprobar` |

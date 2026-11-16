@@ -8,6 +8,7 @@ import threading
 import traceback
 
 from .base import VERSION_DATOS, MAX_INCIDENCIAS, REGLAS_EN_CURSO, registrar
+from .medicion import detalle_proceso
 from .privacidad import MAX_HISTORIAL_PRIVACIDAD
 from .reglas import MAX_EJECUCIONES
 
@@ -114,6 +115,19 @@ def procesar_linea(linea, ctx, responder=None):
             if not ctx.comprobador.comprobar(lambda doc: ctx.al_bucle(responder, json.dumps(doc, ensure_ascii=False))):
                 return json.dumps({"ok": False, "error": "ya hay una comprobación en marcha"})
             return None
+        if orden == "procesos":
+            # Todos los procesos de la ultima muestra (PERFORMANCE ordena y busca en la ventana).
+            lista = ctx.muestreador.lista
+            return json.dumps({"ok": True, "v": VERSION_DATOS, "t": int((ctx.instante or {}).get("t") or 0),
+                               "total": len(lista), "procesos": lista}, ensure_ascii=False)
+        if orden == "proceso":
+            pid = peticion.get("pid")
+            if not isinstance(pid, int) or isinstance(pid, bool) or pid < 1:
+                return json.dumps({"ok": False, "error": "falta el pid"})
+            detalle = detalle_proceso(pid)
+            if detalle is None:
+                return json.dumps({"ok": False, "error": "ese proceso ya no existe"})
+            return json.dumps(dict(detalle, ok=True), ensure_ascii=False)
         if orden == "energia":
             # La foto del bucle (anillo, minutos, reglas) se toma aqui; lo que lee el sistema va
             # al hilo de efectos.

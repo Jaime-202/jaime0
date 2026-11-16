@@ -183,7 +183,7 @@ Item {
                     Text {
                         id: textoDiag
                         anchors.centerIn: parent
-                        text: "DETAILED VIEW"
+                        text: "SENSORS & TRENDS"
                         color: salud.diagnostico ? Tema.fondo : Tema.cian
                         font.family: Tema.mono
                         font.pixelSize: Tema.letraMini
@@ -262,7 +262,7 @@ Item {
             }
         }
 
-        // ZONA SECUNDARIA — HARDWARE (o la vista detallada de las metricas: DETAILED VIEW; los
+        // ZONA SECUNDARIA — HARDWARE (o SENSORS & TRENDS: estadisticas del rango, sensores y eventos; los
         // problemas interpretados estan en DIAGNOSTICS)
         Loader {
             Layout.fillWidth: true
@@ -479,7 +479,8 @@ Item {
         }
     }
 
-    // ── DIAGNOSTIC MODE: detalle por nucleo, sensores, memoria y procesos ────────
+    // ── SENSORS & TRENDS: estadisticas del rango, todos los sensores y eventos. Los nucleos y
+    // los procesos estan en PERFORMANCE (lo que pasa ahora): aqui no se repiten. ──────────
     Component {
         id: vistaDiagnostico
         RowLayout {
@@ -488,42 +489,34 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ident: "D1"
-                etiqueta: "CPU CORES · USO Y FRECUENCIA"
+                etiqueta: "TRENDS · " + salud.r.nombre
                 acento: Tema.cian
-                Flow {
+                Flickable {
                     anchors.fill: parent
-                    spacing: 8
+                    contentHeight: tablaTendencias.implicitHeight
+                    clip: true
+                Column {
+                    id: tablaTendencias
+                    width: parent.width
+                    spacing: 3
+                    Text { text: "MÉTRICA          MÍNIMO    MEDIA    PICO"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9 }
                     Repeater {
-                        model: salud.instante && salud.instante.cpu ? salud.instante.cpu.nucleos : []
-                        Column {
+                        model: [["cpu", "CPU %"], ["ram", "RAM %"], ["swap", "SWAP %"], ["presion", "PRESIÓN"], ["temp", "TEMP CPU °C"],
+                                ["gpu_temp", "TEMP GPU °C"], ["bateria", "BATERÍA %"], ["disco", "DISCO %"], ["lectura", "LECTURA MB/s"], ["escritura", "ESCRITURA MB/s"]]
+                        Text {
                             required property var modelData
-                            required property int index
-                            width: 92
-                            spacing: 2
-                            Text {
-                                text: "C" + String(index).padStart(2, "0") + "  " + Number(modelData).toFixed(0) + "%"
-                                color: Tema.texto
-                                font.family: Tema.mono
-                                font.pixelSize: Tema.letraMini
-                            }
-                            Rectangle {
-                                width: 86; height: 4; color: Tema.rejilla
-                                Rectangle {
-                                    width: parent.width * Math.min(1, modelData / 100)
-                                    height: parent.height
-                                    color: modelData >= 85 ? Tema.ambar : Tema.verde
-                                    Behavior on width { NumberAnimation { duration: Tema.medio } }
-                                }
-                            }
-                            Text {
-                                readonly property var mhz: salud.instante.cpu.mhz ? salud.instante.cpu.mhz[index] : null
-                                text: mhz === null || mhz === undefined ? "— MHz" : mhz + " MHz"
-                                color: Tema.apagado
-                                font.family: Tema.mono
-                                font.pixelSize: 9
-                            }
+                            readonly property var e: salud.estadistica(modelData[0])
+                            text: modelData[1].padEnd(15) + (e ? e.minimo.toFixed(1).padStart(8) + e.media.toFixed(1).padStart(9) + e.pico.toFixed(1).padStart(8) : "   sin datos en este rango")
+                            color: e ? Tema.texto : Tema.apagado
+                            font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
                     }
+                    Text {
+                        width: parent.width
+                        text: "Solo datos medidos del rango elegido arriba; los huecos no cuentan. Lo que pasa ahora mismo está en PERFORMANCE."
+                        color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap
+                    }
+                }
                 }
             }
             Marco {
@@ -584,7 +577,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 ident: "D3"
-                etiqueta: "PROCESSES · EVENTOS DEL INTERVALO"
+                etiqueta: "EVENTS · DEL RANGO"
                 acento: Tema.cian
                 Flickable {
                     anchors.fill: parent
@@ -594,19 +587,13 @@ Item {
                         id: listaProc
                         width: parent.width
                         spacing: 2
-                        Repeater {
-                            model: salud.instante && salud.instante.procesos ? salud.instante.procesos : []
-                            Text {
-                                required property var modelData
-                                text: String(modelData.pid).padStart(6) + "  " + modelData.nombre.padEnd(16).slice(0, 16) + " " + Number(modelData.cpu).toFixed(1).padStart(5) + "%  " + (modelData.ram !== null ? modelData.ram + "M" : "N/D")
-                                color: modelData.cpu >= 50 ? Tema.ambar : Tema.texto
-                                font.family: Tema.mono
-                                font.pixelSize: Tema.letraMini
-                            }
+                        Text {
+                            visible: !(salud.vista && salud.vista.eventos && salud.vista.eventos.length)
+                            text: "Sin eventos en este rango."
+                            color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                         }
-                        Item { width: 1; height: 8 }
                         Repeater {
-                            model: salud.vista && salud.vista.eventos ? salud.vista.eventos.slice(-12).reverse() : []
+                            model: salud.vista && salud.vista.eventos ? salud.vista.eventos.slice(-40).reverse() : []
                             Text {
                                 required property var modelData
                                 width: listaProc.width

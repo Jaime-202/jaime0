@@ -269,7 +269,8 @@ class PruebasMedicion(Base):
         proc(11, "beta", 0, 0)
         proc(12, "gamma", 5, 5)
         antes = S.leer_procesos()
-        self.assertEqual(antes[10], (100, "alfa x"))
+        self.assertEqual(antes[10][:2], (100, "alfa x"))
+        self.assertEqual(antes[10][2:], ("S", 1, 1))       # estado, hilos y paginas de RSS
         proc(10, "alfa", 150, 50, 2048)    # +100 tics
         proc(11, "beta", 0, 1)
         shutil.rmtree(os.path.join(self.raiz, "proc", "12"))    # desaparece
