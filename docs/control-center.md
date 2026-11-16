@@ -297,11 +297,30 @@ Arreglos encontrados al probar: `swaync` podía arrancar dos veces por D-Bus (el
 ### Decisiones
 
 1. **Un único servicio, un único dueño del estado.** `jaime0-servicio` aplica los perfiles, mide y ejecuta las reglas. Las CLIs y la interfaz son clientes: piden por el socket y leen los archivos de estado. Si el servicio no corre, las CLIs de solo lectura funcionan solas y las que cambian algo lo dicen, en lugar de aplicar por su cuenta (evita carreras y dos fuentes de verdad).
-2. **Separación por módulos dentro del servicio** (salud, perfiles, reglas, API), cada manejador aislado con `try/except`; `Restart=on-failure`; sin subprocesos en el bucle de muestreo. Atado a `graphical-session.target` para tener `HYPRLAND_INSTANCE_SIGNATURE`; reconecta al socket2 si Hyprland se reinicia.
+2. **Separación por módulos dentro del servicio**, cada manejador aislado con `try/except`; `Restart=on-failure`; sin subprocesos en el bucle de muestreo. Desde la evolución de noviembre (fase 2), el código está en el paquete `jaime0_servicio` (`/usr/local/lib/jaime0/`, ver abajo) y lo que puede tardar o colgarse va por el hilo de efectos. Atado a `graphical-session.target` para tener `HYPRLAND_INSTANCE_SIGNATURE`; reconecta al socket2 si Hyprland se reinicia.
 3. **La interfaz no mide.** Lee `instante.json` (tmpfs, sin escrituras a disco) con `FileView` y pide al servicio subir a 1–2 s mientras está abierta. Al cerrarla, el proceso de Quickshell termina y el servicio vuelve a 10 s.
 4. **Quickshell es opcional.** Sin él, el escritorio, el servicio, las reglas, los perfiles y las CLIs funcionan; solo falta la ventana. `jaime0-control` lo avisa.
 5. **Sin root por defecto.** Lo único que lo necesita es leer las reglas de UFW: ayudante mínimo con una acción de polkit fija (solo esa lectura, sin argumentos libres), pedido al pulsar, con el agente `lxpolkit` de la sesión.
 6. **Sin telemetría.** Nada sale del equipo; los datos viven en `$XDG_RUNTIME_DIR` y `~/.local/state/jaime0/` y se pueden borrar.
+
+### Módulos y concurrencia (evolución, fase 2)
+
+`/usr/local/bin/jaime0-servicio` es un lanzador; el código está en `/usr/local/lib/jaime0/jaime0_servicio/`, un módulo por responsabilidad y **un solo proceso** (ningún demonio nuevo). Cada módulo solo importa de los anteriores (lo vigila una prueba):
+
+| Módulo | Responsabilidad |
+|---|---|
+| `base` | Rutas, registro, `protegido`, `Recordado` (caché con caducidad) y `Trabajador` (hilo de efectos) |
+| `medicion` · `historico` · `incidencias` | Lectura de `/proc` y `/sys`; anillo, agregados y huecos; detector e incidencias |
+| `sistema` | SMART, umbrales, D-Bus, aviso a Waybar, firma de Hyprland |
+| `perfiles` · `privacidad` · `estado` | Motor de perfiles; PRIVACY & SECURITY; estado global |
+| `reglas` | Catálogo, validación, acciones y motor de Jaime0 Rules |
+| `api` · `servicio` | Órdenes del socket; el servicio, el cerrojo de instancia única y `main` |
+
+**Tres hilos y nada más:** el bucle de GLib (medidas, socket, reglas, estado), los trabajos de privacidad y de acciones de reglas, que ya existían, y el **hilo de efectos** (`jaime0-efectos`). Este ejecuta en orden, una a una, las operaciones que pueden tardar o colgarse: aplicar perfiles (venga de la ventana, de `jaime0-perfil` o de una regla), leer los umbrales (`jaime0-ajustes`), las consultas de energía a D-Bus, la lista de aplicaciones y de eventos para las reglas, y el aviso a Waybar. El motor de perfiles solo se usa desde ese hilo; sus avisos (actividad, `estado.json`, eventos de reglas) vuelven al bucle con `idle_add`. Las órdenes del socket que pasan por él contestan al terminar (`perfiles`, `perfil`, `perfil_anterior`, `personalizado`, `reglas`, `regla_guardar`, `reglas_importar`), sin hacer esperar a las demás. Cada operación conserva su propio límite (D-Bus 3 s, subprocesos con `timeout`); un fallo se registra y no detiene el hilo; las que pasan de 10 s se anotan. `estado.json` lleva `servicio.efectos` (pendientes, operación en curso y desde cuándo).
+
+Medido en una VM con la ISO 0.4.0-beta.1 y un `swaync-client` que no responde, al aplicar FOCUS: el socket tardaba **3,05 s** en contestar con el servicio anterior y **0,00 s** con este (12 peticiones, una por segundo); las medidas siguen su ritmo. En reposo: 0,12 % de CPU y 37 MiB (el anterior, 38 MiB de pico en la misma VM).
+
+Para probar a mano en un sistema instalado hay que copiar las dos partes: `/usr/local/bin/jaime0-servicio` y `/usr/local/lib/jaime0/jaime0_servicio/`.
 
 ### Histórico
 

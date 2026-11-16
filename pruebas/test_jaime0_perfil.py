@@ -430,7 +430,7 @@ class PruebasAplicar(Base):
 class PruebasFallos(Base):
     def setUp(self):
         super().setUp()
-        p = mock.patch.object(S, "registrar")      # los fallos simulados no ensucian la salida
+        p = mock.patch.object(S.perfiles_mod, "registrar")      # los fallos simulados no ensucian la salida
         p.start()
         self.addCleanup(p.stop)
 
@@ -695,7 +695,7 @@ class PruebasEventosYEstado(Base):
         s = self.servicio()
         s.instante = {"v": 1, "t": int(time.time()), "intervalo": 10}
         s.publicar("ONLINE", [])
-        with mock.patch.object(S, "avisar_barra") as aviso:
+        with mock.patch.object(S.servicio_mod, "avisar_barra") as aviso:
             s.perfiles.aplicar("focus")
             self.assertEqual(aviso.call_count, 1)
             s.perfiles.aplicar("focus")                      # nada cambia: sin aviso
@@ -878,7 +878,7 @@ class PruebasSistemaReal(unittest.TestCase):
         self.assertEqual(self.llamadas[0][1]["env"]["HYPRLAND_INSTANCE_SIGNATURE"], "nueva")
 
     def test_modo_noche(self):
-        with mock.patch.object(S, "programa_hermano", return_value="/bin/modo-noche"):
+        with mock.patch.object(S.perfiles_mod, "programa_hermano", return_value="/bin/modo-noche"):
             self.assertTrue(self.sistema(RespuestaFalsa("encendido\n")).noche_leer())
             self.assertEqual(self.llamadas[0][0], ["/bin/modo-noche", "estado"])
             self.assertFalse(self.sistema(RespuestaFalsa("apagado\n")).noche_leer())
@@ -888,7 +888,7 @@ class PruebasSistemaReal(unittest.TestCase):
             sis.noche_poner(True)
             sis.noche_poner(False)
             self.assertEqual([c[0][1] for c in self.llamadas], ["encender", "apagar"])
-        with mock.patch.object(S, "programa_hermano", return_value=None):
+        with mock.patch.object(S.perfiles_mod, "programa_hermano", return_value=None):
             with self.assertRaises(OSError):
                 S.SistemaReal().noche_leer()
 
@@ -898,7 +898,7 @@ class PruebasSistemaReal(unittest.TestCase):
 
     def test_sin_gi_ppd_y_logind_no_responden(self):
         sis = S.SistemaReal()
-        with mock.patch.object(S, "_gi", side_effect=ImportError):
+        with mock.patch.object(S.perfiles_mod, "_gi", side_effect=ImportError):
             self.assertIsNone(sis.ppd_perfiles())
             self.assertFalse(sis.inhibir_disponible())
             self.assertIsNone(sis.ppd_degradado())

@@ -711,7 +711,7 @@ class PruebasApi(Base):
     def test_orden_privacidad_con_todas_las_claves(self):
         self.instalar_ufw()
         sv = self.sv_completo()
-        with mock.patch.object(S, "nombres_de_grupos", return_value=["sudo", "audio"]):
+        with mock.patch.object(S.privacidad_mod, "nombres_de_grupos", return_value=["sudo", "audio"]):
             r = json.loads(S.procesar_linea(json.dumps({"orden": "privacidad"}), sv))
         self.assertEqual(sorted(r), ["conexiones", "cortafuegos", "dispositivos", "estado", "flatpak",
                                      "historial", "ok", "privilegios", "puertos", "servicios", "telemetria", "v"])

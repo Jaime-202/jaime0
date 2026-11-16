@@ -6,6 +6,16 @@ set -e
 chmod 755 /usr/local/bin/jaime0-servicio /usr/local/bin/jaime0-salud /usr/local/bin/jaime0-control /usr/local/bin/jaime0-perfil /usr/local/bin/modo-noche /usr/local/bin/jaime0-privacidad /usr/local/bin/jaime0-reglas
 chmod 644 /usr/lib/systemd/user/jaime0-servicio.service
 
+# Paquete del servicio (lo importa /usr/local/bin/jaime0-servicio): de root y sin escritura
+# para nadie mas; directorios 755 y modulos 644 (se importan, no se ejecutan). Fuera el
+# bytecode que viniera del repositorio y precompilado aqui: el usuario no puede escribir en
+# esta carpeta y, sin esto, el servicio compilaria sus 5.500 lineas en cada arranque.
+find /usr/local/lib/jaime0 -name __pycache__ -type d -prune -exec rm -rf {} +
+python3 -m compileall -q /usr/local/lib/jaime0
+chown -R root:root /usr/local/lib/jaime0
+find /usr/local/lib/jaime0 -type d -exec chmod 755 {} +
+find /usr/local/lib/jaime0 -type f -exec chmod 644 {} +
+
 # Ayudante de solo lectura que pkexec ejecuta como root (reglas de UFW): de root y sin
 # escritura para nadie mas, o un usuario podria cambiar lo que se ejecuta con privilegios.
 chown root:root /usr/local/libexec/jaime0-ufw-estado /usr/share/polkit-1/actions/es.jaime0.ufw-estado.policy

@@ -62,7 +62,7 @@ fi
 seccion "Python"
 PY=()
 while read -r F; do [ "$(interprete "$F")" = "python3" ] && PY+=("$F"); done < <(ejecutables)
-PY+=(scripts/*.py pruebas/*.py)
+PY+=(scripts/*.py pruebas/*.py "$I"/usr/local/lib/jaime0/jaime0_servicio/*.py)
 if python3 - "${PY[@]}" <<'FIN'
 import sys
 for f in sys.argv[1:]:
@@ -133,6 +133,10 @@ for F in auto/config auto/build \
 done
 for P in actualizaciones jaime0-servicio jaime0-salud jaime0-control jaime0-perfil jaime0-privacidad jaime0-reglas jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
     [ -f "$I/usr/local/bin/$P" ] || fallo "falta el programa $P"
+done
+# Paquete de jaime0-servicio (el programa es solo su lanzador)
+for M in __init__ base medicion historico incidencias sistema perfiles privacidad estado reglas api servicio; do
+    [ -f "$I/usr/local/lib/jaime0/jaime0_servicio/$M.py" ] || fallo "falta el modulo jaime0_servicio/$M.py"
 done
 ok "archivos imprescindibles revisados"
 

@@ -275,7 +275,7 @@ class PruebasMedicion(Base):
         shutil.rmtree(os.path.join(self.raiz, "proc", "12"))    # desaparece
         proc(13, "nuevo", 500, 0)                                # sin muestra previa
         self.escribir("proc/basura", "no es un pid")
-        with mock.patch.object(S, "tics_por_segundo", return_value=100):
+        with mock.patch.object(S.medicion_mod, "tics_por_segundo", return_value=100):
             top = S.procesos_top(antes, S.leer_procesos(), 1.0)
         self.assertEqual([p["pid"] for p in top], [10, 11])
         self.assertEqual(top[0], {"pid": 10, "nombre": "alfa x", "cpu": 100.0, "ram": 2})
@@ -449,7 +449,7 @@ class PruebasInstanteYServicio(Base):
         sv = S.Servicio(directorio=self.rt)
         for nombre in ("instante.json", "estado.json", "control.sock"):
             open(os.path.join(self.rt, nombre), "w").close()
-        with mock.patch.object(sv.historico, "volcar"), mock.patch.object(S, "avisar_barra") as barra:
+        with mock.patch.object(sv.historico, "volcar"), mock.patch.object(S.servicio_mod, "avisar_barra") as barra:
             sv.limpiar()
         for nombre in ("instante.json", "estado.json", "control.sock"):
             self.assertFalse(os.path.exists(os.path.join(self.rt, nombre)), nombre)
@@ -520,7 +520,7 @@ class PruebasApi(unittest.TestCase):
         class Roto(ContextoFalso):
             def rapido(self):
                 raise RuntimeError("fallo")
-        with mock.patch.object(S, "registrar"):
+        with mock.patch.object(S.api_mod, "registrar"):
             r = self.pedir('{"orden":"rapido"}', Roto())
         self.assertFalse(r["ok"])
 
@@ -1240,7 +1240,7 @@ class PruebasServicioFase3(Base):
         sv.detector.cpu_altas = 1                                         # ya hubo una muestra alta
         self.escribir("proc/stat", "cpu  95 0 0 105 0 0 0 0 0 0\ncpu0 95 0 0 105 0 0 0 0 0 0\n")
         self.escribir("proc/4/stat", "4 (compilador) S 1 1 1 0 -1 0 0 0 0 0 0 0 0 0 20 0 1 0 1 1 1\n")
-        with mock.patch.object(S, "tics_por_segundo", return_value=100), \
+        with mock.patch.object(S.medicion_mod, "tics_por_segundo", return_value=100), \
                 mock.patch.object(S.time, "monotonic", side_effect=[1.0, 2.0]):
             sv.muestreador.previa = sv.muestreador.crudo()
             self.escribir("proc/4/stat", "4 (compilador) S 1 1 1 0 -1 0 0 0 0 0 90 0 0 0 20 0 1 0 1 1 1\n")
@@ -1553,7 +1553,7 @@ class PruebasSmart(Base):
             @staticmethod
             def bus_get_sync(*a):
                 raise RuntimeError("sin bus")
-        with mock.patch.object(S, "_gi", return_value=(None, GioSinBus)):
+        with mock.patch.object(S.sistema_mod, "_gi", return_value=(None, GioSinBus)):
             S.consultar_smart(recibido.append)
         self.assertEqual(recibido, [None])
         # hay bus pero udisks2 no contesta: _llamar da None
@@ -1563,8 +1563,8 @@ class PruebasSmart(Base):
             @staticmethod
             def bus_get_sync(*a):
                 return object()
-        with mock.patch.object(S, "_gi", return_value=(None, GioConBus)), \
-                mock.patch.object(S, "_llamar", side_effect=lambda *a: a[-1](None)):
+        with mock.patch.object(S.sistema_mod, "_gi", return_value=(None, GioConBus)), \
+                mock.patch.object(S.sistema_mod, "_llamar", side_effect=lambda *a: a[-1](None)):
             S.consultar_smart(recibido.append)
         self.assertEqual(recibido, [None])
 
@@ -1582,7 +1582,7 @@ class PruebasSmart(Base):
         def llamar(con, destino, objeto, interfaz, metodo, params, cb):
             pedidos.append((destino, objeto, interfaz, metodo))
             cb((self.objetos(self.drive(**self.nvme())),))
-        with mock.patch.object(S, "_gi", return_value=(None, Gio)), mock.patch.object(S, "_llamar", llamar):
+        with mock.patch.object(S.sistema_mod, "_gi", return_value=(None, Gio)), mock.patch.object(S.sistema_mod, "_llamar", llamar):
             S.consultar_smart(recibido.append)
         self.assertEqual(pedidos, [("org.freedesktop.UDisks2", "/org/freedesktop/UDisks2",
                                     "org.freedesktop.DBus.ObjectManager", "GetManagedObjects")])
@@ -1873,7 +1873,7 @@ class PruebasConexionesApi(Base):
         self.con = ConexionFalsa(self.orden, **k)
         self.sv = S.Servicio(directorio=self.rt, estado=self.estado)
         self.sv._servidor = ServidorFalso(self.con)
-        p = mock.patch.object(S, "_gi", lambda: (self.glib, None))
+        p = mock.patch.object(S.servicio_mod, "_gi", lambda: (self.glib, None))
         p.start()
         self.addCleanup(p.stop)
         self.assertTrue(self.sv._aceptar(0, 0))
@@ -1887,7 +1887,7 @@ class PruebasConexionesApi(Base):
     def test_fallo_al_entregar_desde_un_hilo_quita_el_watch_antes_de_cerrar(self):
         self.preparar()
         respuestas = []
-        with mock.patch.object(S, "procesar_linea", lambda linea, ctx, responder: respuestas.append(responder)):
+        with mock.patch.object(S.servicio_mod, "procesar_linea", lambda linea, ctx, responder: respuestas.append(responder)):
             self.assertTrue(self.leer(7, 1))        # la respuesta la dara un hilo: el watch sigue vivo
         self.assertEqual(self.orden, [])
         respuestas[0]("respuesta")
@@ -1919,7 +1919,7 @@ class PruebasInstanciaUnica(Base):
             S.adquirir_cerrojo(self.rt, FcntlFalso)
 
     def test_sin_fcntl_se_tolera(self):
-        with mock.patch.object(S, "fcntl", None):
+        with mock.patch.object(S.servicio_mod, "fcntl", None):
             self.assertIsNone(S.adquirir_cerrojo(self.rt))
 
     @unittest.skipUnless(S.fcntl, "flock solo existe en Linux")
@@ -1934,7 +1934,7 @@ class PruebasInstanciaUnica(Base):
         with open(sock, "w") as f:
             f.write("socket de la otra instancia")
         sv = S.Servicio(directorio=self.rt, estado=self.estado)
-        with mock.patch.object(S, "adquirir_cerrojo", side_effect=S.ServicioYaEnMarcha("ya hay otra")):
+        with mock.patch.object(S.servicio_mod, "adquirir_cerrojo", side_effect=S.ServicioYaEnMarcha("ya hay otra")):
             with self.assertRaises(S.ServicioYaEnMarcha):
                 sv.ejecutar()
         self.assertTrue(os.path.exists(sock))
@@ -1945,7 +1945,7 @@ class PruebasInstanciaUnica(Base):
                 raise S.ServicioYaEnMarcha("ya hay otra instancia")
 
         err = io.StringIO()
-        with mock.patch.object(S, "Servicio", ServicioOcupado), contextlib.redirect_stderr(err):
+        with mock.patch.object(S.servicio_mod, "Servicio", ServicioOcupado), contextlib.redirect_stderr(err):
             self.assertEqual(S.main(["ejecutar"]), S.SALIDA_YA_EN_MARCHA)
         self.assertNotEqual(S.SALIDA_YA_EN_MARCHA, 0)
         self.assertIn("ya hay otra instancia", err.getvalue())
@@ -1968,6 +1968,66 @@ class PruebasFirmaHyprland(unittest.TestCase):
     def test_entorno_para_hyprctl(self):
         self.assertIsNone(S.entorno_hyprland(None))
         self.assertEqual(S.entorno_hyprland("nueva")["HYPRLAND_INSTANCE_SIGNATURE"], "nueva")
+
+
+class PruebasPaquete(unittest.TestCase):
+    """jaime0-servicio es un lanzador del paquete jaime0_servicio (usr/local/lib/jaime0)."""
+
+    ORDEN = ("base", "medicion", "historico", "incidencias", "sistema", "perfiles", "privacidad",
+             "estado", "reglas", "api", "servicio")
+    PAQUETE = BIN.parent / "lib/jaime0/jaime0_servicio"
+
+    def arbol(self, modulo):
+        import ast
+        return ast.parse((self.PAQUETE / f"{modulo}.py").read_text(encoding="utf-8"))
+
+    def definidos(self, arbol):
+        import ast
+        nombres = []
+        for n in arbol.body:
+            if isinstance(n, (ast.FunctionDef, ast.ClassDef)):
+                nombres.append(n.name)
+            elif isinstance(n, ast.Assign):
+                nombres += [x.id for t in n.targets for x in ast.walk(t) if isinstance(x, ast.Name)]
+            elif isinstance(n, ast.Try):            # import opcional (fcntl)
+                nombres += [a.asname or a.name for a in ast.walk(n) if isinstance(a, ast.alias)]
+        return [x for x in nombres if x != "__all__"]
+
+    def test_los_modulos_son_los_del_paquete(self):
+        self.assertEqual(sorted(p.stem for p in self.PAQUETE.glob("*.py")), sorted(self.ORDEN + ("__init__",)))
+
+    def test_all_es_lo_que_define_cada_modulo_y_nada_se_define_dos_veces(self):
+        vistos = {}
+        for m in self.ORDEN:
+            definidos = self.definidos(self.arbol(m))
+            self.assertEqual(sorted(getattr(S, f"{m}_mod").__all__), sorted(set(definidos)), m)
+            for nombre in definidos:
+                self.assertNotIn(nombre, vistos, f"{nombre} en {m} y en {vistos.get(nombre)}")
+                vistos[nombre] = m
+
+    def test_el_lanzador_reexporta_todo_con_el_mismo_objeto(self):
+        for m in self.ORDEN:
+            modulo = getattr(S, f"{m}_mod")
+            for nombre in modulo.__all__:
+                self.assertIs(getattr(S, nombre), getattr(modulo, nombre), f"{m}.{nombre}")
+
+    def test_cada_modulo_solo_importa_de_los_anteriores(self):
+        import ast
+        for i, m in enumerate(self.ORDEN):
+            for n in ast.walk(self.arbol(m)):
+                if isinstance(n, ast.ImportFrom) and n.level:
+                    self.assertIn(n.module, self.ORDEN[:i], f"{m} importa de {n.module}")
+
+    def test_programa_hermano_busca_junto_al_lanzador(self):
+        self.assertEqual(os.path.realpath(S.programa_hermano("jaime0-servicio")),
+                         os.path.realpath(BIN / "jaime0-servicio"))
+
+    def test_el_lanzador_arranca_aislado(self):
+        import subprocess
+        r = subprocess.run([sys.executable, "-I", "-B", str(BIN / "jaime0-servicio"), "--help"],
+                           capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("medir", r.stdout)
 
 
 if __name__ == "__main__":

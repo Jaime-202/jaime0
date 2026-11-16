@@ -327,13 +327,13 @@ class PruebasValidacion(Base):
         self.assertIn("bucle", self.motor.errores[0]["error"])
 
     def test_acciones_privilegiadas_se_rechazan(self):
-        with mock.patch.object(S, "ACCIONES_PRIVILEGIADAS", ("volumen",)):
+        with mock.patch.object(S.reglas_mod, "ACCIONES_PRIVILEGIADAS", ("volumen",)):
             _r, error = self.validar(hacer=[{"accion": "volumen", "nivel": 10}])
             self.assertIn("Esta acción necesita autorización de administrador: no se puede automatizar", error)
             self.assertEqual(S.Acciones(self.ejec, lambda: APPS, None, None, None, None).ejecutar_accion(
                 {"accion": "volumen", "nivel": 10}), (False, S.MENSAJE_PRIVILEGIADA))
             self.assertEqual(self.ejec.llamadas, [])
-        self.assertEqual(S.ACCIONES_PRIVILEGIADAS, ())
+        self.assertEqual(S.reglas_mod.ACCIONES_PRIVILEGIADAS, ())
         self.assertIsNone(self.validar(hacer=[{"accion": "volumen", "nivel": 10}])[1])
 
     def test_ninguna_accion_del_catalogo_es_privilegiada(self):
@@ -970,7 +970,7 @@ class PruebasPerfilesConElServicio(unittest.TestCase):
         m = self.sv.reglas
         m.guardar(regla("Estado", cuando={"evento": "estado_sistema", "estado": "WARNING"}))
         m.guardar(regla("Reanuda", cuando={"evento": "suspension", "estado": "reanudar"}))
-        with mock.patch.object(S, "avisar_barra"):
+        with mock.patch.object(S.servicio_mod, "avisar_barra"):
             self.sv.publicar("ONLINE", [])                      # primera vez: sin cambio
             self.assertEqual(self.historial(), [])
             self.sv.publicar("WARNING", [{"gravedad": "WARNING", "componente": "x", "texto": "t"}])
@@ -1427,7 +1427,7 @@ Settings
 class PruebasAcciones(Base):
     def setUp(self):
         super().setUp()
-        p = mock.patch.object(S, "programa_hermano", lambda n: "/usr/local/bin/" + n)
+        p = mock.patch.object(S.reglas_mod, "programa_hermano", lambda n: "/usr/local/bin/" + n)
         p.start()
         self.addCleanup(p.stop)
         self.A = self.motor.acciones
@@ -1485,12 +1485,14 @@ class PruebasAcciones(Base):
         self.assertFalse(ok)
         self.assertEqual(self.ejec.llamadas, [])
 
-    def test_perfil_via_en_bucle_con_origen_regla(self):
+    def test_perfil_no_pasa_por_el_bucle(self):
+        # Fase 2 (desacoplar): aplicar un perfil tarda (D-Bus, hyprctl...) y bloquearia el
+        # bucle de GLib; aplicar_perfil lo lleva al hilo de efectos, nunca en_bucle.
         llamadas = []
         self.A.en_bucle = lambda fn: (llamadas.append("bucle"), fn())[1]
         ok, d = self.run_accion(accion="perfil", perfil="focus")
         self.assertTrue(ok)
-        self.assertEqual((llamadas, self.perfiles), (["bucle"], ["focus"]))
+        self.assertEqual((llamadas, self.perfiles), ([], ["focus"]))
         self.A.aplicar_perfil = lambda pid: {"ok": False, "error": "El perfil X no está disponible: sin ppd"}
         self.assertEqual(self.run_accion(accion="perfil", perfil="focus"), (False, "El perfil X no está disponible: sin ppd"))
         self.A.aplicar_perfil = lambda pid: {"ok": True, "nombre": "FOCUS", "fallos": ["No molestar: roto"]}
