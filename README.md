@@ -90,20 +90,24 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 | **AUTOMATION** | Reglas «cuando pase esto → haz esto» (p. ej. batería baja → ahorro). Funcionan con la ventana cerrada | `jaime0-reglas lista` |
 | **PRIVACY & SECURITY** | Tres bloques: ACTIVE SECURITY (cortafuegos, puertos, AppArmor, Secure Boot, servicios, telemetría), APPLICATION PERMISSIONS (micrófono, cámara, pantalla, privilegios, Flatpak) y SYSTEM VISIBILITY (lo que no se puede comprobar o no aplica, que nunca cuenta como problema) | `jaime0-privacidad` |
 | **HEALTH** | Cómo evoluciona el sistema: gráficas e histórico, temperaturas, almacenamiento, batería, incidencias y SENSORS & TRENDS (mínimo, media y pico del rango) | `jaime0-salud incidencias` |
-| **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos y el atajo | `jaime0-ajustes` |
+| **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos, el atajo y el tamaño de la ventana | `jaime0-ajustes` |
 | **UPDATES** | Versión instalada y disponible de Jaime0 (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
 | **DIAGNOSTICS** | Busca problemas reales (servicios caídos, configuración rota, permisos, gráficos, disco…) y explica cada uno: qué se ha visto, causas posibles, consecuencias y qué hacer. Las reparaciones enseñan las órdenes, piden confirmación y guardan copia | `jaime0-diagnostico comprobar` |
 | **POWER** | Batería en detalle (salud, ciclos, consumo, autonomía), gráficas (integrada, NVIDIA y qué programas la usan), perfil de energía, tiempos de bloqueo y suspensión, e histórico de consumo por perfil. Cada dato dice si es medido, calculado o estimado | `jaime0-ajustes poner inactividad_suspender 30` |
 
 | PERFORMANCE | PROFILES |
 |---|---|
-| ![Núcleos, carga, memoria y procesos](capturas/cc-rendimiento.png) | ![Los seis perfiles](capturas/cc-perfiles.png) |
+| ![Núcleos, carga, memoria, disco, red, picos y la tabla de procesos](capturas/cc-rendimiento.png) | ![Los seis perfiles](capturas/cc-perfiles.png) |
 | **AUTOMATION** | **PRIVACY & SECURITY** |
-| ![Reglas y su historial](capturas/cc-automatizacion.png) | ![Cortafuegos, puertos, dispositivos y telemetría](capturas/cc-privacidad.png) |
+| ![Reglas y su historial](capturas/cc-automatizacion.png) | ![Seguridad activa, permisos de aplicaciones y lo que no se puede comprobar](capturas/cc-privacidad.png) |
 | **HEALTH** | **SETTINGS** |
-| ![Gráficas, almacenamiento, batería e incidencias](capturas/cc-salud.png) | ![Animaciones, frecuencias, umbrales, avisos y atajo](capturas/cc-ajustes.png) |
+| ![Gráficas, tendencias del rango y detección de hardware](capturas/cc-salud.png) | ![Animaciones, frecuencias, umbrales, avisos y atajo](capturas/cc-ajustes.png) |
+| **UPDATES** | **DIAGNOSTICS** |
+| ![Versión instalada, paquetes de Debian y conflictos](capturas/cc-actualizaciones.png) | ![Un problema explicado: lo detectado, causas, consecuencias y comprobaciones](capturas/cc-diagnosticos.png) |
+| **POWER** | |
+| ![Batería con el origen de cada dato, gráficas, perfil de energía e inactividad](capturas/cc-energia.png) | |
 
-Lo hace funcionar `jaime0-servicio`, que se arranca con la sesión, usa unos 55 MiB y casi nada de CPU, y guarda el historial en `~/.local/state/jaime0`. Si la ventana no está instalada o el servicio se para, el resto del sistema sigue igual y el estado se ve con `jaime0-salud`. Más en [docs/control-center.md](docs/control-center.md).
+Lo hace funcionar `jaime0-servicio`, que se arranca con la sesión, usa unos 45 MiB y casi nada de CPU (0,16 % con la ventana cerrada), y guarda el historial en `~/.local/state/jaime0`. Si la ventana no está instalada o el servicio se para, el resto del sistema sigue igual y el estado se ve con `jaime0-salud`. Más en [docs/control-center.md](docs/control-center.md).
 
 ### Cambiar el aspecto: `jaime0-ajustes`
 
