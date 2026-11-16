@@ -2,7 +2,7 @@
 
 **Jaime0 es un sistema operativo personal hecho a medida de un portátil: el Acer Nitro AN515-55.** Es Debian con un escritorio montado pieza a pieza alrededor de Hyprland. Se prueba desde un USB sin tocar el disco, se instala con un asistente gráfico y funciona nada más instalarlo: el firmware, los controladores, el navegador y los visores ya vienen dentro.
 
-![Mosaico con btop, Neovim y Fastfetch](capturas/mosaico.png)
+![Escritorio con btop, Neovim y Fastfetch en mosaico](capturas/mosaico.png)
 
 > **Estado:** en desarrollo. La última versión publicada es la **0.4.0-beta.1**, la primera con el Control Center. Se ha probado en máquinas virtuales; **todavía no en el portátil** (ver [docs/pruebas.md](docs/pruebas.md)).
 
@@ -21,6 +21,14 @@
 
 Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medido en una máquina virtual). Más detalle de cómo encaja todo en [docs/arquitectura.md](docs/arquitectura.md).
 
+**La barra.** A la izquierda, los escritorios (el verde es el actual); en el centro, las aplicaciones ancladas; a la derecha, CPU, memoria, volumen y red, el icono de Jaime0 (perfil y estado; abre el Control Center), batería, notificaciones, fecha, hora y menú de energía. Cada indicador abre su herramienta al pulsarlo.
+
+![Barra de Jaime0 ampliada](capturas/barra.png)
+
+| Escritorio al entrar | Con widgets (opcionales) |
+|---|---|
+| ![Escritorio vacío](capturas/escritorio-vacio.png) | ![Reloj, sistema, calendario y volumen en el escritorio](capturas/widgets.png) |
+
 ## Instalar
 
 1. **Consigue la ISO.** El repositorio es privado: descárgala de [Releases](https://github.com/Jaime-202/jaime0/releases) o compílala ([docs/compilar.md](docs/compilar.md)).
@@ -36,6 +44,10 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
 5. **Primer arranque:** entra con tu usuario. Si aparece el aviso de la NVIDIA, registra su clave una vez: `jaime0-nvidia registrar`, reinicia y elige **Enroll MOK** en la pantalla azul ([docs/nvidia.md](docs/nvidia.md)). Hasta entonces todo va con la Intel.
 
 ¿Pantalla en negro? En el menú de arranque elige **Modo seguro**.
+
+| Instalador | Elegir el disco | Acceso tras instalar |
+|---|---|---|
+| ![Bienvenida del instalador](capturas/instalador.png) | ![Borrar el disco, ext4 o Btrfs y cifrado](capturas/instalador-disco.png) | ![Pantalla de acceso](capturas/acceso.png) |
 
 ## Cómo se usa
 
@@ -58,9 +70,17 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
 
 El comando `atajos` muestra la lista real y permite añadir los tuyos (`atajos añadir "SUPER+O" "kitty -e nvim" "Abrir Neovim"`); comprueba la configuración antes de aplicar nada.
 
+| Lanzador (`SUPER + Espacio`) | Atajos (`SUPER + F1`, con buscador) |
+|---|---|
+| ![Lanzador de aplicaciones](capturas/lanzador.png) | ![Lista de atajos filtrada por SUPER](capturas/atajos.png) |
+| **Notificaciones** (`SUPER + N`): no molestar y volumen | **Bloqueo** (`SUPER + L`, o sola tras 10 min sin uso) |
+| ![Centro de notificaciones](capturas/notificaciones.png) | ![Pantalla de bloqueo](capturas/bloqueo.png) |
+
 ### Control Center
 
-Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`7` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo.
+Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`7` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
+
+![Control Center: SYSTEM](capturas/cc-sistema.png)
 
 | Sección | Para qué sirve | En la terminal |
 |---|---|---|
@@ -71,6 +91,14 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 | **PRIVACY & SECURITY** | Cortafuegos, puertos abiertos, conexiones, micrófono y cámara en uso, telemetría | `jaime0-privacidad` |
 | **HEALTH** | Gráficas e histórico, incidencias y modo diagnóstico | `jaime0-salud incidencias` |
 | **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos y el atajo | `jaime0-ajustes` |
+
+| PERFORMANCE | PROFILES |
+|---|---|
+| ![Núcleos, carga, memoria y procesos](capturas/cc-rendimiento.png) | ![Los seis perfiles](capturas/cc-perfiles.png) |
+| **AUTOMATION** | **PRIVACY & SECURITY** |
+| ![Reglas y su historial](capturas/cc-automatizacion.png) | ![Cortafuegos, puertos, dispositivos y telemetría](capturas/cc-privacidad.png) |
+| **HEALTH** | **SETTINGS** |
+| ![Gráficas, almacenamiento, batería e incidencias](capturas/cc-salud.png) | ![Animaciones, frecuencias, umbrales, avisos y atajo](capturas/cc-ajustes.png) |
 
 Lo hace funcionar `jaime0-servicio`, que se arranca con la sesión, usa unos 55 MiB y casi nada de CPU, y guarda el historial en `~/.local/state/jaime0`. Si la ventana no está instalada o el servicio se para, el resto del sistema sigue igual y el estado se ve con `jaime0-salud`. Más en [docs/control-center.md](docs/control-center.md).
 
@@ -87,6 +115,8 @@ jaime0-ajustes restablecer acento
 ```
 
 Cambia el color de acento, el fondo, los bordes, las esquinas, el desenfoque, las animaciones, la barra y los widgets de escritorio (reloj, música, tiempo...). Se aplica al momento y se guarda en `~/.config/jaime0/ajustes`, que solo contiene lo que has cambiado. Sin argumentos abre su ventana. Todos los ajustes: [docs/ajustes.md](docs/ajustes.md).
+
+![Ventana de ajustes de Jaime0](capturas/ajustes.png)
 
 ### Aplicaciones ancladas: `jaime0-anclar`
 
