@@ -28,6 +28,13 @@ Item {
 
     readonly property var r: rangos[rango]
 
+    // Deteccion de hardware (orden "hardware"): que tiene este equipo y si Jaime0 puede leerlo.
+    property var hardware: null
+    function textoHw(e) { return ({ compatible: "COMPATIBLE", detectado: "DETECTADO", no_disponible: "NO DISPONIBLE", error_lectura: "ERROR DE LECTURA" })[e] || e; }
+    function colorHw(e) { return ({ compatible: Tema.verde, detectado: Tema.ambar, error_lectura: Tema.rojo })[e] || Tema.apagado; }
+    Consulta { id: consultaHw; onRespuesta: d => { if (d.ok) salud.hardware = d; } }
+    Timer { interval: 30000; running: salud.diagnostico; repeat: true; triggeredOnStart: true; onTriggered: consultaHw.pedir({ orden: "hardware" }) }
+
     // Serie recortada a los ultimos N segundos (REAL TIME).
     function recortar(s, segundos) {
         if (!s || !s.t || !segundos || s.peticion === "historia") return s;
@@ -488,6 +495,7 @@ Item {
             Marco {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredWidth: 3
                 ident: "D1"
                 etiqueta: "TRENDS · " + salud.r.nombre
                 acento: Tema.cian
@@ -522,8 +530,9 @@ Item {
             Marco {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredWidth: 4
                 ident: "D2"
-                etiqueta: "SENSORS · MEMORY"
+                etiqueta: "HARDWARE · SENSORS"
                 acento: Tema.cian
                 Flickable {
                     anchors.fill: parent
@@ -532,42 +541,34 @@ Item {
                     Column {
                         id: tabla
                         width: parent.width
-                        spacing: 2
-                        Repeater {
-                            model: salud.instante && salud.instante.temp ? salud.instante.temp : []
-                            Text {
-                                required property var modelData
-                                text: modelData.id.padEnd(30).slice(0, 30) + " " + Number(modelData.c).toFixed(1) + " °C"
-                                color: modelData.c >= salud.umbrales.temp_aviso ? Tema.ambar : Tema.texto
-                                font.family: Tema.mono
-                                font.pixelSize: Tema.letraMini
-                            }
-                        }
+                        spacing: 3
                         Text {
-                            visible: !salud.instante || !salud.instante.temp || salud.instante.temp.length === 0
-                            text: "Sin sensores hwmon de temperatura."
-                            color: Tema.apagado
-                            font.family: Tema.mono
-                            font.pixelSize: Tema.letraMini
+                            text: salud.hardware ? ["compatible", "detectado", "no_disponible", "error_lectura"].map(e => salud.textoHw(e) + " " + salud.hardware.cuenta[e]).join("   ") : "Detectando…"
+                            color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9
                         }
-                        Item { width: 1; height: 8 }
                         Repeater {
-                            model: {
-                                const m = salud.instante ? salud.instante.ram : null;
-                                if (!m) return [];
-                                return [
-                                    "RAM usada       " + m.usada + " / " + m.total + " MiB",
-                                    "Disponible      " + (m.total - m.usada) + " MiB",
-                                    "Swap            " + m.swap + " / " + m.swap_total + " MiB",
-                                    "Presión (avg10) " + (m.presion === null ? "N/D" : m.presion.toFixed(2))
-                                ];
-                            }
-                            Text {
+                            model: salud.hardware ? salud.hardware.componentes : []
+                            Column {
+                                id: comp
                                 required property var modelData
-                                text: modelData
-                                color: Tema.secundario
-                                font.family: Tema.mono
-                                font.pixelSize: Tema.letraMini
+                                width: tabla.width
+                                spacing: 1
+                                Row {
+                                    spacing: 6
+                                    Text { width: 112; text: salud.textoHw(comp.modelData.estado); color: salud.colorHw(comp.modelData.estado); font.family: Tema.mono; font.pixelSize: 9 }
+                                    Text { text: comp.modelData.nombre; color: Tema.texto; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                                }
+                                Text { x: 118; width: comp.width - 118; text: comp.modelData.detalle; color: Tema.secundario; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap }
+                                Repeater {
+                                    model: (comp.modelData.valores || []).slice(0, 8)
+                                    Text {
+                                        required property var modelData
+                                        x: 118
+                                        text: modelData.id.padEnd(28).slice(0, 28) + " " + modelData.valor + " " + modelData.unidad
+                                        color: modelData.unidad === "°C" && modelData.valor >= salud.umbrales.temp_aviso ? Tema.ambar : Tema.texto
+                                        font.family: Tema.mono; font.pixelSize: 9
+                                    }
+                                }
                             }
                         }
                     }
@@ -576,6 +577,7 @@ Item {
             Marco {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredWidth: 2
                 ident: "D3"
                 etiqueta: "EVENTS · DEL RANGO"
                 acento: Tema.cian

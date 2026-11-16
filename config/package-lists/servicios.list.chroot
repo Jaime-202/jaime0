@@ -22,6 +22,10 @@ polkitd
 lxpolkit
 # pkexec: el Control Center pide la contraseña para leer las reglas del cortafuegos.
 pkexec
+# jaime0-servicio usa D-Bus y GLib desde Python. Antes llegaban solo como dependencia de
+# blueman: se fijan para que quitar blueman no deje el Control Center sin servicio.
+python3-gi
+gir1.2-glib-2.0
 libnotify-bin
 xdg-user-dirs
 network-manager-tui

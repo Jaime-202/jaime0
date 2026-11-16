@@ -74,6 +74,16 @@ if python3 -m unittest discover -s pruebas 2>&1 | tail -n 3 | tee /tmp/validar-p
 else
     fallo "pruebas automaticas"; cat /tmp/validar-pruebas.$$
 fi
+# Que no desaparezcan pruebas sin querer: si se quitan a proposito, se baja el minimo.
+HECHAS=$(sed -nE 's/^Ran ([0-9]+) tests?.*/\1/p' /tmp/validar-pruebas.$$)
+MINIMO=$(grep -vE '^\s*(#|$)' pruebas/minimo-pruebas.txt 2>/dev/null | head -n 1)
+if [ -z "$MINIMO" ]; then
+    fallo "falta pruebas/minimo-pruebas.txt"
+elif [ "${HECHAS:-0}" -lt "$MINIMO" ]; then
+    fallo "se han ejecutado ${HECHAS:-0} pruebas y el minimo es $MINIMO (¿se han borrado pruebas?)"
+else
+    ok "${HECHAS} pruebas (minimo $MINIMO)"
+fi
 rm -f /tmp/validar-pruebas.$$
 
 seccion "Configuraciones"
@@ -114,7 +124,7 @@ fi
 seccion "QML"
 # Cada componente que se carga por nombre de archivo existe junto a quien lo usa.
 N=0
-for D in "$I/usr/share/jaime0/ajustes-gui" "$I/usr/share/jaime0/widgets"; do
+for D in "$I/usr/share/jaime0/ajustes-gui" "$I/usr/share/jaime0/widgets" "$I/usr/share/jaime0/control"; do
     [ -f "$D/shell.qml" ] || { fallo "falta $D/shell.qml"; N=$((N + 1)); }
     for Q in $(grep -ohE '"[A-Z][A-Za-z]+\.qml"' "$D"/*.qml | tr -d '"' | sort -u); do
         [ -f "$D/$Q" ] || { fallo "$D: falta $Q"; N=$((N + 1)); }
@@ -138,9 +148,13 @@ done
 for P in actualizaciones jaime0-update jaime0-servicio jaime0-salud jaime0-control jaime0-perfil jaime0-privacidad jaime0-reglas jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
     [ -f "$I/usr/local/bin/$P" ] || fallo "falta el programa $P"
 done
-# Paquete de jaime0-servicio (el programa es solo su lanzador)
-for M in __init__ base medicion historico incidencias sistema perfiles privacidad estado reglas actualizaciones api servicio; do
-    [ -f "$I/usr/local/lib/jaime0/jaime0_servicio/$M.py" ] || fallo "falta el modulo jaime0_servicio/$M.py"
+# Paquete de jaime0-servicio (el programa es solo su lanzador): cada modulo del orden que
+# declara __init__.py existe. Las pruebas comprueban ademas que el lanzador los importa todos.
+S="$I/usr/local/lib/jaime0/jaime0_servicio"
+MODULOS=$(grep -A3 '^# Orden' "$S/__init__.py" | grep -E '^#   ' | tr -d '#,')
+[ -n "$MODULOS" ] || fallo "no se pudo leer el orden de modulos de $S/__init__.py"
+for M in __init__ $MODULOS; do
+    [ -f "$S/$M.py" ] || fallo "falta el modulo jaime0_servicio/$M.py"
 done
 # La clave publica de jaime0-update es la de siempre (huella SHA-256 del DER).
 if command -v openssl >/dev/null 2>&1; then

@@ -30,6 +30,27 @@ Pruebas de `pruebas/` (`python3 -m unittest discover -s pruebas -v`):
 | `test_jaime0_anclar.py` | Ancladas: nombres, máximo, orden, estado de los huecos, aplicaciones desinstaladas |
 | `test_jaime0_tiempo.py` | Tiempo: Open-Meteo de mentira, homónimos, caché, sin red |
 | `test_jaime0_diagnostico.py` | Diagnóstico: que no salgan datos personales y que no falle sin comandos |
+| `test_integridad_repo.py` | Lo que puede romper el instalador o la ISO sin que falle ningún programa: cada paso de Calamares existe y lo que ejecuta está en la imagen; lo que desinstala al terminar no lo usa Jaime0 (p. ej. un `import QtQuick.Effects` cuando se desinstala ese módulo); cada programa externo que usa Jaime0 viene de un paquete de las listas; lo que arrancan las unidades de systemd existe; y un inventario de secciones, órdenes del servicio, programas y ajustes que no pueden desaparecer sin cambiar la lista |
+| `test_jaime0_hardware.py` | Detección de hardware: portátil híbrido, solo integrada, máquina virtual, sensores, ventiladores, voltajes y errores de lectura |
+
+`validar-repo.sh` además falla si se ejecutan menos pruebas que las de `pruebas/minimo-pruebas.txt`: así no desaparecen pruebas sin querer (si se quitan a propósito, se baja el mínimo en el mismo commit). Se ha comprobado que las pruebas de integridad fallan de verdad: un QML que importa un módulo que el instalador desinstala, un paso de Calamares que ejecuta un programa inexistente y una sección que desaparece se detectan los tres.
+
+### Antes de integrar un cambio importante
+
+```bash
+scripts/validar-repo.sh                                  # lo mismo que GitHub Actions
+python3 -m unittest discover -s pruebas -v              # si solo se quieren las pruebas
+```
+
+Con una ISO nueva, además, en la VM de compilación (Linux, sin root):
+
+```bash
+scripts/verificar-iso.sh jaime0-VERSION-amd64.iso --repo .
+```
+
+`verificar-iso.sh` no arranca la ISO: comprueba arranque BIOS y UEFI (El Torito, shim, GRUB, núcleo, initrd y menú), que el sistema de archivos se lee entero, los programas imprescindibles y sus permisos (lo que corre como root es de root y no lo puede escribir nadie más), que no haya claves privadas, la versión, que estén instalados todos los paquetes de `config/package-lists` y qué archivos del repositorio faltan o son distintos en la ISO. Resultado con la ISO publicada 0.4.0-beta.1 (16-11-2026): 47 correctos, 0 fallos, en 1 min; una copia truncada de la ISO falla. Después se arranca y se instala en la VM (sección 3) y, en la sesión, `verificar-sesion.sh`.
+
+La instalación con el instalador gráfico (Calamares) no está automatizada: se hace en la VM siguiendo la sección 3. Lo que sí se comprueba sin VM es que la configuración del instalador sea coherente (`test_integridad_repo.py`) y el resultado (`verificar-iso.sh`, `verificar-instalador.sh` sobre el chroot y `verificar-sesion.sh` en el sistema instalado).
 
 ## 2. Sesión en marcha
 
@@ -37,7 +58,9 @@ Pruebas de `pruebas/` (`python3 -m unittest discover -s pruebas -v`):
 bash scripts/verificar-sesion.sh
 ```
 
-Desde una terminal de la sesión (VM o equipo real). Comprueba Hyprland, los procesos de la sesión, los ajustes de ida y vuelta, las ancladas, los widgets y las notificaciones, y deja tus ajustes como estaban.
+Desde una terminal de la sesión (VM o equipo real). Comprueba Hyprland, los procesos de la sesión, los ajustes de ida y vuelta, las ancladas, los widgets, el servicio de Jaime0 y el Control Center (cada orden del socket responde, `estado.json` al día, la ventana abre sin errores de QML), `jaime0-diagnostico`, `jaime0-reglas`, `jaime0-perfil`, `jaime0-update`, las herramientas básicas y las notificaciones (con No molestar activo no se exige que se vean), y deja tus ajustes como estaban.
+
+**Resultado (16-11-2026, VM `jaime0-fase2`, sesión en vivo 0.4.0-beta.1 con los archivos de la evolución encima):** 47 correctos, 0 fallos.
 
 **Resultado (13-11-2026, VM `jaime0-pruebas`, sesión en vivo 0.1 con los archivos 0.2 encima, tras entrar de nuevo con tuigreet):** 21 correctos, 0 fallos.
 

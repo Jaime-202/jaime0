@@ -9,6 +9,7 @@ import traceback
 
 from .base import VERSION_DATOS, MAX_INCIDENCIAS, REGLAS_EN_CURSO, registrar
 from .medicion import detalle_proceso
+from .hardware import detectar_hardware
 from .privacidad import MAX_HISTORIAL_PRIVACIDAD
 from .reglas import MAX_EJECUCIONES
 
@@ -128,6 +129,10 @@ def procesar_linea(linea, ctx, responder=None):
             if detalle is None:
                 return json.dumps({"ok": False, "error": "ese proceso ya no existe"})
             return json.dumps(dict(detalle, ok=True), ensure_ascii=False)
+        if orden == "hardware":
+            # Solo sysfs (milisegundos): se atiende en el acto.
+            return json.dumps(detectar_hardware(getattr(ctx, "energia", None), getattr(ctx, "smart", None)),
+                              ensure_ascii=False)
         if orden == "energia":
             # La foto del bucle (anillo, minutos, reglas) se toma aqui; lo que lee el sistema va
             # al hilo de efectos.

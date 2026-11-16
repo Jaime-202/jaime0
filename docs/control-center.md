@@ -10,12 +10,25 @@ Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [a
 |---|---|---|
 | SYSTEM | ¿Cómo está el sistema ahora? Estado global, perfil, CPU, memoria, temperatura, disco, batería, privacidad, servicios importantes (red, energía, cortafuegos, Bluetooth, sonido), actualizaciones pendientes, alertas (con la de DIAGNOSTICS) y actividad reciente | Procesos (antes «TOP PROCESSES»: ahora en PERFORMANCE) |
 | PERFORMANCE | ¿Qué está pasando ahora? Núcleos y frecuencias, carga de 5 min y carga media 1/5/15, memoria, disco, red, GPU, picos recientes y la tabla de procesos: ordenar por CPU, RAM, nombre o PID, buscar, ver el detalle (orden completa, usuario, padre, hilos, memoria, inicio) y en ámbar los que gastan mucho | El perfil de energía (está en PROFILES y POWER) y el histórico (HEALTH). No hay acciones sobre procesos: es solo lectura |
-| HEALTH | ¿Cómo evoluciona y qué problemas presenta? Gráficas por rango, temperaturas, almacenamiento, batería, incidencias y SENSORS & TRENDS (mínimo, media y pico de cada métrica en el rango, todos los sensores y los eventos) | Núcleos y procesos (la antigua vista detallada los repetía) |
+| HEALTH | ¿Cómo evoluciona y qué problemas presenta? Gráficas por rango, temperaturas, almacenamiento, batería, incidencias y SENSORS & TRENDS (mínimo, media y pico de cada métrica en el rango, la detección de hardware con sus sensores, y los eventos) | Núcleos y procesos (la antigua vista detallada los repetía) |
 | PRIVACY & SECURITY | ACTIVE SECURITY, APPLICATION PERMISSIONS y SYSTEM VISIBILITY, con los estados `ACTIVE`, `WARNING`, `DISABLED`, `UNAVAILABLE` y `NOT APPLICABLE` | Lo no comprobable o lo que el equipo no tiene va siempre a SYSTEM VISIBILITY: ni es un problema ni cuenta como protección |
 | AUTOMATION | Reglas activas y desactivadas, últimas y próximas ejecuciones, errores, conflictos e historial (fase 3) | |
 | SETTINGS | Preferencias del Control Center: animaciones, frecuencia, umbrales, avisos y atajo | Inactividad y suspensión (POWER), actualizaciones (UPDATES), diagnósticos (DIAGNOSTICS) |
 
 Nuevo en el servicio: órdenes `procesos` (todos los de la última muestra) y `proceso` (detalle de uno, solo lectura de `/proc`); `red` (KB/s recibidos y enviados, sin `lo`) y `cpu.carga` (`/proc/loadavg`) en el instante; `servicios` en `estado.json` (una llamada a `systemctl show` por ámbito cada 60 s); y `categorias` en la orden `privacidad`, con AppArmor (`/sys/module/apparmor`) y Secure Boot (variable EFI, legible sin root) además de lo que ya se comprobaba.
+
+## Detección de hardware (evolución, fase 8)
+
+La orden `hardware` del servicio (módulo `hardware`, solo lee sysfs) dice, para cada componente, si Jaime0 puede usarlo en ese equipo. La muestra HEALTH › SENSORS & TRENDS (panel HARDWARE · SENSORS).
+
+| Estado | Significa |
+|---|---|
+| COMPATIBLE | Está y Jaime0 lo lee o lo usa |
+| DETECTADO | Está, pero falta algo para usarlo: controlador, módulo o herramienta (p. ej. NVIDIA sin su módulo, Wi-Fi bloqueada por el interruptor) |
+| NO DISPONIBLE | Este equipo no lo tiene (sin batería, solo gráfica integrada, VM sin sensores) |
+| ERROR DE LECTURA | Está, pero leerlo ha fallado |
+
+Componentes: batería (y qué datos da), cargador, gráfica integrada (o virtual) y dedicada por separado (nunca se supone NVIDIA), temperatura de CPU y de GPU, otras temperaturas, ventiladores, voltajes, brillo de pantalla, Wi-Fi, Bluetooth, suspensión, perfiles de energía y SMART. Nunca despierta la NVIDIA ni ejecuta programas; un fallo inesperado en un componente da ERROR DE LECTURA solo en ese componente.
 
 ## DIAGNOSTICS (evolución, fase 5)
 

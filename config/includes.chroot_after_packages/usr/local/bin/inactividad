@@ -36,6 +36,12 @@ if command -v hypridle >/dev/null 2>&1; then
     exec hypridle
 fi
 
+if ! command -v swayidle >/dev/null 2>&1; then
+    echo "inactividad: faltan hypridle y swayidle; no hay bloqueo ni suspension por inactividad" >&2
+    command -v notify-send >/dev/null 2>&1 && notify-send --app-name=Jaime0 \
+        "Sin bloqueo por inactividad" "Falta hypridle. Reinstálalo con: sudo apt install hypridle"
+    exit 1
+fi
 exec swayidle -w \
     timeout 600  'swaylock -f' \
     timeout 660  "hyprctl dispatch 'hl.dsp.dpms({ action = \"disable\" })'" \
