@@ -1,12 +1,15 @@
 [Unit]
-Description=Aviso de actualizaciones de seguridad de Debian
+Description=Aviso de actualizaciones de Debian y de Jaime0
 # Solo en el sistema instalado.
 ConditionPathExists=!/run/live/medium
 
 [Service]
 Type=oneshot
-# Solo consulta y avisa. Nunca instala nada.
+# Solo consultan y avisan. Nunca instalan nada. Primero apt (paquetes de Debian); despues
+# jaime0-update (version nueva de Jaime0 en tu canal; lee lo que acaba de dejar apt y no
+# lo repite). El "-" hace que un fallo de red del segundo no marque la unidad como fallida.
 ExecStart=/usr/local/bin/actualizaciones comprobar --notificar --silencioso
+ExecStart=-/usr/local/bin/jaime0-update comprobar --notificar --silencioso
 SuccessExitStatus=1
 Nice=10
 IOSchedulingClass=idle

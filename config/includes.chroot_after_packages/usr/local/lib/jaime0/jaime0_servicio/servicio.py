@@ -37,6 +37,7 @@ from .reglas import (
     ejecutar_grupo, MotorReglas, disponibilidad_sistema, vigilar_bluetooth, vigilar_red,
     FuenteHyprland
 )
+from .actualizaciones import estado_actualizaciones, Comprobador
 from .api import procesar_linea
 
 __all__ = [
@@ -115,6 +116,9 @@ class Servicio:
                                       lambda: os.path.join(carpeta_config(), "perfil-personalizado.json"),
                                       evento=al_bucle(self.evento), notificar=al_bucle(self._perfil_cambiado),
                                       cambio=al_bucle(lambda perfil, origen: self.reglas.perfil_cambiado(perfil, origen)))
+        # Actualizaciones (fase 4): estado sin red por el hilo de efectos; comprobar con red, en
+        # su propio hilo (Comprobador). Instalar nunca pasa por el servicio.
+        self.comprobador = Comprobador()
         self.aviso_lanzar = self._lanzar_aviso  # las pruebas lo sustituyen
         self.reglas_ejecutar = subprocess.run   # las pruebas lo sustituyen
         ejecutar_reglas = lambda *a, **k: self.reglas_ejecutar(*a, **k)
@@ -196,6 +200,15 @@ class Servicio:
         self.historico.intervalo = self.intervalo_normal()
         if self._fuente is not None and self.intervalo_actual() != antes:
             self._programar()               # el temporizador sigue ya el intervalo nuevo
+
+    def al_bucle(self, fn, *a):
+        """Ejecuta fn(*a) en el bucle principal (desde otro hilo)."""
+        self.efectos.al_bucle(fn, *a)
+
+    def actualizaciones_doc(self):
+        doc = estado_actualizaciones()
+        doc["comprobando_desde"] = self.comprobador.en_curso()
+        return doc
 
     def intervalo_normal(self):
         return max(1, int(self.umbrales.get("intervalo_normal", INTERVALO_NORMAL)))

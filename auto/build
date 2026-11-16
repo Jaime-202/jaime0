@@ -1,4 +1,14 @@
 #!/bin/sh
 set -e
 
+# Ninguna clave privada puede acabar dentro de la imagen.
+if grep -rIlE -- '-----BEGIN ([A-Z0-9]+ )?PRIVATE KEY-----' config/; then
+    echo "ERROR: hay una clave privada dentro de config/" >&2
+    exit 1
+fi
+
+# Manifiesto de la version que lleva la ISO: es el punto de partida de jaime0-update.
+python3 scripts/empaquetar-actualizacion.py \
+    --manifiesto-iso config/includes.chroot_after_packages/usr/share/jaime0/manifiesto.json
+
 lb build noauto "${@}" 2>&1 | tee build.log

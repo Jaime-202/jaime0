@@ -99,6 +99,21 @@ def procesar_linea(linea, ctx, responder=None):
 
             threading.Thread(target=en_hilo, daemon=True).start()
             return None
+        if orden == "actualizaciones":
+            # Sin red: jaime0-update estado --json (un subproceso corto) en el hilo de efectos.
+            efectos = getattr(ctx, "efectos", None)
+            if responder is None or efectos is None or not efectos.activo():
+                return json.dumps(ctx.actualizaciones_doc(), ensure_ascii=False)
+            efectos.enviar(ctx.actualizaciones_doc, lambda doc: responder(json.dumps(doc, ensure_ascii=False)),
+                           "orden actualizaciones")
+            return None
+        if orden == "actualizaciones_comprobar":
+            # Con red (manifiesto firmado y apt): en su propio hilo, una a la vez; contesta al acabar.
+            if responder is None:
+                return json.dumps({"ok": False, "error": "esta orden contesta al terminar: hace falta el socket"})
+            if not ctx.comprobador.comprobar(lambda doc: ctx.al_bucle(responder, json.dumps(doc, ensure_ascii=False))):
+                return json.dumps({"ok": False, "error": "ya hay una comprobación en marcha"})
+            return None
         if orden == "privacidad_historial":
             limite = peticion.get("limite", 50)
             if not isinstance(limite, int) or isinstance(limite, bool) or limite < 1:

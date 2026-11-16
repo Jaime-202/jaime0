@@ -78,7 +78,7 @@ El comando `atajos` muestra la lista real y permite añadir los tuyos (`atajos a
 
 ### Control Center
 
-Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`7` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
+Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`8` cambian de sección y `Esc` cierra. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
 
 ![Control Center: SYSTEM](capturas/cc-sistema.png)
 
@@ -91,6 +91,7 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 | **PRIVACY & SECURITY** | Cortafuegos, puertos abiertos, conexiones, micrófono y cámara en uso, telemetría | `jaime0-privacidad` |
 | **HEALTH** | Gráficas e histórico, incidencias y modo diagnóstico | `jaime0-salud incidencias` |
 | **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos y el atajo | `jaime0-ajustes` |
+| **UPDATES** | Versión instalada y disponible de Jaime0 (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
 
 | PERFORMANCE | PROFILES |
 |---|---|
@@ -148,7 +149,7 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 ### Actualizar y volver atrás
 
 - **Debian, Brave y la NVIDIA:** el icono de actualizaciones de la barra (o la orden `actualizaciones`) muestra lo pendiente, marca lo que corrige fallos de seguridad y lo instala cuando quieras. Nunca instala nada solo.
-- **Lo propio de Jaime0:** llega con una ISO nueva.
+- **Lo propio de Jaime0** (configuración, scripts, Control Center): `jaime0-update`, o la sección **UPDATES** del Control Center, descarga la versión nueva firmada, enseña qué archivos cambian y no pisa los que hayas modificado. Se puede revertir (`jaime0-update revertir`). Las instalaciones 0.3 y 0.4 no lo traen: se instala una vez a mano ([docs/actualizaciones.md](docs/actualizaciones.md)).
 - **Volver atrás:** si instalaste con **Btrfs**, se guarda una instantánea antes y después de cada actualización y se puede deshacer. Con ext4 no hay instantáneas. Ver [docs/actualizaciones.md](docs/actualizaciones.md) y [docs/recuperacion.md](docs/recuperacion.md).
 
 ### Si algo falla

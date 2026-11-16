@@ -1,11 +1,25 @@
 #!/bin/sh
-# Version de Jaime0 visible para cualquier programa (fastfetch, hostnamectl...) y aviso
-# diario de actualizaciones de seguridad de Debian.
+# Version de Jaime0 y jaime0-update: version visible para cualquier programa (fastfetch,
+# hostnamectl...), punto de partida del actualizador y aviso diario (actualizaciones-aviso:
+# paquetes de Debian con "actualizaciones" y versiones nuevas de Jaime0 con jaime0-update).
 set -e
 
-chmod 644 /usr/share/jaime0/version
-chmod 755 /usr/local/bin/actualizaciones
+chown root:root /usr/local/bin/jaime0-update /usr/local/bin/actualizaciones
+chmod 755 /usr/local/bin/jaime0-update /usr/local/bin/actualizaciones
+chmod 644 /usr/share/jaime0/version /usr/share/jaime0/firma-actualizaciones.pem /etc/jaime0/update.conf
 chmod 644 /usr/lib/systemd/user/actualizaciones-aviso.service /usr/lib/systemd/user/actualizaciones-aviso.timer
+
+# El manifiesto de la version instalada lo genera auto/build antes de compilar. Sin el,
+# la primera actualizacion trataria todos los archivos como conflictos.
+test -s /usr/share/jaime0/manifiesto.json
+chmod 644 /usr/share/jaime0/manifiesto.json
+grep -q "\"version\": \"$(cat /usr/share/jaime0/version)\"" /usr/share/jaime0/manifiesto.json
+
+# Copias y cache del actualizador: solo root. Estado (conflictos, ultima operacion): legible.
+install -d -m 700 /var/backups/jaime0 /var/cache/jaime0-update
+install -d -m 755 /var/lib/jaime0
+# Punto de partida de cada usuario: lo que trae /etc/skel en esta ISO.
+install -m 644 /usr/share/jaime0/manifiesto.json /var/lib/jaime0/manifiesto-instalacion.json
 
 VERSION="$(cat /usr/share/jaime0/version)"
 sed -i '/^VERSION=/d; /^VERSION_ID=/d' /usr/lib/os-release

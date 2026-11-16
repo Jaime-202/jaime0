@@ -29,7 +29,8 @@ ShellRoot {
         { id: "AUTOMATION", titulo: "JAIME0 RULES" },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
-        { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" }
+        { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" },
+        { id: "UPDATES", titulo: "UPDATE MANAGER" }
     ]
 
     function leerJson(vista) {
@@ -334,7 +335,7 @@ ShellRoot {
                     anchors.bottomMargin: 12
                     x: 16
                     width: parent.width - 32
-                    text: "1–7  sección\nESC  cerrar"
+                    text: "1–" + raiz.secciones.length + "  sección\nESC  cerrar"
                     color: Tema.apagado
                     font.family: Tema.mono
                     font.pixelSize: Tema.letraMini
@@ -358,7 +359,7 @@ ShellRoot {
                 Loader {
                     id: cargador
                     anchors.fill: parent
-                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes][raiz.seccion]
+                    sourceComponent: [vistaSistema, vistaRendimiento, vistaPerfiles, vistaAutomatizacion, vistaPrivacidad, vistaSalud, vistaAjustes, vistaActualizaciones][raiz.seccion]
                     onLoaded: cambio.restart()
                 }
                 ParallelAnimation {
@@ -409,6 +410,10 @@ ShellRoot {
                 Component {
                     id: vistaAjustes
                     Preferencias {}
+                }
+                Component {
+                    id: vistaActualizaciones
+                    Actualizaciones {}
                 }
             }
 

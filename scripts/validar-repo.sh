@@ -17,7 +17,7 @@ I=config/includes.chroot_after_packages
 
 # Archivos que se ejecutan: programas, hooks, live-config, auto/ y scripts de prueba.
 ejecutables() {
-    git ls-files "$I/usr/local/bin" "$I/usr/local/sbin" "$I/usr/lib/live/config" config/hooks auto scripts \
+    git ls-files "$I/usr/local/bin" "$I/usr/local/sbin" "$I/usr/local/libexec" "$I/usr/lib/live/config" config/hooks auto scripts \
         | grep -vE '^scripts/coords-[a-z]+\.sh$|\.py$'
 }
 # "#!/bin/sh", "#!/usr/bin/python3 -I" o "#!/usr/bin/env python3" -> sh, python3...
@@ -128,16 +128,29 @@ for F in auto/config auto/build \
          "$I/etc/skel/.config/waybar/config.jsonc" "$I/etc/skel/.config/waybar/style.css" \
          "$I/etc/skel/.config/swaync/config.json" "$I/etc/skel/.config/swaync/style.css" \
          "$I/usr/share/jaime0/ajustes.predeterminados" "$I/usr/share/jaime0/version" \
-         "$I/usr/share/backgrounds/jaime0/jaime0.png"; do
+         "$I/usr/share/backgrounds/jaime0/jaime0.png" \
+         "$I/usr/share/jaime0/firma-actualizaciones.pem" "$I/etc/jaime0/update.conf" \
+         "$I/usr/lib/systemd/user/actualizaciones-aviso.service" "$I/usr/lib/systemd/user/actualizaciones-aviso.timer" \
+         "$I/usr/local/libexec/jaime0-ufw-estado" "$I/usr/share/polkit-1/actions/es.jaime0.ufw-estado.policy" \
+         scripts/empaquetar-actualizacion.py; do
     [ -f "$F" ] || fallo "falta $F"
 done
-for P in actualizaciones jaime0-servicio jaime0-salud jaime0-control jaime0-perfil jaime0-privacidad jaime0-reglas jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
+for P in actualizaciones jaime0-update jaime0-servicio jaime0-salud jaime0-control jaime0-perfil jaime0-privacidad jaime0-reglas jaime0-ajustes jaime0-anclar jaime0-widgets jaime0-tiempo jaime0-osd jaime0-diagnostico jaime0-nvidia prime-run notificaciones bloquear inactividad atajos; do
     [ -f "$I/usr/local/bin/$P" ] || fallo "falta el programa $P"
 done
 # Paquete de jaime0-servicio (el programa es solo su lanzador)
-for M in __init__ base medicion historico incidencias sistema perfiles privacidad estado reglas api servicio; do
+for M in __init__ base medicion historico incidencias sistema perfiles privacidad estado reglas actualizaciones api servicio; do
     [ -f "$I/usr/local/lib/jaime0/jaime0_servicio/$M.py" ] || fallo "falta el modulo jaime0_servicio/$M.py"
 done
+# La clave publica de jaime0-update es la de siempre (huella SHA-256 del DER).
+if command -v openssl >/dev/null 2>&1; then
+    H=$(openssl pkey -pubin -in "$I/usr/share/jaime0/firma-actualizaciones.pem" -outform DER 2>/dev/null | sha256sum | cut -d' ' -f1)
+    [ "$H" = 3a5d37d572023bda6147d91cbf3672b957eab93afeecc36ac74a48e2148c4d54 ] || fallo "la clave publica de jaime0-update no es la esperada ($H)"
+else
+    fallo "falta openssl"
+fi
+# El aviso diario de jaime0-update va en actualizaciones-aviso: su unidad propia ya no existe.
+if grep -rq 'jaime0-update-aviso' config/hooks; then fallo "un hook usa jaime0-update-aviso, que ya no existe"; fi
 ok "archivos imprescindibles revisados"
 
 printf '\nRESULTADO: %s fallo(s)\n' "$FALLOS"
