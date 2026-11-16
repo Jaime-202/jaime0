@@ -40,7 +40,7 @@ scripts/verificar-*.sh                                         comprobaciones so
 
 | Decisión | Motivo |
 |---|---|
-| Sin actualizador propio | Con el repositorio privado y un solo equipo, una ISO nueva es más simple que mantener firmas, canales y fusiones. Los paquetes ya se actualizan con `apt` |
+| Sin actualizador propio | Con un solo equipo, una ISO nueva es más simple que mantener firmas, canales y fusiones. Los paquetes ya se actualizan con `apt` |
 | NVIDIA sin el metapaquete `nvidia-driver` | El metapaquete arrastra el controlador de Xorg, que Jaime0 bloquea. Las bibliotecas EGL, Vulkan, CUDA y NVENC se instalan sueltas |
 | Intel para el escritorio, NVIDIA bajo demanda | La NVIDIA apagada ahorra batería y calor; Hyprland en la Intel evita los problemas de Wayland con NVIDIA. `prime-run` la usa para lo que lo merece |
 | Clave de firma de NVIDIA por instalación | La ISO no lleva ninguna clave privada: el instalador crea una propia y recompila el módulo. Con Secure Boot se registra una vez (MokManager) |

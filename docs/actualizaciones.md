@@ -7,7 +7,7 @@ Jaime0 se actualiza de dos maneras, cada una con lo suyo:
 | **Programas y sistema** (paquetes de Debian, Brave, el controlador de NVIDIA) | `apt`, desde sus repositorios oficiales | Cuando quieras: `actualizaciones` o `sudo apt full-upgrade` |
 | **Lo propio de Jaime0** (configuración de Hyprland y la barra, scripts, temas) | Una ISO nueva | Al reinstalar |
 
-Hasta la 0.2 existía `jaime0-update`, que descargaba versiones firmadas desde GitHub. Desde la 0.3 el repositorio es privado y la ISO está pensada para un solo equipo, así que se ha retirado: menos piezas que mantener.
+Hasta la 0.2 existía `jaime0-update`, que descargaba versiones firmadas desde GitHub. Desde la 0.3 la ISO está pensada para un solo equipo, así que se ha retirado: menos piezas que mantener.
 
 ## El aviso de la barra
 

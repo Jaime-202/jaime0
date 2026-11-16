@@ -31,7 +31,7 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
 
 ## Instalar
 
-1. **Consigue la ISO.** El repositorio es privado: descárgala de [Releases](https://github.com/Jaime-202/jaime0/releases) o compílala ([docs/compilar.md](docs/compilar.md)).
+1. **Consigue la ISO:** descárgala de [Releases](https://github.com/Jaime-202/jaime0/releases) o compílala ([docs/compilar.md](docs/compilar.md)).
 2. **Grábala en un USB** de 4 GB o más (se borra entero).
    - Windows: [Rufus](https://rufus.ie), elige la ISO y el **modo Imagen DD**.
    - Linux (cambia `/dev/sdX` por tu USB; compruébalo con `lsblk`):
