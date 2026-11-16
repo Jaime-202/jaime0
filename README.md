@@ -177,6 +177,7 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 | [energia.md](docs/energia.md) | La sección POWER: de dónde sale cada dato, NVIDIA, quién manda en cada ajuste e inactividad |
 | [compilar.md](docs/compilar.md) | Compilar la ISO y estructura del repositorio |
 | [pruebas.md](docs/pruebas.md) | Qué se ha probado, qué falta y problemas conocidos |
+| [evolucion.md](docs/evolucion.md) | La evolución del sistema (fases 1 a 10): qué cambió, por qué, medidas y lo que queda |
 
 ## Licencia
 

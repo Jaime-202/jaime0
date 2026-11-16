@@ -112,6 +112,16 @@ class PruebasInstalador(unittest.TestCase):
                      "packages", "plymouthcfg", "machineid", "locale"):
                 self.assertTrue(conf.is_file(), f"falta modules/{m}.conf")
 
+    def test_los_modulos_de_calamares_tienen_sus_herramientas(self):
+        """Pasos de Calamares que ejecutan un programa en el sistema instalado: el paquete que lo
+        trae debe estar en las listas (si no, el paso falla en silencio, como hwclock)."""
+        necesita = {"hwclock": "util-linux-extra", "luksbootkeyfile": "cryptsetup",
+                    "initramfs": "initramfs-tools", "grubcfg": "grub-common", "plymouthcfg": "plymouth"}
+        exec_ = self.settings.split("- exec:")[1].split("- show:")[0]
+        for m in re.findall(r"^\s+- (\S+)$", exec_, flags=re.M):
+            if m in necesita:
+                self.assertIn(necesita[m], paquetes(), f"el paso {m} necesita {necesita[m]}")
+
     def test_las_unidades_que_activa_vienen_de_paquetes_de_la_imagen(self):
         de = {"greetd.service": "greetd", "NetworkManager.service": "network-manager", "bluetooth.service": "bluez"}
         unidades = re.findall(r"- name: (\S+)", leer(CALAMARES / "modules/services-systemd.conf"))

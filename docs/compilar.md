@@ -45,6 +45,12 @@ sudo apt install live-build debootstrap squashfs-tools xorriso mtools dosfstools
 
    Las pruebas en vivo necesitan una VM con aceleración 3D. `scripts/coords-barra.sh` guarda las posiciones de los módulos de la barra a 1280 px: si cambia la barra, hay que volver a medirlas.
 
+   La ISO terminada se verifica sin arrancarla (arranque BIOS y UEFI, sistema de archivos, permisos, claves, versión, paquetes y diferencias con el repositorio), sin root:
+
+   ```bash
+   scripts/verificar-iso.sh jaime0-amd64.hybrid.iso --repo .
+   ```
+
    Las comprobaciones que no necesitan la ISO (permisos, shellcheck, sintaxis de Python, JSON, Lua y QML, y las pruebas automáticas) están en `scripts/validar-repo.sh`, que GitHub Actions ejecuta en cada cambio. Qué se ha probado y qué falta: [docs/pruebas.md](pruebas.md).
 
 Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambia a diario: si llega otra versión de Hyprland, revalida la configuración con `Hyprland --verify-config`.

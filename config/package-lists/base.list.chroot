@@ -19,6 +19,8 @@ iproute2
 iputils-ping
 kmod
 procps
+# hwclock: el paso «hwclock» del instalador ajusta con él el reloj del equipo.
+util-linux-extra
 less
 pciutils
 usbutils

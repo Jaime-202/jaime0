@@ -361,7 +361,8 @@ class Servicio:
 
     # -- ciclo de medicion ---------------------------------------------------
     def muestrear(self):
-        med = self.muestreador.muestrear()
+        # La lista de todos los procesos solo hace falta con la ventana abierta (modo rapido).
+        med = self.muestreador.muestrear(completa=time.time() < self.rapido_hasta)
         if med["gpu"]["nvidia"] != "activa":
             self.gpu_temp = None            # suspendida o sin GPU: sin temperatura, jamas se despierta
         med["gpu"]["temp"] = self.gpu_temp

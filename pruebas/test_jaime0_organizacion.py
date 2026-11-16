@@ -64,6 +64,22 @@ class PruebasProcesos(Base):
         self.assertIsNone(S.io_red(None, ahora, 2.0))
         self.assertIsNone(S.io_red({"x": (0, 0)}, ahora, 2.0))
 
+    def test_la_lista_completa_solo_con_la_ventana_abierta(self):
+        self.escribir("proc/10/stat", stat(10, "firefox", 100, 0))
+        m = S.Muestreador()
+        m.base()
+        m.muestrear(completa=False)
+        self.assertEqual(m.lista, [])
+        m.muestrear()
+        self.assertEqual([p["pid"] for p in m.lista], [10])
+        sv = S.Servicio(directorio=self.rt, estado=self.estado)
+        sv.muestreador.base()
+        sv.muestrear()
+        self.assertEqual(sv.muestreador.lista, [], "sin el modo rápido (ventana cerrada) no se calcula")
+        sv.rapido()
+        sv.muestrear()
+        self.assertEqual([p["pid"] for p in sv.muestreador.lista], [10])
+
     def test_ordenes_procesos_y_proceso(self):
         sv = S.Servicio(directorio=self.rt, estado=self.estado)
         sv.muestreador.lista = [{"pid": 1, "nombre": "a", "cpu": 1.0, "ram": 1.0, "hilos": 1, "estado": "esperando"}]

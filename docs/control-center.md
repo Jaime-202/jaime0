@@ -1,6 +1,6 @@
 # Jaime0 Control Center — plan y arquitectura
 
-Estado: **Fases 1 a 8 terminadas.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, la ventana con sus 7 secciones (SYSTEM OVERVIEW, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH y SETTINGS), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Probado de punta a punta en un sistema instalado desde una ISO nueva (fase 8); queda lo que solo existe en el portátil.
+Estado: **Fases 1 a 8 del Control Center terminadas y evolución del sistema (fases 1 a 10) terminada.** Funcionan el servicio, `jaime0-salud`, `jaime0-perfil`, `jaime0-privacidad`, `jaime0-reglas`, `jaime0-update`, `jaime0-diagnostico` y la ventana con sus 10 secciones (SYSTEM, PERFORMANCE, PROFILES, AUTOMATION, PRIVACY & SECURITY, HEALTH, SETTINGS, UPDATES, DIAGNOSTICS y POWER), los tres niveles de animación, el atajo configurable, los avisos de incidencias y el indicador de la barra. Lo que solo existe en el portátil (NVIDIA, batería y sensores reales) queda por probar allí. El resumen de la evolución está en [evolucion.md](evolucion.md).
 
 Después (evolución del sistema) se añadieron **UPDATES** (sección 08, ver [actualizaciones.md](actualizaciones.md)) y **DIAGNOSTICS** (sección 09, ver [diagnostico.md](diagnostico.md)) y **POWER** (sección 10, tecla `0`, ver [energia.md](energia.md)); las teclas van de `1` a `9` y `0`.
 
@@ -371,6 +371,8 @@ Arreglos encontrados al probar: `swaync` podía arrancar dos veces por D-Bus (el
 | `sistema` | SMART, umbrales, D-Bus, aviso a Waybar, firma de Hyprland |
 | `perfiles` · `privacidad` · `estado` | Motor de perfiles; PRIVACY & SECURITY; estado global |
 | `reglas` | Catálogo, validación, acciones y motor de Jaime0 Rules |
+| `actualizaciones` · `diagnostico` | UPDATES (`jaime0-update` y apt, comprobación en su hilo) y DIAGNOSTICS (`jaime0-diagnostico` en su hilo) |
+| `energia` · `hardware` | POWER (batería, gráficas, CPU, suspensión, historial por perfil) y la detección de hardware |
 | `api` · `servicio` | Órdenes del socket; el servicio, el cerrojo de instancia única y `main` |
 
 **Tres hilos y nada más:** el bucle de GLib (medidas, socket, reglas, estado), los trabajos de privacidad y de acciones de reglas, que ya existían, y el **hilo de efectos** (`jaime0-efectos`). Este ejecuta en orden, una a una, las operaciones que pueden tardar o colgarse: aplicar perfiles (venga de la ventana, de `jaime0-perfil` o de una regla), leer los umbrales (`jaime0-ajustes`), las consultas de energía a D-Bus, la lista de aplicaciones y de eventos para las reglas, y el aviso a Waybar. El motor de perfiles solo se usa desde ese hilo; sus avisos (actividad, `estado.json`, eventos de reglas) vuelven al bucle con `idle_add`. Las órdenes del socket que pasan por él contestan al terminar (`perfiles`, `perfil`, `perfil_anterior`, `personalizado`, `reglas`, `regla_guardar`, `reglas_importar`), sin hacer esperar a las demás. Cada operación conserva su propio límite (D-Bus 3 s, subprocesos con `timeout`); un fallo se registra y no detiene el hilo; las que pasan de 10 s se anotan. `estado.json` lleva `servicio.efectos` (pendientes, operación en curso y desde cuándo).

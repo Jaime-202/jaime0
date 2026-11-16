@@ -465,7 +465,9 @@ class Muestreador:
     def base(self):
         self.previa = self.crudo()
 
-    def muestrear(self):
+    def muestrear(self, completa=True):
+        """completa: calcula tambien la lista de todos los procesos (la que usa PERFORMANCE con
+        el Control Center abierto). Sin ella solo se calculan los 5 que mas gastan."""
         ahora = self.crudo()
         antes, self.previa = self.previa, ahora
         dt = ahora["mono"] - antes["mono"] if antes else 0
@@ -488,7 +490,7 @@ class Muestreador:
             if u:
                 u["lectura"], u["escritura"] = (lectura, escritura) if punto == "/" else (None, None)
                 discos.append(u)
-        self.lista = lista_procesos(antes["procs"] if antes else None, ahora["procs"], dt)
+        self.lista = lista_procesos(antes["procs"] if antes else None, ahora["procs"], dt) if completa else []
         return {"cpu": cpu, "ram": leer_ram(), "temp": temps,
                 "red": io_red(antes.get("net") if antes else None, ahora["net"], dt),
                 "gpu": {"nvidia": estado_nvidia(), "temp": None},
