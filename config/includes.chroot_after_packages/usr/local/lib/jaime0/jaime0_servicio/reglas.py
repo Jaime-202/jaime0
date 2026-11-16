@@ -32,7 +32,9 @@ __all__ = [
     "IDS_PERFIL", "RE_HORA", "RE_ID_REGLA", "RE_ID_APP", "UUID_AUDIO", "NOMBRES_DIA", "_p",
     "EVENTOS", "CONDICIONES", "ACCIONES", "EVENTOS_POR_ID", "tiene_control", "validar_valor",
     "validar_bloque", "validar_regla", "slug_regla", "id_unico", "regla_ejecutable",
-    "texto_evento", "coincide", "minutos_de", "evaluar_condicion", "proxima_hora",
+    "texto_evento", "coincide", "minutos_de", "evaluar_condicion", "PRIORIDADES", "NIVEL_PRIORIDAD",
+    "recurso_accion", "NOMBRES_RECURSO", "resolver_conflictos", "huella_regla", "posibles_choques",
+    "proxima_hora", "MAX_CONFLICTOS",
     "estado_bateria_baja", "info_bluez", "cambio_bluez", "estado_red", "AnalizadorHyprland",
     "parsear_sinks_wpctl", "limpiar_miniaturas", "comprobar_script", "limpiar_detalle",
     "AplicacionesDisponibles", "ejecutar_grupo", "Acciones", "HistorialEjecuciones",
@@ -50,9 +52,14 @@ __all__ = [
 # regla (la regla se desactiva y queda una incidencia), tope global (las ejecuciones de
 # sobra se omiten, sin desactivar ninguna regla, y queda una incidencia por ventana),
 # "perfil -> perfil" rechazado y reglas importadas desactivadas hasta que el usuario las active.
+# Conflictos (evolucion, fase 3): si un mismo evento dispara reglas que piden valores
+# distintos para el mismo recurso, gana la de prioridad mas alta (o la que va antes en la
+# lista) y a la otra se le omite esa accion, con el motivo en el historial; no se guardan
+# reglas repetidas.
 # ---------------------------------------------------------------------------
 
 MAX_EJECUCIONES = 1000              # lineas de ejecuciones.jsonl
+MAX_CONFLICTOS = 20                 # conflictos recientes que se recuerdan (en memoria)
 MAX_REGLAS = 100
 MAX_ACCIONES = 5
 MAX_CONDICIONES = 10
@@ -261,11 +268,13 @@ def validar_bloque(catalogo, clave, doc, ctx, etiqueta):
 
 def validar_regla(doc, ctx):
     """(regla, error): estricta. La regla limpia lleva id (o None si no venia), nombre,
-    activa, cuando, si, hacer y revisar. 'ultima' (que anade el listado) se ignora."""
+    activa, prioridad, cuando, si, hacer y revisar. Lo que solo anade el listado (ultima,
+    proxima, choca_con) se ignora."""
     if not isinstance(doc, dict):
         return None, "la regla debe ser un objeto"
     for k in doc:
-        if k not in ("id", "nombre", "activa", "cuando", "si", "hacer", "revisar", "ultima"):
+        if k not in ("id", "nombre", "activa", "prioridad", "cuando", "si", "hacer", "revisar",
+                     "ultima", "proxima", "choca_con"):
             return None, f"campo desconocido en la regla: «{k}»"
     rid = doc.get("id")
     if rid is not None and (not isinstance(rid, str) or not RE_ID_REGLA.match(rid)):
@@ -276,6 +285,9 @@ def validar_regla(doc, ctx):
     for campo, defecto in (("activa", True), ("revisar", False)):
         if not isinstance(doc.get(campo, defecto), bool):
             return None, f"«{campo}» debe ser verdadero o falso"
+    prioridad = doc.get("prioridad", "normal")
+    if prioridad not in PRIORIDADES:
+        return None, "«prioridad» debe ser alta, normal o baja"
     cuando, error = validar_bloque(EVENTOS, "evento", doc.get("cuando"), ctx, "CUANDO")
     if error:
         return None, error
@@ -306,8 +318,8 @@ def validar_regla(doc, ctx):
     if cuando["evento"] == "perfil" and any(a["accion"] == "perfil" for a in hacer):
         return None, ("Una regla que reacciona a un cambio de perfil no puede cambiar de perfil: "
                       "crearía un bucle")
-    return {"id": rid, "nombre": nombre.strip(), "activa": doc.get("activa", True), "cuando": cuando,
-            "si": si, "hacer": hacer, "revisar": doc.get("revisar", False)}, None
+    return {"id": rid, "nombre": nombre.strip(), "activa": doc.get("activa", True), "prioridad": prioridad,
+            "cuando": cuando, "si": si, "hacer": hacer, "revisar": doc.get("revisar", False)}, None
 
 
 def slug_regla(texto):
@@ -412,6 +424,84 @@ def evaluar_condicion(c, est):
     if t == "dias":
         return est["ahora"].weekday() in c["dias"]
     return False
+
+
+# -- conflictos y duplicados (funciones puras) --------------------------------------
+# Dos reglas chocan si el MISMO evento las dispara a la vez y piden valores distintos para
+# el mismo recurso (perfil, volumen, no molestar...). Se resuelve siempre igual: gana la de
+# prioridad mas alta y, a igual prioridad, la que va antes en la lista (la mas antigua). A
+# la perdedora solo se le omiten las acciones en conflicto, y queda anotado por que.
+
+PRIORIDADES = ("alta", "normal", "baja")
+NIVEL_PRIORIDAD = {"alta": 0, "normal": 1, "baja": 2}
+
+
+def recurso_accion(a):
+    """(recurso, valor pedido) de una accion, o None si no puede chocar con otra (notificar,
+    abrir una aplicacion, mantenimiento o un script se pueden hacer a la vez)."""
+    t = a.get("accion")
+    if t == "perfil":
+        return "perfil", a.get("perfil")
+    if t in ("modo_noche", "no_molestar", "silenciar"):
+        return t, a.get("estado")
+    if t == "volumen":
+        return "volumen", a.get("nivel")
+    if t == "salida_audio":
+        return "salida_audio", str(a.get("nombre", "")).casefold()
+    return None
+
+
+NOMBRES_RECURSO = {"perfil": "perfil", "modo_noche": "modo noche", "no_molestar": "no molestar",
+                   "silenciar": "silencio", "volumen": "volumen", "salida_audio": "salida de audio"}
+
+
+def resolver_conflictos(reglas):
+    """reglas: las que dispara un mismo evento, en el orden de la lista. Devuelve
+    (planes, conflictos): planes[i] = (acciones que se ejecutan, [(accion omitida, ganadora)])
+    para reglas[i]; conflictos = [{"recurso", "ganadora", "perdedora", "motivo"}]."""
+    orden = sorted(range(len(reglas)),
+                   key=lambda i: (NIVEL_PRIORIDAD.get(reglas[i].get("prioridad", "normal"), 1), i))
+    reservado, planes, conflictos = {}, [None] * len(reglas), []
+    for i in orden:
+        r, quedan, omitidas = reglas[i], [], []
+        for a in r["hacer"]:
+            rec = recurso_accion(a)
+            if rec is not None:
+                previo = reservado.get(rec[0])
+                if previo is not None and previo[1] is not r and previo[0] != rec[1]:
+                    ganadora = previo[1]
+                    omitidas.append((a, ganadora))
+                    misma = ganadora.get("prioridad", "normal") == r.get("prioridad", "normal")
+                    conflictos.append({"recurso": rec[0], "ganadora": ganadora, "perdedora": r,
+                                       "motivo": "va antes en la lista" if misma
+                                       else f"prioridad {ganadora.get('prioridad', 'normal')}"})
+                    continue
+                reservado.setdefault(rec[0], (rec[1], r))
+            quedan.append(a)
+        planes[i] = (quedan, omitidas)
+    return planes, conflictos
+
+
+def huella_regla(r):
+    """Lo que hace una regla (CUANDO, SI y HACER), para detectar reglas repetidas."""
+    return json.dumps([r.get("cuando"), r.get("si"), r.get("hacer")], sort_keys=True, ensure_ascii=False)
+
+
+def posibles_choques(reglas):
+    """{id: [{"id", "nombre", "recurso"}]}: reglas activas con el mismo CUANDO que pediran
+    valores distintos para un recurso si se disparan juntas (aviso al guardar o listar)."""
+    activas = [r for r in reglas if regla_ejecutable(r)]
+    salida = {}
+    for i, a in enumerate(activas):
+        for b in activas[i + 1:]:
+            if json.dumps(a["cuando"], sort_keys=True) != json.dumps(b["cuando"], sort_keys=True):
+                continue
+            pa = {x[0]: x[1] for x in map(recurso_accion, a["hacer"]) if x}
+            for x in filter(None, map(recurso_accion, b["hacer"])):
+                if x[0] in pa and pa[x[0]] != x[1]:
+                    salida.setdefault(a["id"], []).append({"id": b["id"], "nombre": b["nombre"], "recurso": x[0]})
+                    salida.setdefault(b["id"], []).append({"id": a["id"], "nombre": a["nombre"], "recurso": x[0]})
+    return salida
 
 
 def proxima_hora(reglas, ahora):
@@ -887,6 +977,7 @@ class MotorReglas:
         self._cargador = None
         self._timer = None
         self.proxima = None
+        self.conflictos = collections.deque(maxlen=MAX_CONFLICTOS)
 
     # -- carga y guardado ------------------------------------------------------------
     def _ctx(self, estricto):
@@ -991,16 +1082,38 @@ class MotorReglas:
         return {"eventos": tabla(EVENTOS, "eventos"), "condiciones": tabla(CONDICIONES, "condiciones"),
                 "acciones": tabla(ACCIONES, "acciones")}
 
-    def _con_ultima(self, regla, ultimas):
-        return dict(regla, ultima=ultimas.get(regla["id"]))
+    def _con_ultima(self, regla, ultimas, choques=None):
+        proxima = None
+        if regla_ejecutable(regla) and regla["cuando"].get("evento") == "hora":
+            p = proxima_hora([regla], datetime.datetime.fromtimestamp(self.reloj()))
+            proxima = int(time.mktime(p.timetuple())) if p else None
+        if choques is None:
+            choques = posibles_choques(self.reglas)
+        return dict(regla, ultima=ultimas.get(regla["id"]), proxima=proxima,
+                    choca_con=choques.get(regla["id"], []))
+
+    def resumen(self, ultimas=None):
+        ultimas = self.historial.ultima_por_regla() if ultimas is None else ultimas
+        return {"activas": sum(1 for r in self.reglas if regla_ejecutable(r)),
+                "desactivadas": sum(1 for r in self.reglas if not r["activa"] and not r["revisar"]),
+                "por_revisar": sum(1 for r in self.reglas if r["revisar"]),
+                "con_fallo": sum(1 for r in self.reglas if (ultimas.get(r["id"]) or {}).get("resultado") == "fallo"),
+                "invalidas": len(self.errores), "conflictos": len(self.conflictos)}
 
     def listar(self):
         self._asegurar()
         ultimas = self.historial.ultima_por_regla()
+        choques = posibles_choques(self.reglas)
         apps = self.apps()
-        return {"ok": True, "v": VERSION_DATOS, "reglas": [self._con_ultima(r, ultimas) for r in self.reglas],
-                "errores": list(self.errores), "catalogo": self.catalogo(),
+        return {"ok": True, "v": VERSION_DATOS, "reglas": [self._con_ultima(r, ultimas, choques) for r in self.reglas],
+                "errores": list(self.errores), "resumen": self.resumen(ultimas),
+                "conflictos": list(self.conflictos)[::-1], "catalogo": self.catalogo(),
                 "aplicaciones": [{"id": i, "nombre": n} for i, n in sorted((apps or {}).items(), key=lambda x: x[1].lower())]}
+
+    def _duplicada(self, regla, excepto=None):
+        """La regla ya existente que hace exactamente lo mismo (otro id), o None."""
+        h = huella_regla(regla)
+        return next((r for r in self.reglas if r["id"] != excepto and huella_regla(r) == h), None)
 
     def guardar(self, doc):
         """Crea o actualiza una regla (valida de forma estricta). Si no trae id, o el id no
@@ -1009,6 +1122,9 @@ class MotorReglas:
         regla, error = validar_regla(doc, self._ctx(True))
         if error:
             return {"ok": False, "error": error}
+        igual = self._duplicada(regla, excepto=regla["id"])
+        if igual is not None:
+            return {"ok": False, "error": f"Ya hay una regla que hace exactamente lo mismo: «{igual['nombre']}»"}
         previa = self._buscar(regla["id"]) if regla["id"] else None
         if previa is None:
             if len(self.reglas) >= MAX_REGLAS:
@@ -1089,6 +1205,9 @@ class MotorReglas:
             regla, error = validar_regla(entrada, ctx)
             if error is None and len(self.reglas) >= MAX_REGLAS:
                 error = f"hay demasiadas reglas (máximo {MAX_REGLAS})"
+            igual = self._duplicada(regla) if error is None else None
+            if igual is not None:
+                error = f"repite la regla «{igual['nombre']}»"
             if error:
                 errores.append({"indice": i, "error": error})
                 continue
@@ -1161,19 +1280,28 @@ class MotorReglas:
             self.notificar()
         return detalle
 
-    def _intentar(self, regla, texto, cb=None):
-        """Enfriamiento, tope y lanzamiento. Devuelve (estado, mensaje): 'lanzada', 'omitida'
-        (enfriamiento, ya en curso o tope global: la regla sigue activa) o 'tope' (tope por
-        regla: la regla se desactiva)."""
+    def _bloqueo(self, regla):
+        """Por que no se puede lanzar ahora (ya en curso o enfriamiento), o None. Sin efectos."""
         rid, ahora = regla["id"], self.reloj()
         if rid in self._en_curso:
-            self._anotar(regla, texto, "omitida", "omitida (ya se está ejecutando)")
-            return "omitida", "la regla ya se está ejecutando"
+            return "omitida (ya se está ejecutando)", "la regla ya se está ejecutando"
         ultimo = self._ultimo.get(rid)
         if ultimo is not None and ahora - ultimo < ENFRIAMIENTO:
             espera = int(ENFRIAMIENTO - (ahora - ultimo)) + 1
-            self._anotar(regla, texto, "omitida", f"omitida (enfriamiento): se ejecutó hace menos de {ENFRIAMIENTO} s")
-            return "omitida", f"enfriamiento: espera {espera} s antes de volver a ejecutarla"
+            return (f"omitida (enfriamiento): se ejecutó hace menos de {ENFRIAMIENTO} s",
+                    f"enfriamiento: espera {espera} s antes de volver a ejecutarla")
+        return None
+
+    def _intentar(self, regla, texto, cb=None, acciones=None, omitidas=()):
+        """Enfriamiento, tope y lanzamiento. Devuelve (estado, mensaje): 'lanzada', 'omitida'
+        (enfriamiento, ya en curso o tope global: la regla sigue activa) o 'tope' (tope por
+        regla: la regla se desactiva). acciones: las que se ejecutan (por defecto todas);
+        omitidas: [(accion, ganadora)] que un conflicto ha dejado fuera."""
+        rid, ahora = regla["id"], self.reloj()
+        bloqueo = self._bloqueo(regla)
+        if bloqueo is not None:
+            self._anotar(regla, texto, "omitida", bloqueo[0])
+            return "omitida", bloqueo[1]
         while self._global and self._global[0] <= ahora - TOPE_GLOBAL[1]:
             self._global.popleft()
         propias = [t for t in self._por_regla.get(rid, []) if t > ahora - TOPE_REGLA[1]]
@@ -1192,8 +1320,12 @@ class MotorReglas:
         self._en_curso.add(rid)
         if any(a["accion"] == "abrir_aplicacion" for a in regla["hacer"]):
             self._silencio["aplicacion"] = ahora + SILENCIO_APLICACION
-        acciones = list(regla["hacer"])
-        self.lanzador(lambda: self._trabajo(acciones), lambda res: self._terminar(regla, texto, res, cb))
+        acciones = list(regla["hacer"] if acciones is None else acciones)
+        notas = [{"accion": a["accion"], "resultado": "omitida",
+                  "detalle": f"conflicto con «{g['nombre']}» ({NOMBRES_RECURSO.get(recurso_accion(a)[0])})"}
+                 for a, g in omitidas]
+        self.lanzador(lambda: self._trabajo(acciones),
+                      lambda res: self._terminar(regla, texto, notas + res, cb))
         return "lanzada", ""
 
     def _trabajo(self, acciones):
@@ -1212,10 +1344,14 @@ class MotorReglas:
     def _terminar(self, regla, texto, resultados, cb):
         """En el bucle principal: historial, actividad y aviso."""
         self._en_curso.discard(regla["id"])
-        malas = [r for r in resultados if r["resultado"] != "ok"]
+        omitidas = [r for r in resultados if r["resultado"] == "omitida"]
+        hechas = [r for r in resultados if r["resultado"] != "omitida"]
+        malas = [r for r in hechas if r["resultado"] != "ok"]
         resultado = "fallo" if malas else "ok"
-        detalle = (f"{len(resultados) - len(malas)} de {len(resultados)} acciones correctas: {malas[0]['detalle']}"
-                   if malas else f"{len(resultados)} acción(es) correcta(s)")
+        detalle = (f"{len(hechas) - len(malas)} de {len(hechas)} acciones correctas: {malas[0]['detalle']}"
+                   if malas else f"{len(hechas)} acción(es) correcta(s)")
+        if omitidas:
+            detalle += f"; {len(omitidas)} omitida(s): {omitidas[0]['detalle']}"
         entrada = self._anotar(regla, texto, resultado, limpiar_detalle(detalle), resultados)
         self.evento_actividad(f"Regla «{regla['nombre']}»: {resultado}", None, "INFO" if not malas else "WARNING",
                               None, "regla")
@@ -1249,17 +1385,48 @@ class MotorReglas:
         ahora = self.reloj()
         if nombre == "aplicacion" and datos.get("estado") == "abierta" and ahora < self._silencio.get("aplicacion", 0):
             return 0                        # lo ha abierto una regla: no dispara reglas
-        texto, n = texto_evento(nombre, datos), 0
+        texto, disparadas = texto_evento(nombre, datos), []
         for r in list(self.reglas):
             if not regla_ejecutable(r) or r["cuando"]["evento"] != nombre:
                 continue
             try:
                 if coincide(r["cuando"], datos) and self._condiciones_ok(r):
-                    self._intentar(r, texto)
-                    n += 1
+                    disparadas.append(r)
             except Exception:
                 registrar(f"error al evaluar la regla {r.get('id')}:\n" + traceback.format_exc())
-        return n
+        # Las que no pueden lanzarse (en curso o enfriamiento) no cuentan para los conflictos.
+        candidatas = []
+        for r in disparadas:
+            bloqueo = self._bloqueo(r)
+            if bloqueo is not None:
+                self._anotar(r, texto, "omitida", bloqueo[0])
+            else:
+                candidatas.append(r)
+        planes, conflictos = resolver_conflictos(candidatas)
+        for c in conflictos:
+            self._anotar_conflicto(c, texto)
+        for r, (acciones, omitidas) in zip(candidatas, planes):
+            try:
+                if not acciones:
+                    g = omitidas[0][1]
+                    self._anotar(r, texto, "omitida", f"omitida (conflicto): «{g['nombre']}» tiene preferencia",
+                                 [{"accion": a["accion"], "resultado": "omitida",
+                                   "detalle": f"conflicto con «{g['nombre']}»"} for a, g in omitidas])
+                else:
+                    self._intentar(r, texto, acciones=acciones, omitidas=omitidas)
+            except Exception:
+                registrar(f"error al lanzar la regla {r.get('id')}:\n" + traceback.format_exc())
+        return len(disparadas)
+
+    def _anotar_conflicto(self, c, texto):
+        recurso = NOMBRES_RECURSO.get(c["recurso"], c["recurso"])
+        entrada = {"t": int(self.reloj()), "evento": texto, "recurso": c["recurso"],
+                   "ganadora": {"id": c["ganadora"]["id"], "nombre": c["ganadora"]["nombre"]},
+                   "perdedora": {"id": c["perdedora"]["id"], "nombre": c["perdedora"]["nombre"]},
+                   "motivo": c["motivo"]}
+        self.conflictos.append(entrada)
+        self.evento_actividad(f"Conflicto de reglas ({recurso}): gana «{c['ganadora']['nombre']}» "
+                              f"sobre «{c['perdedora']['nombre']}» ({c['motivo']})", None, "WARNING", None, "regla")
 
     def perfil_cambiado(self, perfil, origen):
         """Gancho del motor de perfiles: solo los cambios del usuario disparan reglas."""

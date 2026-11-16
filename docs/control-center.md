@@ -95,7 +95,11 @@ Reglas **CUANDO → SI → HACER**. Las ejecuta el servicio aunque el Control Ce
 
 **Seguridad.** Ninguna acción necesita root. Los scripts solo se ejecutan si están en `~/.config/jaime0/scripts-autorizados/`, son tuyos, ejecutables y nadie más puede modificarlos (tampoco la carpeta); sin shell, sin argumentos y con 60 s como mucho. Las reglas importadas (`jaime0-reglas importar`) entran desactivadas y marcadas `REVISAR`.
 
-**Sin bucles:** lo que hace una regla no dispara otras reglas; los disparadores son por flanco; 30 s de enfriamiento por regla (se registra como «omitida»); si una regla se ejecuta 5 veces en 5 min o hay más de 20 ejecuciones en un minuto, se desactiva sola y abre una incidencia; una regla «cambio de perfil → cambiar de perfil» se rechaza al guardarla.
+**Sin bucles:** lo que hace una regla no dispara otras reglas; los disparadores son por flanco; 30 s de enfriamiento por regla (se registra como «omitida»); si una regla se ejecuta 5 veces en 5 min se desactiva sola y abre una incidencia; si hay más de 20 ejecuciones en un minuto en total, las de sobra se omiten (sin desactivar ninguna regla) y queda una incidencia; una regla «cambio de perfil → cambiar de perfil» se rechaza al guardarla.
+
+**Conflictos y duplicadas (evolución, fase 3):** si un mismo evento dispara a la vez reglas que piden valores distintos para lo mismo (perfil, volumen, silencio, salida de audio, no molestar o modo noche), gana la de **prioridad** más alta (`alta`, `normal` —por defecto— o `baja`) y, a igual prioridad, la que va antes en la lista. A la otra solo se le omite la acción en conflicto, con el motivo en el historial; el conflicto queda en la actividad y en la lista de conflictos recientes (los 20 últimos, en memoria). Pedir el mismo valor no es conflicto, y una regla en enfriamiento no le quita el recurso a otra. Al listar, cada regla avisa de con cuáles puede chocar (mismo CUANDO y valores distintos). No se guarda ni se importa una regla que haga exactamente lo mismo que otra. AUTOMATION y `jaime0-reglas lista` muestran el resumen (activas, desactivadas, por revisar, con fallo, conflictos), la prioridad, la próxima ejecución de las reglas de hora y los conflictos recientes; el editor tiene el selector de prioridad.
+
+Resultados (16-11-2026, VM con la ISO 0.4.0-beta.1 en vivo y el servicio nuevo): dos reglas de inactividad con perfiles distintos, una de prioridad alta: gana la alta (FOCUS y volumen al 20 %) y a la otra se le omite el perfil con el motivo; la regla duplicada se rechaza; «Noche» muestra la próxima ejecución; la prioridad se cambia y se guarda desde el editor; 0 avisos de QML.
 
 **Ventana:** lista con interruptor, resumen CUANDO → SI → HACER y última ejecución (ok, fallo u omitida), botones PROBAR, EDITAR y BORRAR (pide confirmación), editor construido con el catálogo del servicio e historial de ejecuciones. **Terminal:** `jaime0-reglas lista|catalogo|historial|crear ARCHIVO|importar ARCHIVO|activar|desactivar|probar|borrar ID`.
 
@@ -349,7 +353,8 @@ Cada perfil declara sus capacidades: lo que el equipo no admite (p. ej. `perform
 
 1. Todo cambio lleva origen (`usuario` o `regla`); los eventos causados por una regla no disparan reglas.
 2. Disparadores por flanco con histéresis (salta al 20 %, se rearma al 25 %).
-3. Enfriamiento por regla (30 s) y tope global; si se supera, la regla se desactiva y queda una incidencia.
+3. Enfriamiento por regla (30 s); tope por regla (la regla se desactiva y queda una incidencia) y tope global (se omiten ejecuciones sin desactivar ninguna regla).
+6. Conflictos entre reglas del mismo evento resueltos por prioridad y orden, y anotados (fase 3).
 4. Se rechaza al cargar cualquier regla «perfil cambiado → cambiar perfil».
 5. Las reglas importadas entran desactivadas hasta revisarlas.
 

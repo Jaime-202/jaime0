@@ -111,9 +111,15 @@ def texto_reglas(doc):
     cat = doc.get("catalogo") or {}
     ev, co, ac = (nombres_catalogo(cat, s) for s in ("eventos", "condiciones", "acciones"))
     L = []
+    res = doc.get("resumen")
+    if res:
+        L.append(f"{res['activas']} activas · {res['desactivadas']} desactivadas · {res['por_revisar']} por revisar"
+                 f" · {res['con_fallo']} con fallo en la última ejecución · {res['conflictos']} conflictos recientes")
+        L.append("")
     for r in doc.get("reglas", []):
         estado = "POR REVISAR" if r.get("revisar") else ("activa" if r.get("activa") else "desactivada")
-        L.append(f"{r['id']}  [{estado}]  {r['nombre']}")
+        prioridad = f"  prioridad {r['prioridad']}" if r.get("prioridad", "normal") != "normal" else ""
+        L.append(f"{r['id']}  [{estado}]  {r['nombre']}{prioridad}")
         L.append("    CUANDO: " + describir(r["cuando"], "evento", ev))
         for c in r.get("si") or []:
             L.append("    SI:     " + describir(c, "condicion", co))
@@ -121,11 +127,18 @@ def texto_reglas(doc):
             L.append("    HACER:  " + describir(a, "accion", ac))
         u = r.get("ultima")
         L.append("    Última: " + (f"{fecha(u['t'])} {u['resultado']} ({u['evento']})" if u else "nunca"))
+        if r.get("proxima"):
+            L.append("    Próxima: " + fecha(r["proxima"]))
+        for c in r.get("choca_con") or []:
+            L.append(f"    Aviso: puede chocar con «{c['nombre']}» ({c['recurso']}) si se disparan a la vez")
     if not doc.get("reglas"):
         L.append("No hay reglas.")
     for e in doc.get("errores") or []:
         donde = f"regla {e['id']}" if e.get("id") else (f"entrada {e['indice'] + 1}" if e.get("indice") is not None else "archivo")
         L.append(f"No válida ({donde}): {e['error']}")
+    for c in doc.get("conflictos") or []:
+        L.append(f"Conflicto {fecha(c['t'])} ({c['evento']}, {c['recurso']}): gana «{c['ganadora']['nombre']}»"
+                 f" sobre «{c['perdedora']['nombre']}» ({c['motivo']})")
     return "\n".join(L)
 
 
@@ -136,7 +149,7 @@ def cmd_lista(args, enviar):
     if not r.get("ok"):
         return error(r.get("error", "error desconocido"))
     if "--json" in args:
-        print(json.dumps({k: r[k] for k in ("reglas", "errores") if k in r}, ensure_ascii=False))
+        print(json.dumps({k: r[k] for k in ("reglas", "errores", "resumen", "conflictos") if k in r}, ensure_ascii=False))
     else:
         print(texto_reglas(r))
     return 0

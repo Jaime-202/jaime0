@@ -11,6 +11,7 @@ import glob
 import importlib.machinery
 import importlib.util
 import io
+import itertools
 import json
 import os
 import pathlib
@@ -79,9 +80,15 @@ class Ejecutor:
         return [o for o, _k in self.llamadas]
 
 
+_N_REGLA = itertools.count(1)
+
+
 def regla(nombre="Prueba", cuando=None, hacer=None, **extra):
+    # Desde la fase 3 no se guardan dos reglas que hagan exactamente lo mismo: el texto por
+    # defecto lleva un numero para que cada regla de ejemplo sea distinta.
     d = {"nombre": nombre, "cuando": {"evento": "cargador", "estado": "conectado"} if cuando is None else cuando,
-         "hacer": [{"accion": "notificar", "titulo": "Hola", "texto": "Mundo"}] if hacer is None else hacer}
+         "hacer": ([{"accion": "notificar", "titulo": "Hola", "texto": f"Mundo {next(_N_REGLA)}"}]
+                   if hacer is None else hacer)}
     d.update(extra)
     return d
 
@@ -1013,7 +1020,7 @@ class PruebasArchivo(Base):
         self.assertEqual(doc["v"], 1)
         self.assertEqual([r["id"] for r in doc["reglas"]], ["bateria-baja", "bateria-baja-2"])
         self.assertFalse(os.path.exists(self.archivo + ".tmp"))
-        self.assertEqual(sorted(doc["reglas"][0]), ["activa", "cuando", "hacer", "id", "nombre", "revisar", "si"])
+        self.assertEqual(sorted(doc["reglas"][0]), ["activa", "cuando", "hacer", "id", "nombre", "prioridad", "revisar", "si"])
 
     def test_guardar_actualiza_si_el_id_existe_y_crea_si_no(self):
         a = self.guardar("Uno")
@@ -2133,6 +2140,136 @@ class PruebasHypridle(unittest.TestCase):
         conf = (REPO / "config/includes.chroot_after_packages/etc/skel/.config/hypr/hypridle.conf").read_text(encoding="utf-8")
         self.assertIn("on-timeout = jaime0-reglas evento inactivo", conf)
         self.assertIn("on-resume = jaime0-reglas evento activo", conf)
+
+
+CARGADOR = {"evento": "cargador", "estado": "conectado"}
+
+
+class PruebasConflictos(Base):
+    """Fase 3 de la evolucion: reglas que el mismo evento dispara a la vez y piden valores
+    distintos para el mismo recurso. Resolucion predecible y anotada."""
+
+    def disparar(self):
+        return self.motor.evento("cargador", {"estado": "conectado"})
+
+    def por_regla(self):
+        return {e["regla"]: e for e in self.historial()}
+
+    def test_gana_la_que_va_antes_y_a_la_otra_se_le_omite_con_el_motivo(self):
+        a = self.guardar("Ahorro", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "power-saver"}])
+        b = self.guardar("Rendimiento", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "performance"}])
+        self.assertEqual(self.disparar(), 2)
+        self.assertEqual(self.perfiles, ["power-saver"])
+        h = self.por_regla()
+        self.assertEqual(h[a["id"]]["resultado"], "ok")
+        self.assertEqual(h[b["id"]]["resultado"], "omitida")
+        self.assertIn("conflicto", h[b["id"]]["detalle"])
+        self.assertIn("«Ahorro»", h[b["id"]]["detalle"])
+        c = self.motor.listar()["conflictos"]
+        self.assertEqual(len(c), 1)
+        self.assertEqual((c[0]["ganadora"]["id"], c[0]["perdedora"]["id"], c[0]["recurso"], c[0]["motivo"]),
+                         (a["id"], b["id"], "perfil", "va antes en la lista"))
+        self.assertTrue(any("Conflicto de reglas (perfil)" in x[0] for x in self.actividad))
+
+    def test_la_prioridad_alta_gana_aunque_vaya_despues(self):
+        self.guardar("Ahorro", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "power-saver"}])
+        b = self.guardar("Rendimiento", cuando=CARGADOR, prioridad="alta",
+                         hacer=[{"accion": "perfil", "perfil": "performance"}])
+        self.disparar()
+        self.assertEqual(self.perfiles, ["performance"])
+        self.assertEqual(self.motor.listar()["conflictos"][0]["ganadora"]["id"], b["id"])
+        self.assertEqual(self.motor.listar()["conflictos"][0]["motivo"], "prioridad alta")
+
+    def test_solo_se_omite_la_accion_en_conflicto(self):
+        self.guardar("Bajo", cuando=CARGADOR, hacer=[{"accion": "volumen", "nivel": 50}])
+        b = self.guardar("Aviso", cuando=CARGADOR, hacer=[{"accion": "volumen", "nivel": 30},
+                                                         {"accion": "notificar", "titulo": "Cargador", "texto": "Conectado"}])
+        self.disparar()
+        volumenes = [o for o in self.ejec.ordenes if o[:2] == ["wpctl", "set-volume"]]
+        self.assertEqual(volumenes, [["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "50%"]])
+        self.assertTrue(any(o[0] == "notify-send" for o in self.ejec.ordenes))
+        e = self.por_regla()[b["id"]]
+        self.assertEqual(e["resultado"], "ok")
+        self.assertIn("1 omitida(s): conflicto con «Bajo» (volumen)", e["detalle"])
+        self.assertEqual([x["resultado"] for x in e["acciones"]], ["omitida", "ok"])
+
+    def test_el_mismo_valor_no_es_conflicto(self):
+        self.guardar("Uno", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "power-saver"}])
+        self.guardar("Dos", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "power-saver"},
+                                                   {"accion": "notificar", "titulo": "Ahorro", "texto": "Activado"}])
+        self.disparar()
+        self.assertEqual(self.perfiles, ["power-saver", "power-saver"])
+        self.assertEqual(self.motor.listar()["conflictos"], [])
+
+    def test_una_regla_en_enfriamiento_no_le_quita_el_recurso_a_otra(self):
+        a = self.guardar("Ahorro", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "power-saver"}])
+        self.disparar()
+        b = self.guardar("Rendimiento", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "performance"}])
+        self.reloj.avanzar(10)                      # Ahorro sigue en enfriamiento
+        self.disparar()
+        self.assertEqual(self.perfiles, ["power-saver", "performance"])
+        self.assertIn("enfriamiento", self.por_regla()[a["id"]]["detalle"])
+        self.assertEqual(self.por_regla()[b["id"]]["resultado"], "ok")
+        self.assertEqual(self.motor.listar()["conflictos"], [])
+
+    def test_aviso_de_posible_choque_al_listar(self):
+        a = self.guardar("Ahorro", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "power-saver"}])
+        b = self.guardar("Rendimiento", cuando=CARGADOR, hacer=[{"accion": "perfil", "perfil": "performance"}])
+        c = self.guardar("Otra hora", cuando={"evento": "hora", "hora": "22:00"},
+                         hacer=[{"accion": "perfil", "perfil": "performance"}])
+        reglas = {r["id"]: r for r in self.motor.listar()["reglas"]}
+        self.assertEqual(reglas[a["id"]]["choca_con"], [{"id": b["id"], "nombre": "Rendimiento", "recurso": "perfil"}])
+        self.assertEqual(reglas[b["id"]]["choca_con"], [{"id": a["id"], "nombre": "Ahorro", "recurso": "perfil"}])
+        self.assertEqual(reglas[c["id"]]["choca_con"], [])
+        self.motor.activar(b["id"], False)          # desactivada: ya no choca
+        self.assertEqual({r["id"]: r for r in self.motor.listar()["reglas"]}[a["id"]]["choca_con"], [])
+
+
+class PruebasDuplicadasYPrioridad(Base):
+    def test_no_se_guarda_una_regla_que_hace_lo_mismo_que_otra(self):
+        hacer = [{"accion": "notificar", "titulo": "Hola", "texto": "Igual"}]
+        a = self.guardar("Primera", cuando=CARGADOR, hacer=hacer)
+        r = self.motor.guardar(regla("Segunda", cuando=CARGADOR, hacer=hacer))
+        self.assertFalse(r["ok"])
+        self.assertIn("«Primera»", r["error"])
+        # Editar la misma regla no cuenta como duplicada:
+        self.assertTrue(self.motor.guardar(dict(a, nombre="Primera (editada)"))["ok"])
+        # Ni importar una copia:
+        imp = self.motor.importar([regla("Copia", cuando=CARGADOR, hacer=hacer)])
+        self.assertEqual(imp["importadas"], 0)
+        self.assertIn("repite la regla", imp["errores"][0]["error"])
+
+    def test_prioridad_por_defecto_y_valores_validos(self):
+        self.assertEqual(self.guardar("Normal")["prioridad"], "normal")
+        self.assertEqual(self.guardar("Alta", prioridad="alta")["prioridad"], "alta")
+        r = self.motor.guardar(regla("Mala", prioridad="urgente"))
+        self.assertFalse(r["ok"])
+        self.assertIn("prioridad", r["error"])
+
+    def test_los_campos_del_listado_se_ignoran_al_guardar(self):
+        r = self.guardar("Con hora", cuando={"evento": "hora", "hora": "22:00"})
+        listada = next(x for x in self.motor.listar()["reglas"] if x["id"] == r["id"])
+        self.assertTrue(self.motor.guardar(dict(listada, nombre="Con hora 2"))["ok"])
+
+
+class PruebasResumenYProxima(Base):
+    def test_resumen_y_proxima_ejecucion(self):
+        h = self.guardar("Noche", cuando={"evento": "hora", "hora": "22:00"})
+        self.guardar("Apagada", activa=False)
+        self.motor.importar([regla("Importada")])
+        doc = self.motor.listar()
+        self.assertEqual(doc["resumen"], {"activas": 1, "desactivadas": 1, "por_revisar": 1, "con_fallo": 0,
+                                          "invalidas": 0, "conflictos": 0})
+        noche = next(x for x in doc["reglas"] if x["id"] == h["id"])
+        self.assertEqual(datetime.datetime.fromtimestamp(noche["proxima"]),
+                         datetime.datetime(2026, 11, 16, 22, 0))           # hoy (lunes) a las 22:00
+        self.assertTrue(all(x["proxima"] is None for x in doc["reglas"] if x["id"] != h["id"]))
+
+    def test_una_regla_con_fallo_cuenta_en_el_resumen(self):
+        self.guardar("Volumen", cuando=CARGADOR, hacer=[{"accion": "volumen", "nivel": 40}])
+        self.ejec.resp["wpctl"] = proc(rc=1, err="no hay audio")
+        self.motor.evento("cargador", {"estado": "conectado"})
+        self.assertEqual(self.motor.listar()["resumen"]["con_fallo"], 1)
 
 
 if __name__ == "__main__":

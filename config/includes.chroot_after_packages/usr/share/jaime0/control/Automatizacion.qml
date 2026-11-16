@@ -50,7 +50,7 @@ Item {
         const ev = (vista.catalogo.eventos || []).find(e => e.disponible) || vista.catalogo.eventos[0];
         const ac = (vista.catalogo.acciones || []).find(a => a.disponible) || vista.catalogo.acciones[0];
         const cuando = nuevoElemento("evento", ev);
-        return { nombre: "Nueva regla", activa: true, cuando: cuando, si: [], hacer: [nuevoElemento("accion", ac)] };
+        return { nombre: "Nueva regla", activa: true, prioridad: "normal", cuando: cuando, si: [], hacer: [nuevoElemento("accion", ac)] };
     }
     // Cambia un valor dentro del borrador y lo reasigna para que la vista se actualice.
     function poner(seccion, indice, clave, valor) {
@@ -229,7 +229,12 @@ Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 3
                 ident: "A1"
-                etiqueta: "JAIME0 RULES · " + vista.reglas.length + " REGLAS · " + vista.reglas.filter(r => r.activa).length + " ACTIVAS"
+                readonly property var res: vista.datos && vista.datos.resumen ? vista.datos.resumen : null
+                etiqueta: "JAIME0 RULES · " + (res ? res.activas + " ACTIVAS · " + res.desactivadas + " DESACTIVADAS"
+                                                     + (res.por_revisar ? " · " + res.por_revisar + " POR REVISAR" : "")
+                                                     + (res.con_fallo ? " · " + res.con_fallo + " CON FALLO" : "")
+                                                     + (res.conflictos ? " · " + res.conflictos + " CONFLICTOS" : "")
+                                               : vista.reglas.length + " REGLAS")
                 acento: Tema.verde
 
                 Row {
@@ -289,7 +294,7 @@ Item {
                                 id: fila
                                 required property var modelData
                                 width: listaReglas.width
-                                height: 58
+                                height: Math.max(58, datosFila.implicitHeight + 16)
                                 color: vista.borrador && vista.borrador.id === modelData.id ? "#0f171b" : Tema.panel2
                                 border.color: modelData.activa ? Tema.borde : Tema.rejilla
                                 border.width: 1
@@ -303,6 +308,7 @@ Item {
                                     TapHandler { onTapped: orden.pedir({ orden: "regla_activar", id: fila.modelData.id, activa: !fila.modelData.activa }) }
                                 }
                                 Column {
+                                    id: datosFila
                                     x: 56; y: 8
                                     width: fila.width - 56 - acciones.width - 16
                                     spacing: 3
@@ -310,6 +316,12 @@ Item {
                                         spacing: 8
                                         Text { text: fila.modelData.nombre; color: fila.modelData.activa ? Tema.texto : Tema.apagado; font.family: Tema.mono; font.pixelSize: 13 }
                                         Text { visible: !!fila.modelData.revisar; text: "REVISAR"; color: Tema.ambar; font.family: Tema.mono; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter }
+                                        Text {
+                                            visible: (fila.modelData.prioridad || "normal") !== "normal"
+                                            text: "PRIORIDAD " + String(fila.modelData.prioridad || "").toUpperCase()
+                                            color: fila.modelData.prioridad === "alta" ? Tema.cian : Tema.secundario
+                                            font.family: Tema.mono; font.pixelSize: 9; anchors.verticalCenter: parent.verticalCenter
+                                        }
                                     }
                                     Text {
                                         width: parent.width
@@ -327,6 +339,25 @@ Item {
                                         font.family: Tema.mono
                                         font.pixelSize: 9
                                         elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        visible: !!fila.modelData.proxima
+                                        text: "PRÓXIMA  " + (fila.modelData.proxima ? vista.hora(fila.modelData.proxima) : "")
+                                        color: Tema.cian
+                                        font.family: Tema.mono
+                                        font.pixelSize: 9
+                                    }
+                                    Repeater {
+                                        model: fila.modelData.choca_con || []
+                                        Text {
+                                            required property var modelData
+                                            width: datosFila.width
+                                            text: "△ PUEDE CHOCAR CON «" + modelData.nombre + "» (" + modelData.recurso + ") si se disparan a la vez"
+                                            color: Tema.ambar
+                                            font.family: Tema.mono
+                                            font.pixelSize: 9
+                                            elide: Text.ElideRight
+                                        }
                                     }
                                 }
                                 Row {
@@ -390,6 +421,21 @@ Item {
                                 texto: vista.borrador ? vista.borrador.nombre : ""
                                 onEditado: t => vista.ponerTexto("regla", -1, "nombre", t)
                             }
+                        }
+
+                        Row {
+                            spacing: 8
+                            Text { width: 70; anchors.verticalCenter: parent.verticalCenter; text: "PRIORIDAD"; color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini }
+                            Opciones {
+                                opciones: [{ valor: "alta", texto: "ALTA" }, { valor: "normal", texto: "NORMAL" }, { valor: "baja", texto: "BAJA" }]
+                                valor: vista.borrador ? (vista.borrador.prioridad || "normal") : "normal"
+                                onElegido: v => vista.poner("regla", -1, "prioridad", v)
+                            }
+                        }
+                        Text {
+                            width: editor.width
+                            text: "Si otra regla se dispara a la vez y pide otro valor para lo mismo (perfil, volumen, no molestar…), gana la de prioridad más alta; a igualdad, la que va antes en la lista."
+                            color: Tema.apagado; font.family: Tema.mono; font.pixelSize: 9; wrapMode: Text.WordWrap
                         }
 
                         // CUANDO
@@ -564,6 +610,19 @@ Item {
                     id: listaHist
                     width: parent.width
                     spacing: 2
+                    Repeater {
+                        model: vista.datos && vista.datos.conflictos ? vista.datos.conflictos : []
+                        Text {
+                            required property var modelData
+                            width: listaHist.width
+                            elide: Text.ElideRight
+                            text: vista.hora(modelData.t) + "  CONFLICTO " + modelData.recurso + ": gana «" + modelData.ganadora.nombre
+                                  + "» sobre «" + modelData.perdedora.nombre + "» (" + modelData.motivo + ")  ·  " + modelData.evento
+                            color: Tema.ambar
+                            font.family: Tema.mono
+                            font.pixelSize: Tema.letraMini
+                        }
+                    }
                     Text {
                         visible: vista.historial.length === 0
                         text: "Ninguna regla se ha ejecutado todavía."
