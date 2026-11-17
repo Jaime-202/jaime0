@@ -159,7 +159,7 @@ class SistemaReal:
     def ppd_retener(self, perfil):
         GLib, _Gio = _gi()
         return self._llamada(PPD[0], PPD[1], PPD[0], "HoldProfile",
-                             GLib.Variant("(sss)", (perfil, "Perfil de Jaime0", "jaime0"))).unpack()[0]
+                             GLib.Variant("(sss)", (perfil, "Perfil de ZYRON", "jaime0"))).unpack()[0]
 
     def ppd_liberar(self, cookie):
         GLib, _Gio = _gi()
@@ -180,7 +180,7 @@ class SistemaReal:
         con = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
         r, fds = con.call_with_unix_fd_list_sync(
             "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", "Inhibit",
-            GLib.Variant("(ssss)", ("idle", "Jaime0", motivo, "block")), GLib.VariantType("(h)"),
+            GLib.Variant("(ssss)", ("idle", "ZYRON", motivo, "block")), GLib.VariantType("(h)"),
             Gio.DBusCallFlags.NONE, 3000, None, None)
         return fds.get(r.unpack()[0])
 

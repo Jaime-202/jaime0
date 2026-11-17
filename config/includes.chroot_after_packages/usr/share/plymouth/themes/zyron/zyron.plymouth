@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=ZYRON
+Description=Activacion del nucleo de ZYRON.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/zyron
+ScriptFile=/usr/share/plymouth/themes/zyron/zyron.script

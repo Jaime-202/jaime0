@@ -2,7 +2,7 @@
 # en detalle, graficas (integrada, dedicada, PRIME y quien usa la NVIDIA), CPU, suspension e
 # inactividad, y resume el historico (tiempo con cargador y consumo por perfil de energia).
 # Solo lee: no cambia nada. Cada ajuste tiene un unico dueno (ver docs/energia.md): el perfil de
-# energia lo pone el perfil de Jaime0 (PROFILES), la inactividad son ajustes de jaime0-ajustes y
+# energia lo pone el perfil de ZYRON (PROFILES), la inactividad son ajustes de jaime0-ajustes y
 # lo que necesita root (logind, limites de carga, gobernador) solo se muestra.
 # Cada dato va como {"valor", "origen"}: origen "medido" (lo da el hardware), "calculado" (a
 # partir de datos medidos), "estimado" (supone que el consumo sigue igual) o "no_disponible".

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Verifica una sesion de Jaime0 en marcha (VM o equipo real), desde una terminal de la
+# Verifica una sesion de ZYRON en marcha (VM o equipo real), desde una terminal de la
 # propia sesion:   bash verificar-sesion.sh
 # Comprueba procesos, configuracion, ajustes, ancladas, widgets, el servicio y el Control
 # Center (cada orden del socket), las herramientas basicas y las notificaciones. Cambia
@@ -33,7 +33,7 @@ restaurar() {
 trap 'restaurar; rm -f "$COPIA"' EXIT
 
 seccion "Sistema"
-info "Jaime0 $(cat /usr/share/jaime0/version 2>/dev/null || echo '?'), en vivo: $EN_VIVO, $(hyprctl version 2>/dev/null | head -n 1)"
+info "ZYRON $(cat /usr/share/jaime0/version 2>/dev/null || echo '?'), en vivo: $EN_VIVO, $(hyprctl version 2>/dev/null | head -n 1)"
 
 seccion "Hyprland"
 V=$(Hyprland --verify-config -c "$CONF/hypr/hyprland.lua" 2>&1 | tail -n 1)
@@ -97,7 +97,7 @@ else
     info "sin ciudad para el tiempo: no se prueba jaime0-tiempo"
 fi
 
-seccion "Servicios de Jaime0 y Control Center"
+seccion "Servicios de ZYRON y Control Center"
 systemctl --user is-active --quiet jaime0-servicio && ok "jaime0-servicio activo" || fallo "jaime0-servicio no esta activo"
 # Cada orden del socket responde con un JSON con "ok" (o el documento de estado).
 for O in estado instante energia hardware procesos privacidad diagnostico actualizaciones perfiles reglas; do
@@ -159,7 +159,7 @@ if [ "$(swaync-client -D 2>/dev/null)" = true ]; then
     # Con No molestar (perfil FOCUS o MULTIMEDIA) las notificaciones se guardan sin mostrarse.
     info "No molestar activo: no se comprueba que la notificacion aparezca en pantalla"
 else
-    notify-send -a verificar-sesion "Prueba de Jaime0" "Notificación de verificar-sesion.sh" 2>/dev/null; sleep 1.5
+    notify-send -a verificar-sesion "Prueba de ZYRON" "Notificación de verificar-sesion.sh" 2>/dev/null; sleep 1.5
     hyprctl layers | grep -qE 'namespace: (swaync-notification-window|notifications)' && ok "la notificacion se muestra" || fallo "la notificacion no aparece"
 fi
 command -v swaync-client >/dev/null && swaync-client --close-all --skip-wait >/dev/null 2>&1

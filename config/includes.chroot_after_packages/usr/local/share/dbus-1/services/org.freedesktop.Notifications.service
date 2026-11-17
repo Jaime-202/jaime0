@@ -1,5 +1,5 @@
 [D-BUS Service]
-# Jaime0: quien muestra las notificaciones lo decide "notificaciones iniciar" (swaync, o
+# ZYRON: quien muestra las notificaciones lo decide "notificaciones iniciar" (swaync, o
 # dunst si swaync no esta instalado). Esta carpeta va antes que /usr/share, asi que
 # D-Bus nunca elige por su cuenta entre dos servicios.
 Name=org.freedesktop.Notifications

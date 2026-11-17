@@ -1,5 +1,6 @@
 // ~/.config/fastfetch/config.jsonc
-// Marca Jaime0 (J0) en color a la izquierda y datos agrupados en arbol: OS, WM y PC.
+// Simbolo de ZYRON (hexagono verde, Z gris claro y nucleo cian) a la izquierda y datos
+// agrupados en arbol: OS, WM y PC.
 // Los colores son los ANSI de la terminal, que en Kitty siguen la paleta jaime0:
 // 32 verde (la J, el titulo y los grupos), 37 gris claro, 90 gris y 36 cian.
 {
@@ -8,7 +9,8 @@
         "source": "~/.config/fastfetch/logo.txt",
         "color": {
             "1": "32",
-            "2": "37"
+            "2": "37",
+            "3": "36"
         },
         "padding": {
             "top": 1,

@@ -32,11 +32,11 @@ Probado en la VM (1280 × 800, ventana de 1100 × 688): Tab recorre la barra lat
 
 ## Detección de hardware (evolución, fase 8)
 
-La orden `hardware` del servicio (módulo `hardware`, solo lee sysfs) dice, para cada componente, si Jaime0 puede usarlo en ese equipo. La muestra HEALTH › SENSORS & TRENDS (panel HARDWARE · SENSORS).
+La orden `hardware` del servicio (módulo `hardware`, solo lee sysfs) dice, para cada componente, si ZYRON puede usarlo en ese equipo. La muestra HEALTH › SENSORS & TRENDS (panel HARDWARE · SENSORS).
 
 | Estado | Significa |
 |---|---|
-| COMPATIBLE | Está y Jaime0 lo lee o lo usa |
+| COMPATIBLE | Está y ZYRON lo lee o lo usa |
 | DETECTADO | Está, pero falta algo para usarlo: controlador, módulo o herramienta (p. ej. NVIDIA sin su módulo, Wi-Fi bloqueada por el interruptor) |
 | NO DISPONIBLE | Este equipo no lo tiene (sin batería, solo gráfica integrada, VM sin sensores) |
 | ERROR DE LECTURA | Está, pero leerlo ha fallado |
@@ -65,7 +65,7 @@ El servicio lanza `jaime0-diagnostico comprobar --json` en su propio hilo (a los
 |---|---|
 | El tope global de reglas (20 por minuto) desactivaba para siempre reglas sin culpa | Se omiten esas ejecuciones con el motivo; desactivar queda para el tope por regla |
 | Una incidencia de un sensor que deja de dar datos (p. ej. la GPU al suspenderse) quedaba abierta para siempre | Tras 3 muestras sin dato se cierra («Sin datos del sensor») |
-| Si el perfil de energía se cambiaba fuera, power-profiles-daemon soltaba la retención y Jaime0 no lo veía | Se olvida la retención y se vuelve a pedir |
+| Si el perfil de energía se cambiaba fuera, power-profiles-daemon soltaba la retención y ZYRON no lo veía | Se olvida la retención y se vuelve a pedir |
 | El servicio podía arrancar antes de exportar el entorno de Hyprland (POWER SAVER salía como no disponible) | Se arranca después, en la misma orden, y busca la firma de Hyprland en cada uso |
 | Un `reglas.json` roto a mano se sobrescribía | Antes se guarda una copia `reglas.json.roto` |
 | Una conexión cerrada por error dejaba su vigilancia de GLib activa | Se quita antes de cerrar |
@@ -134,7 +134,7 @@ La VM tiene la 0.3.0-beta.1 instalada y `sudo` pide contraseña, así que la ver
 
 Encontrado al probar: el mensaje de error se salía de la tarjeta de SETTINGS (ahora salta de línea), y al recargar la ventana en caliente con las animaciones activas se quedaba en blanco (la opacidad inicial dependía de un enlace; ahora la pone la animación).
 
-## AUTOMATION · Jaime0 Rules (fase 6)
+## AUTOMATION · ZYRON Rules (fase 6)
 
 Reglas **CUANDO → SI → HACER**. Las ejecuta el servicio aunque el Control Center esté cerrado.
 
@@ -179,8 +179,8 @@ Una sección más del Control Center, no una aplicación aparte. Muestra comprob
 | OPEN PORTS | Programas que escuchan conexiones; ◆ = abierto a la red (no solo al propio equipo) | `ss -tulnp` |
 | DEVICES IN USE | Micrófono, cámara y pantalla compartida, con la aplicación; el punto parpadea mientras se usan | PipeWire (`pw-dump`) y `/proc/*/fd` → `/dev/video*` |
 | ACTIVE CONNECTIONS | Conexiones establecidas agrupadas por programa, con sus destinos (sin resolver nombres: no genera tráfico) | `ss -tunp` (de otros usuarios no se ve el programa) |
-| APPS · PRIVILEGES · SERVICES | Flatpak (`UNAVAILABLE`: no está en Jaime0, así que no hay permisos por aplicación), tus grupos con privilegios y qué permiten, y servicios con efecto en la privacidad (SSH, avahi, CUPS, Bluetooth, NetworkManager) | `os.getgrouplist`, systemd |
-| TELEMETRY · HISTORY | Jaime0 sin telemetría; popularity-contest; qué consulta debsecan; si el widget del tiempo conecta con Open-Meteo; Brave y sus opciones (P3A). Historial de cambios relevantes | `dpkg-query`, archivos de configuración |
+| APPS · PRIVILEGES · SERVICES | Flatpak (`UNAVAILABLE`: no está en ZYRON, así que no hay permisos por aplicación), tus grupos con privilegios y qué permiten, y servicios con efecto en la privacidad (SSH, avahi, CUPS, Bluetooth, NetworkManager) | `os.getgrouplist`, systemd |
+| TELEMETRY · HISTORY | ZYRON sin telemetría; popularity-contest; qué consulta debsecan; si el widget del tiempo conecta con Open-Meteo; Brave y sus opciones (P3A). Historial de cambios relevantes | `dpkg-query`, archivos de configuración |
 
 El historial (`~/.local/state/jaime0/privacidad.jsonl`, 300 líneas como mucho) guarda cambios del cortafuegos, puertos que se abren o se cierran, el uso de micrófono, cámara o pantalla (nombre de la aplicación) y las consultas de reglas con autorización. **No guarda direcciones ni la salida de las reglas.** Cortafuegos y puertos se revisan cada minuto; los dispositivos, cada 10 s con la ventana abierta y cada minuto si no.
 
@@ -193,9 +193,9 @@ El historial (`~/.local/state/jaime0/privacidad.jsonl`, 300 líneas como mucho) 
 | Pruebas automáticas | 376 correctas (90 nuevas: UFW, `ss`, `pw-dump`, cámara, flatpak, grupos, telemetría, estado, historial, API, cliente y ayudante) |
 | Estado real | WARNING por el puerto 22 (SSH) abierto a la red: es el servidor SSH instalado en la VM para manejarla en las pruebas, y el motivo lo dice |
 | Micrófono | Una grabación con `pw-record` se detectó mientras duraba y quedó en el historial al empezar y al terminar |
-| Reglas con autorización | El botón abrió la ventana de contraseña de polkit con el mensaje de Jaime0; con la contraseña se vieron las reglas reales (22/tcp ALLOW IN, IPv4 e IPv6) y la consulta quedó en el historial |
+| Reglas con autorización | El botón abrió la ventana de contraseña de polkit con el mensaje de ZYRON; con la contraseña se vieron las reglas reales (22/tcp ALLOW IN, IPv4 e IPv6) y la consulta quedó en el historial |
 | Ventana | Seis paneles con datos reales, 0 avisos de QML |
-| No probado | Cámara real y pantalla compartida real (la VM no tiene cámara ni se compartió pantalla), y Flatpak instalado (no está en Jaime0) |
+| No probado | Cámara real y pantalla compartida real (la VM no tiene cámara ni se compartió pantalla), y Flatpak instalado (no está en ZYRON) |
 
 Encontrado al probar: **faltaba el paquete `pkexec`** (solo estaban `polkitd` y el agente), sin el cual el botón de reglas no podía pedir la contraseña; está añadido a la lista de paquetes. También se corrigieron dos nombres de campo entre el servicio y la ventana, la fila central que aplastaba a la de abajo y un texto de grupos duplicado.
 
@@ -235,7 +235,7 @@ Un perfil que el equipo no admite sale como `UNAVAILABLE` con el motivo (en la V
 | CUSTOM | Modo noche, ahorro y sin animaciones aplicados y deshechos al volver a BALANCED; valores no válidos rechazados con un mensaje claro; editado y guardado desde la ventana |
 | Persistencia | Tras reiniciar el servicio se reaplica el perfil guardado |
 | Ventana | PROFILES y PERFORMANCE con datos reales; aplicar con un clic; 0 avisos de QML; Hyprland acepta la configuración con la capa (`--verify-config`) |
-| No probado | PERFORMANCE con energía real, el efecto visual de animaciones y desenfoque (en una VM Jaime0 los apaga siempre) y que hypridle respete el inhibidor durante 10 minutos reales: necesitan el portátil o una espera larga |
+| No probado | PERFORMANCE con energía real, el efecto visual de animaciones y desenfoque (en una VM ZYRON los apaga siempre) y que hypridle respete el inhibidor durante 10 minutos reales: necesitan el portátil o una espera larga |
 
 Arreglos encontrados al probar: el enlace para editar CUSTOM estaba dentro de su tarjeta y el clic también aplicaba el perfil (ahora es un botón aparte); el editor no cargaba lo guardado; el botón de volver se salía de la cabecera con textos largos; la descripción de CUSTOM decía «sin definir» aunque estuviera definido; y la gráfica de PERFORMANCE no avisaba mientras recogía el primer minuto de datos.
 
@@ -276,7 +276,7 @@ Arreglos encontrados al probar: el lector de CD de la VM salía como disco en ST
 
 | Qué | Cómo |
 |---|---|
-| Abrir o cerrar el Control Center | `SUPER + I`, clic en el indicador de Jaime0 de la barra (junto a la batería) o `jaime0-control` |
+| Abrir o cerrar el Control Center | `SUPER + I`, clic en el indicador de ZYRON de la barra (junto a la batería) o `jaime0-control` |
 | Dentro | `1`–`7` cambian de sección, `Esc` cierra |
 | Estado en la terminal | `jaime0-salud` (`--json` para la salida completa) |
 | El servicio | `systemctl --user status jaime0-servicio`; lo arranca la sesión de Hyprland |
@@ -370,7 +370,7 @@ Arreglos encontrados al probar: `swaync` podía arrancar dos veces por D-Bus (el
 | `medicion` · `historico` · `incidencias` | Lectura de `/proc` y `/sys`; anillo, agregados y huecos; detector e incidencias |
 | `sistema` | SMART, umbrales, D-Bus, aviso a Waybar, firma de Hyprland |
 | `perfiles` · `privacidad` · `estado` | Motor de perfiles; PRIVACY & SECURITY; estado global |
-| `reglas` | Catálogo, validación, acciones y motor de Jaime0 Rules |
+| `reglas` | Catálogo, validación, acciones y motor de ZYRON Rules |
 | `actualizaciones` · `diagnostico` | UPDATES (`jaime0-update` y apt, comprobación en su hilo) y DIAGNOSTICS (`jaime0-diagnostico` en su hilo) |
 | `energia` · `hardware` | POWER (batería, gráficas, CPU, suspensión, historial por perfil) y la detección de hardware |
 | `api` · `servicio` | Órdenes del socket; el servicio, el cerrojo de instancia única y `main` |

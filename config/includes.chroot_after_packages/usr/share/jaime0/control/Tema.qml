@@ -3,7 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Paleta y medidas del Control Center. Es la misma identidad de Jaime0, pero con mas
+// Paleta y medidas del Control Center. Es la misma identidad de ZYRON, pero con mas
 // presencia del cian y de las lineas tecnicas que el escritorio normal.
 Singleton {
     readonly property color fondo: "#080b0d"
@@ -27,7 +27,7 @@ Singleton {
     readonly property int letraDato: 22
     readonly property int letraGrande: 30
 
-    // Nivel de animacion de Jaime0 (ajuste "animaciones": no, sutil, suave). Lo pone
+    // Nivel de animacion de ZYRON (ajuste "animaciones": no, sutil, suave). Lo pone
     // shell.qml desde ~/.config/jaime0/generado/control.json. Con "no" no hay transiciones
     // ni movimientos decorativos (barrido de la cabecera, luces que laten).
     property string nivel: "sutil"

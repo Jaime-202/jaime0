@@ -124,7 +124,7 @@ echo "== Fondo y acceso =="
 grep -q "^python3-pil" chroot.packages.live && fallo "Pillow en la ISO" || ok "Pillow retirado tras preparar el fondo"
 grep -q "^librsvg2-bin" chroot.packages.live && fallo "librsvg2-bin en la ISO" || ok "librsvg2-bin retirado tras generar la marca"
 grep -q "border=darkgray;title=green" chroot/etc/greetd/config.toml && grep -q "container=black" chroot/etc/greetd/config.toml && ok "tuigreet con colores de la paleta" || fallo "tuigreet sin tema"
-grep -q -- "--greeting 'Jaime0'" chroot/etc/greetd/config.toml && ok "tuigreet saluda con Jaime0" || fallo "tuigreet sin saludo Jaime0"
+grep -q -- "--greeting 'ZYRON'" chroot/etc/greetd/config.toml && ok "tuigreet saluda con ZYRON" || fallo "tuigreet sin saludo ZYRON"
 
 echo "== Zsh por defecto =="
 grep -qx 'SHELL=/bin/zsh' chroot/etc/default/useradd && ok "useradd: SHELL=/bin/zsh" || fallo "useradd"

@@ -21,7 +21,7 @@ import sys
 import time
 
 PROGRAMA = "jaime0-reglas"
-SIN_SERVICIO = "el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio"
+SIN_SERVICIO = "el servicio de ZYRON no está en marcha: systemctl --user start jaime0-servicio"
 MAX_ARCHIVO = 1024 * 1024
 TIMEOUT_PROBAR = 330.0          # cinco acciones de hasta 60 s
 

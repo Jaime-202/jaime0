@@ -1,11 +1,11 @@
-$1          .:oooo.   $2   .:ooooooo:.
-$1          :ooooo:   $2 .ooooo:::ooooo.
-$1          :ooooo:   $2:oooo'     'oooo:
-$1          :ooooo:   $2oooo'   .:  'oooo
-$1          :ooooo:   $2oooo  .:o'   oooo
-$1          :ooooo:   $2oooo .o:'    oooo
-$1          :ooooo:   $2oooo:o'      oooo
-$1  .ooo.   :ooooo:   $2oooo'      .oooo
-$1  :oooo.  .ooooo:   $2:oooo.     .oooo:
-$1   'ooooooooooo'    $2 'ooooo:::ooooo'
-$1     '':::::''      $2   ':ooooooo:'
+$1        ▄▄▄▀▀▀▄▄▄
+$1    ▄▄▀▀▀         ▀▀▀▄▄
+$1  █▀                   ▀█
+$1  █    $2████████████$1     █
+$1  █             $2▄██▀$1    █
+$1  █          $2▄█$3●$2▀$1       █
+$1  █       $2▄██▀$1          █
+$1  █    $2████████████$1     █
+$1  █▄                   ▄█
+$1    ▀▀▄▄▄         ▄▄▄▀▀
+$1        ▀▀▀▄▄▄▀▀▀

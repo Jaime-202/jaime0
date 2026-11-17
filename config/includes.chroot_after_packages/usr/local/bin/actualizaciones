@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-# actualizaciones: aviso de actualizaciones de Debian para la barra de Jaime0.
+# actualizaciones: aviso de actualizaciones de Debian para la barra de ZYRON.
 #
 #   actualizaciones                    muestra lo pendiente y ofrece instalarlo (sudo apt)
 #   actualizaciones comprobar          comprueba sin instalar (--notificar, --silencioso)
@@ -7,7 +7,7 @@
 #
 # Lee las listas locales de apt (las refresca apt-daily una vez al dia) y, con debsecan,
 # cuales de los paquetes pendientes corrigen vulnerabilidades conocidas. Nunca instala
-# nada por su cuenta: solo cuando lo pides y con sudo. Lo propio de Jaime0 (configuracion,
+# nada por su cuenta: solo cuando lo pides y con sudo. Lo propio de ZYRON (configuracion,
 # scripts, temas, servicio) lo actualiza jaime0-update; aqui solo se muestra la version
 # nueva que encontro su ultima comprobacion (sin red y sin ejecutarlo).
 
@@ -87,7 +87,7 @@ def estado_debian():
 
 
 def clave_version(version):
-    """Orden de versiones de Jaime0 (el de jaime0-update): 0.5.0-exp.1 < 0.5.0-beta.1 < 0.5.0."""
+    """Orden de versiones de ZYRON (el de jaime0-update): 0.5.0-exp.1 < 0.5.0-beta.1 < 0.5.0."""
     m = PATRON_VERSION.fullmatch(version) if isinstance(version, str) else None
     if not m:
         return None
@@ -180,7 +180,7 @@ def notificar_seguridad(debian):
     os.makedirs(dir_estado(), exist_ok=True)
     with open(avisado, "w", encoding="utf-8") as f:
         f.write(huella + "\n")
-    subprocess.run(["notify-send", "--app-name=Jaime0", "--icon=security-high",
+    subprocess.run(["notify-send", "--app-name=ZYRON", "--icon=security-high",
                     "Actualizaciones de seguridad de Debian",
                     f"{len(seg)} paquete{'s' if len(seg) != 1 else ''} con correcciones de seguridad. "
                     "Pulsa el icono de la barra o ejecuta: actualizaciones"],
@@ -210,7 +210,7 @@ def cmd_barra(_op):
         lineas.append(f"Debian: {len(seguridad)} {'actualizaciones' if len(seguridad) != 1 else 'actualización'} de seguridad "
                       f"({debian.get('paquetes', 0)} paquetes por actualizar en total)")
     if jaime0:
-        lineas.append(f"Jaime0 {jaime0[0]} disponible (canal {jaime0[1]}). Para instalarla: jaime0-update")
+        lineas.append(f"ZYRON {jaime0[0]} disponible (canal {jaime0[1]}). Para instalarla: jaime0-update")
     if lineas:
         lineas.append("Clic: verlas e instalarlas" if seguridad else "Clic: ver los detalles")
         salida = {"text": ICONO_BARRA, "class": "seguridad" if seguridad else "disponible",
@@ -229,7 +229,7 @@ def cmd_interactivo(_op):
     guardar_estado(debian)
     jaime0 = jaime0_disponible()
     if jaime0:
-        print(verde(f"Jaime0 {jaime0[0]} disponible (canal {jaime0[1]}).") + " Para verla e instalarla: jaime0-update")
+        print(verde(f"ZYRON {jaime0[0]} disponible (canal {jaime0[1]}).") + " Para verla e instalarla: jaime0-update")
     mostrar(debian)
     if not debian["paquetes"]:
         return 0
@@ -248,7 +248,7 @@ def cmd_interactivo(_op):
 
 
 def main():
-    p = argparse.ArgumentParser(prog="actualizaciones", description="Actualizaciones de Debian en Jaime0.")
+    p = argparse.ArgumentParser(prog="actualizaciones", description="Actualizaciones de Debian en ZYRON.")
     sub = p.add_subparsers(dest="orden")
     c = sub.add_parser("comprobar", help="comprueba sin instalar")
     c.add_argument("--notificar", action="store_true", help="avisa de correcciones de seguridad nuevas")

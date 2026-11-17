@@ -3,7 +3,7 @@ import QtQuick.Layouts
 import Quickshell.Io
 
 // SETTINGS: preferencias del Control Center. Se leen y se guardan con jaime0-ajustes
-// (mismo esquema, validacion y archivo que el resto de Jaime0), asi que persisten tras
+// (mismo esquema, validacion y archivo que el resto de ZYRON), asi que persisten tras
 // reiniciar y la aplicacion de ajustes muestra lo mismo.
 Item {
     id: vista

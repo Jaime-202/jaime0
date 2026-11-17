@@ -399,7 +399,7 @@ class PruebasAplicaciones(Base):
     def test_flatpak_ausente(self):
         r = S.info_flatpak(Ejecutor())
         self.assertEqual(r, {"estado": "UNAVAILABLE",
-                             "texto": "Flatpak no está instalado en Jaime0: no hay permisos por aplicación. "
+                             "texto": "Flatpak no está instalado en ZYRON: no hay permisos por aplicación. "
                                       "Los programas de Debian se ejecutan con el acceso de tu usuario "
                                       "(tus carpetas, tus dispositivos)."})
 
@@ -453,7 +453,7 @@ class PruebasTelemetria(Base):
 
     def test_siempre_jaime0_sin_telemetria(self):
         t = self.por(S.telemetria(Ejecutor(), ciudad=""))
-        self.assertEqual(t["Jaime0"]["texto"], "Sin telemetría: nada sale del equipo")
+        self.assertEqual(t["ZYRON"]["texto"], "Sin telemetría: nada sale del equipo")
 
     def test_popularity_contest_ausente(self):
         t = self.por(S.telemetria(Ejecutor(**{"dpkg-query": resultado("", 1)}), ciudad=""))
@@ -726,7 +726,7 @@ class PruebasApi(Base):
         self.assertEqual(r["flatpak"]["estado"], "UNAVAILABLE")
         self.assertEqual([g["grupo"] for g in r["privilegios"]["grupos"]], ["sudo", "audio"])
         self.assertEqual(len(r["servicios"]), 5)
-        self.assertEqual(r["telemetria"][0]["elemento"], "Jaime0")
+        self.assertEqual(r["telemetria"][0]["elemento"], "ZYRON")
         self.assertIsInstance(r["historial"], list)
 
     def test_privacidad_en_hilo_con_responder(self):
@@ -882,10 +882,10 @@ class PruebasCliente(unittest.TestCase):
                         "remoto": "0.0.0.0:*", "proceso": "sshd", "pid": 1, "expuesto": True}],
            "conexiones": [{"proceso": "brave", "pid": 9, "conexiones": 2, "destinos": ["1.2.3.4:443"]}],
            "dispositivos": {"microfono": [{"aplicacion": "Firefox", "pid": 5}], "camara": [], "pantalla": None},
-           "flatpak": {"estado": "UNAVAILABLE", "texto": "Flatpak no está instalado en Jaime0"},
+           "flatpak": {"estado": "UNAVAILABLE", "texto": "Flatpak no está instalado en ZYRON"},
            "privilegios": {"grupos": [{"grupo": "sudo", "texto": "sudo: puede ejecutar órdenes"}]},
            "servicios": [{"nombre": "ssh", "estado": "activo", "texto": "Servidor SSH"}],
-           "telemetria": [{"elemento": "Jaime0", "estado": "NINGUNA", "texto": "Sin telemetría: nada sale del equipo"}],
+           "telemetria": [{"elemento": "ZYRON", "estado": "NINGUNA", "texto": "Sin telemetría: nada sale del equipo"}],
            "historial": [{"v": 1, "t": 1763123456, "tipo": "puerto", "texto": "Puerto expuesto: 22/tcp (sshd)"}]}
 
     def ejecutar(self, argv, respuesta, **kw):
@@ -926,7 +926,7 @@ class PruebasCliente(unittest.TestCase):
             codigo, out, err, _p = self.ejecutar(argv, FileNotFoundError("sin socket"))
             self.assertEqual(codigo, 1, argv)
             self.assertEqual(out, "")
-            self.assertIn("el servicio de Jaime0 no está en marcha", err)
+            self.assertIn("el servicio de ZYRON no está en marcha", err)
 
     def test_reglas_avisa_y_pide_ufw_reglas(self):
         doc = {"ok": True, "activo": True, "registro": "on (low)",

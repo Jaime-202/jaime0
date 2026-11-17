@@ -1,4 +1,4 @@
-# Jaime0: deja que la NVIDIA y sus funciones (sonido HDMI, USB-C) se apaguen cuando no se
+# ZYRON: deja que la NVIDIA y sus funciones (sonido HDMI, USB-C) se apaguen cuando no se
 # usan. Reglas de la documentacion de NVIDIA ("Dynamic Power Management").
 ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{class}=="0x030000", TEST=="power/control", ATTR{power/control}="auto"
 ACTION=="bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x10de", ATTR{class}=="0x030200", TEST=="power/control", ATTR{power/control}="auto"

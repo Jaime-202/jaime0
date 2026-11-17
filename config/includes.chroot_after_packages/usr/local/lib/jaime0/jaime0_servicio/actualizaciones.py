@@ -1,6 +1,6 @@
 # jaime0_servicio.actualizaciones: estado de las actualizaciones para UPDATES (evolucion, fase 4).
 # Junta dos fuentes que ya existen y no las sustituye:
-#   - jaime0-update (componentes propios de Jaime0): "estado --json" sin red y "comprobar --json"
+#   - jaime0-update (componentes propios de ZYRON): "estado --json" sin red y "comprobar --json"
 #     con red;
 #   - actualizaciones (paquetes de Debian con apt): el archivo que deja su ultima comprobacion
 #     (~/.local/state/jaime0/actualizaciones.json); comprobar de nuevo lanza "actualizaciones
@@ -48,7 +48,7 @@ def leer_debian():
 
 
 def ejecutar_json(orden, limite, ejecutar=None):
-    """(doc, error): ejecuta un programa de Jaime0 con salida JSON de una linea."""
+    """(doc, error): ejecuta un programa de ZYRON con salida JSON de una linea."""
     ejecutar = ejecutar or subprocess.run
     try:
         r = ejecutar(orden, capture_output=True, text=True, timeout=limite, stdin=subprocess.DEVNULL)
@@ -110,7 +110,7 @@ class Comprobador:
                 if update:
                     plan, error = ejecutar_json([update, "comprobar", "--json"], LIMITE_COMPROBAR_UPDATE, self.ejecutar)
                     if error or (plan and plan.get("ok") is False):
-                        avisos.append("Jaime0: " + (error or plan.get("error") or "no se pudo comprobar"))
+                        avisos.append("ZYRON: " + (error or plan.get("error") or "no se pudo comprobar"))
                 else:
                     plan = None
                 apt = self.buscar("actualizaciones")

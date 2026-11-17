@@ -1,4 +1,4 @@
-# ~/.config/swaylock/config: pantalla de bloqueo de Jaime0 (paleta jaime0).
+# ~/.config/swaylock/config: pantalla de bloqueo de ZYRON (paleta jaime0).
 # Anillo fino en gris; se ilumina en verde al escribir y en rojo si la clave falla.
 image=/usr/share/backgrounds/jaime0/jaime0.png
 scaling=fill

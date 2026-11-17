@@ -1,4 +1,4 @@
-# Pruebas de Jaime0
+# Pruebas de ZYRON
 
 Qué se prueba, cómo y con qué resultado. Cada prueba indica si se ha **probado** de verdad, si se ha **simulado**, o si está **pendiente** (de hardware real o de una ISO 0.2 compilada). Una función no se da por buena hasta que pasa aquí.
 
@@ -30,7 +30,7 @@ Pruebas de `pruebas/` (`python3 -m unittest discover -s pruebas -v`):
 | `test_jaime0_anclar.py` | Ancladas: nombres, máximo, orden, estado de los huecos, aplicaciones desinstaladas |
 | `test_jaime0_tiempo.py` | Tiempo: Open-Meteo de mentira, homónimos, caché, sin red |
 | `test_jaime0_diagnostico.py` | Diagnóstico: que no salgan datos personales y que no falle sin comandos |
-| `test_integridad_repo.py` | Lo que puede romper el instalador o la ISO sin que falle ningún programa: cada paso de Calamares existe y lo que ejecuta está en la imagen; lo que desinstala al terminar no lo usa Jaime0 (p. ej. un `import QtQuick.Effects` cuando se desinstala ese módulo); cada programa externo que usa Jaime0 viene de un paquete de las listas; lo que arrancan las unidades de systemd existe; y un inventario de secciones, órdenes del servicio, programas y ajustes que no pueden desaparecer sin cambiar la lista |
+| `test_integridad_repo.py` | Lo que puede romper el instalador o la ISO sin que falle ningún programa: cada paso de Calamares existe y lo que ejecuta está en la imagen; lo que desinstala al terminar no lo usa ZYRON (p. ej. un `import QtQuick.Effects` cuando se desinstala ese módulo); cada programa externo que usa ZYRON viene de un paquete de las listas; lo que arrancan las unidades de systemd existe; y un inventario de secciones, órdenes del servicio, programas y ajustes que no pueden desaparecer sin cambiar la lista |
 | `test_jaime0_hardware.py` | Detección de hardware: portátil híbrido, solo integrada, máquina virtual, sensores, ventiladores, voltajes y errores de lectura |
 
 `validar-repo.sh` además falla si se ejecutan menos pruebas que las de `pruebas/minimo-pruebas.txt`: así no desaparecen pruebas sin querer (si se quitan a propósito, se baja el mínimo en el mismo commit). Se ha comprobado que las pruebas de integridad fallan de verdad: un QML que importa un módulo que el instalador desinstala, un paso de Calamares que ejecuta un programa inexistente y una sección que desaparece se detectan los tres.
@@ -58,13 +58,29 @@ La instalación con el instalador gráfico (Calamares) no está automatizada: se
 bash scripts/verificar-sesion.sh
 ```
 
-Desde una terminal de la sesión (VM o equipo real). Comprueba Hyprland, los procesos de la sesión, los ajustes de ida y vuelta, las ancladas, los widgets, el servicio de Jaime0 y el Control Center (cada orden del socket responde, `estado.json` al día, la ventana abre sin errores de QML), `jaime0-diagnostico`, `jaime0-reglas`, `jaime0-perfil`, `jaime0-update`, las herramientas básicas y las notificaciones (con No molestar activo no se exige que se vean), y deja tus ajustes como estaban.
+Desde una terminal de la sesión (VM o equipo real). Comprueba Hyprland, los procesos de la sesión, los ajustes de ida y vuelta, las ancladas, los widgets, el servicio de ZYRON y el Control Center (cada orden del socket responde, `estado.json` al día, la ventana abre sin errores de QML), `jaime0-diagnostico`, `jaime0-reglas`, `jaime0-perfil`, `jaime0-update`, las herramientas básicas y las notificaciones (con No molestar activo no se exige que se vean), y deja tus ajustes como estaban.
 
 **Resultado (16-11-2026, VM `jaime0-fase2`, sesión en vivo 0.4.0-beta.1 con los archivos de la evolución encima):** 47 correctos, 0 fallos.
 
 **Resultado (13-11-2026, VM `jaime0-pruebas`, sesión en vivo 0.1 con los archivos 0.2 encima, tras entrar de nuevo con tuigreet):** 21 correctos, 0 fallos.
 
 ## 3. Pruebas en máquina virtual
+
+### ZYRON: identidad y arranque (17-11-2026)
+
+ISO de prueba con el nombre ZYRON y la animación de arranque (compilación de 18 min, `verificar-iso.sh`: 48 correctos, 0 fallos).
+
+| Prueba | Estado | Notas |
+|---|---|---|
+| Animación en el arranque en vivo (UEFI, VirtualBox 1280 × 800) | Probado | Escaneo, hexágono, Z, núcleo con su onda, anillo, marca y progreso; capturada a 4 imágenes por segundo |
+| Sesión en vivo, `verificar-sesion.sh` | Probado | 49 correctos, 0 fallos; nombre de equipo `zyron`, `os-release` y `/etc/issue` con ZYRON |
+| Instalación con cifrado (LUKS2, ext4) | Probado | Instalador con la marca nueva; tema `zyron` aplicado por el instalador; el paso `hwclock` ya no falla |
+| Clave del disco cifrado en la animación | Probado | Pregunta en español, recuadro cian y un punto por carácter; con la clave correcta llega a la pantalla de acceso («ZYRON») |
+| Apagar y reiniciar | Probado | Símbolo ya activado, sin progreso |
+| GRUB: menú, opciones avanzadas y recuperación | Probado | «ZYRON», «Opciones avanzadas de ZYRON» y la entrada de recuperación: arranca en texto, sin animación, pide la clave en consola y llega al acceso |
+| Hardware real (Intel + NVIDIA, 1920 × 1080, escala 1,25) | **Pendiente del portátil** | La animación se escala a la pantalla; falta verla con la gráfica real y con Windows en el menú |
+
+Visto de paso, sin relación con el cambio (ya ocurría antes): con el disco cifrado GRUB sale con sus colores por defecto, porque el tema de GRUB está en `/usr`, dentro de la partición cifrada; y las entradas de las opciones avanzadas siguen en inglés («recovery mode»).
 
 ### 0.3.0-beta.1 (13-11-2026): ISO para el Acer Nitro AN515-55
 
@@ -133,7 +149,7 @@ Ninguna de estas se ha hecho todavía. Para cada equipo, adjunta a una [incidenc
 
 - **Waybar y Debian:** Debian tiene marcado Waybar para salir de testing el 22-11-2026 por errores en dependencias lejanas. La versión instalada está parcheada, fijada y retenida (`apt-mark hold`), así que una actualización no la retira. Si en el futuro una biblioteca suya desaparece, `apt` retendrá esa actualización. Una compilación nueva de la ISO posterior a esa fecha podría no resolver sus dependencias de compilación.
 - **Rama de pruebas:** Forky es Debian testing y una actualización puede romper algo, en especial si cambia Hyprland. Durante el desarrollo pasó de 0.56 a 0.57 y hubo que retirar una opción.
-- **Fallos aislados en VirtualBox:** en pruebas sobre Windows con VirtualBox funcionando encima de Hyper-V (Integridad de memoria activada), un arranque de cada 11 en una VM se quedó congelado por un fallo de `systemd`, con un trozo de `libc` leído como ceros en memoria, y otra VM reanudada tras muchas horas tuvo programas que fallaban al azar. Reiniciarla lo resolvió: ocho reinicios seguidos entraron bien y no se pudo reproducir. Todo apunta a la capa de virtualización y no a Jaime0, pero no se ha podido demostrar. Por si ocurre, Jaime0 reinicia solo si `systemd` falla al arrancar (`CrashAction=reboot`). No se ha visto en otras condiciones, y no se ha probado en hardware real.
+- **Fallos aislados en VirtualBox:** en pruebas sobre Windows con VirtualBox funcionando encima de Hyper-V (Integridad de memoria activada), un arranque de cada 11 en una VM se quedó congelado por un fallo de `systemd`, con un trozo de `libc` leído como ceros en memoria, y otra VM reanudada tras muchas horas tuvo programas que fallaban al azar. Reiniciarla lo resolvió: ocho reinicios seguidos entraron bien y no se pudo reproducir. Todo apunta a la capa de virtualización y no a ZYRON, pero no se ha podido demostrar. Por si ocurre, ZYRON reinicia solo si `systemd` falla al arrancar (`CrashAction=reboot`). No se ha visto en otras condiciones, y no se ha probado en hardware real.
 - **Textos en inglés:** `tuigreet` y `swaylock` (solo de respaldo) no tienen traducción. El centro de notificaciones muestra la hora relativa en inglés, así que se oculta. Algunas entradas de GRUB y las de otros sistemas salen en inglés.
 - **Instalador:** el mapa, el teclado de muestra y la franja de particiones usan colores fijos de Calamares.
 - **`btop` en mosaicos muy pequeños:** necesita 80x24. Abierto con `CTRL + SHIFT + Escape` usa letra de 7 puntos y cabe en un cuarto de pantalla a 1280x800; más pequeño, lo avisa.

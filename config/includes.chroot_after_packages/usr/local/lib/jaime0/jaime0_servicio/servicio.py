@@ -300,7 +300,7 @@ class Servicio:
                 continue
             nombre = NOMBRES_COMPONENTE.get(d.get("componente"), d.get("componente") or "").upper()
             cuerpo = ". ".join(t.rstrip(".") for t in (d.get("descripcion"), d.get("recomendacion")) if t)
-            self.aviso_lanzar(["notify-send", "--app-name=Jaime0",
+            self.aviso_lanzar(["notify-send", "--app-name=ZYRON",
                                "--urgency=" + ("critical" if d["gravedad"] == "CRITICAL" else "normal"),
                                "--", f"{nombre} · {d['gravedad']}", cuerpo])
 
@@ -418,7 +418,7 @@ class Servicio:
         self._perfil_cambiado()
 
     def _perfil_cambiado(self):
-        """Perfil de Jaime0 o de energia distintos: reescribe estado.json y avisa a Waybar."""
+        """Perfil de ZYRON o de energia distintos: reescribe estado.json y avisa a Waybar."""
         if self.instante is not None:
             self.publicar(self.estado, self.motivos)
 
@@ -885,7 +885,7 @@ def medir():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Servicio de salud del sistema de Jaime0.")
+    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Servicio de salud del sistema de ZYRON.")
     sub = ap.add_subparsers(dest="orden", required=True)
     sub.add_parser("ejecutar", help="ejecuta el servicio (bucle de GLib)")
     pm = sub.add_parser("medir", help="una medicion inmediata en JSON")

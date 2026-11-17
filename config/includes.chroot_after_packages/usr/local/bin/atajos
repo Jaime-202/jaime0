@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# atajos: lista, añade y quita atajos de teclado de Hyprland en Jaime0.
+# atajos: lista, añade y quita atajos de teclado de Hyprland en ZYRON.
 # La lista sale de la configuracion cargada de verdad (hyprctl binds -j); los atajos propios
 # se guardan en ~/.config/hypr/atajos-usuario.lua, que hyprland.lua carga al final.
 import json, os, re, shutil, subprocess, sys, tempfile

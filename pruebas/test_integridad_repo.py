@@ -4,8 +4,8 @@ una ISO defectuosa sin que falle ninguna prueba de un programa concreto. Sin ISO
 los archivos del repositorio. Lo ejecuta GitHub Actions (scripts/validar-repo.sh).
 
   - Instalador: cada paso de Calamares existe y lo que ejecuta esta en la imagen; lo que
-    desinstala al terminar no lo necesita nada de Jaime0.
-  - Dependencias: cada programa externo que usa Jaime0 viene de un paquete de las listas.
+    desinstala al terminar no lo necesita nada de ZYRON.
+  - Dependencias: cada programa externo que usa ZYRON viene de un paquete de las listas.
   - Unidades de systemd propias: lo que arrancan existe.
   - Inventario: secciones del Control Center, ordenes del servicio, programas y ajustes que
     no pueden desaparecer sin que alguien lo decida (y cambie esta lista).
@@ -39,7 +39,7 @@ def paquetes():
 
 
 def programas():
-    """Programas de Jaime0 (los que van en la imagen) con su texto."""
+    """Programas de ZYRON (los que van en la imagen) con su texto."""
     salida = {}
     for carpeta in ("usr/local/bin", "usr/local/sbin", "usr/local/libexec"):
         for f in sorted((I / carpeta).iterdir()):
@@ -55,7 +55,7 @@ def programas():
 BASE = {"dpkg", "apt", "coreutils", "util-linux", "systemd", "procps", "grep", "sed", "findutils",
         "gzip", "tar", "mount", "login", "passwd", "debianutils", "bash", "dash"}
 
-# Programa externo -> paquete que lo trae. Si un programa de Jaime0 usa uno nuevo, se anade
+# Programa externo -> paquete que lo trae. Si un programa de ZYRON usa uno nuevo, se anade
 # aqui con su paquete (y el paquete a una lista): asi no queda una dependencia implicita.
 COMANDOS = {
     "notify-send": "libnotify-bin", "swaync-client": "sway-notification-center", "hyprctl": "hyprland",
@@ -72,7 +72,7 @@ COMANDOS = {
     "loginctl": "systemd", "systemctl": "systemd", "dpkg-query": "dpkg", "apt-get": "apt",
 }
 # Usados solo si existen, con un mensaje claro si faltan: no son dependencias.
-OPCIONALES = {"flatpak": "Flatpak no viene en Jaime0; PRIVACY lo da como NOT APPLICABLE",
+OPCIONALES = {"flatpak": "Flatpak no viene en ZYRON; PRIVACY lo da como NOT APPLICABLE",
               "swayidle": "alternativa de inactividad si faltara hypridle; avisa si tampoco esta"}
 
 
@@ -95,7 +95,7 @@ class PruebasInstalador(unittest.TestCase):
         for conf in self.instancias().values():
             for orden in re.findall(r'^\s+- "([^"]+)"', leer(CALAMARES / "modules" / conf), flags=re.M):
                 programa = orden.split()[0]
-                self.assertTrue(programa.startswith("/usr/local/"), f"{conf}: {programa} no es de Jaime0")
+                self.assertTrue(programa.startswith("/usr/local/"), f"{conf}: {programa} no es de ZYRON")
                 f = I / programa.lstrip("/")
                 self.assertTrue(f.is_file(), f"{conf} ejecuta {programa}, que no está en la imagen")
                 self.assertTrue(leer(f).startswith("#!"), f"{programa} sin #!")
@@ -106,7 +106,7 @@ class PruebasInstalador(unittest.TestCase):
             if "@" in m:
                 continue
             conf = CALAMARES / "modules" / f"{m}.conf"
-            # Los modulos sin archivo usan la configuracion de Calamares; los que Jaime0 cambia
+            # Los modulos sin archivo usan la configuracion de Calamares; los que ZYRON cambia
             # deben tener el suyo.
             if m in ("partition", "mount", "unpackfs", "fstab", "users", "services-systemd", "bootloader",
                      "packages", "plymouthcfg", "machineid", "locale"):
@@ -246,6 +246,55 @@ class PruebasQmlControlCenter(unittest.TestCase):
                 if tipo in self.DE_QT or tipo in archivos or tipo in propios:
                     continue
                 self.fail(f"{f.name}: usa {tipo}, que no es de Qt ni un archivo del Control Center")
+
+
+class PruebasIdentidadYArranque(unittest.TestCase):
+    """ZYRON: nombre, tema de arranque y lo que no puede romperse al cambiar la identidad."""
+
+    TEMA = I / "usr/share/plymouth/themes/zyron"
+
+    def test_nombre_del_producto(self):
+        self.assertIn('PRODUCTO="ZYRON"', leer(I / "usr/local/share/marca/marca.conf"))
+        self.assertIn('"ZYRON"', leer(REPO / "auto/config"))
+
+    def test_el_instalador_deja_el_tema_de_zyron(self):
+        self.assertRegex(leer(CALAMARES / "modules/plymouthcfg.conf"), r"(?m)^plymouth_theme: zyron$")
+        tema = leer(self.TEMA / "zyron.plymouth")
+        self.assertIn("ModuleName=script", tema)
+        self.assertIn("ScriptFile=/usr/share/plymouth/themes/zyron/zyron.script", tema)
+        self.assertTrue((self.TEMA / "zyron.script").is_file())
+
+    def test_cada_capa_de_la_animacion_tiene_su_svg_y_el_hook_la_exige(self):
+        script = leer(self.TEMA / "zyron.script")
+        usadas = set(re.findall(r'"([a-z-]+)\.png"', script))
+        self.assertGreater(len(usadas), 10)
+        for capa in usadas:
+            self.assertTrue((self.TEMA / "capas" / f"{capa}.svg").is_file(), f"falta capas/{capa}.svg")
+        hook = leer(REPO / "config/hooks/normal/0310-plymouth.hook.chroot")
+        exigidas = set(re.search(r"for CAPA in ([^;]+);", hook.replace("\\\n", " ")).group(1).split())
+        self.assertEqual(usadas, exigidas, "el hook debe comprobar exactamente las capas que usa el script")
+        self.assertIn("plymouth-set-default-theme zyron", hook)
+        self.assertIn("update-initramfs -u", hook)
+
+    def test_el_script_dibuja_clave_preguntas_y_mensajes(self):
+        script = leer(self.TEMA / "zyron.script")
+        for funcion in ("SetDisplayPasswordFunction", "SetDisplayQuestionFunction", "SetDisplayNormalFunction",
+                        "SetMessageFunction", "SetBootProgressFunction", "SetRefreshFunction", "GetMode"):
+            self.assertIn("Plymouth." + funcion, script)
+
+    def test_grub_conserva_modo_seguro_otros_sistemas_y_splash(self):
+        grub = leer(I / "etc/default/grub.d/90-hypr.cfg")
+        self.assertRegex(grub, r'(?m)^GRUB_CMDLINE_LINUX_RECOVERY="nomodeset"$')
+        self.assertRegex(grub, r"(?m)^GRUB_DISABLE_OS_PROBER=false$")
+        self.assertRegex(grub, r'(?m)^GRUB_CMDLINE_LINUX_DEFAULT="quiet splash ')
+
+    def test_los_titulos_internos_de_ventana_no_cambian(self):
+        """Las instalaciones existentes hacen flotar las ventanas por su titulo en su hyprland.lua."""
+        lua = leer(I / "etc/skel/.config/hypr/hyprland.lua")
+        self.assertIn('title: "Jaime0 Control Center"', leer(I / "usr/share/jaime0/control/shell.qml"))
+        self.assertIn('title = "^Jaime0 Control Center$"', lua)
+        self.assertIn('title: "Ajustes de Jaime0"', leer(I / "usr/share/jaime0/ajustes-gui/shell.qml"))
+        self.assertIn('title = "^Ajustes de Jaime0$"', lua)
 
 
 if __name__ == "__main__":

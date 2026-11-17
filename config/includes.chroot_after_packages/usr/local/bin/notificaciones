@@ -1,5 +1,5 @@
 #!/bin/sh
-# Notificaciones de Jaime0: Sway Notification Center (swaync), con su centro de
+# Notificaciones de ZYRON: Sway Notification Center (swaync), con su centro de
 # notificaciones, modo no molestar, controles de musica y volumen.
 # Si swaync no esta instalado (sistema actualizado a medias), se usa dunst. Nunca los dos.
 #

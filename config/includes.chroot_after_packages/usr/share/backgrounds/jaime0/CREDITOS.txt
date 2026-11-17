@@ -1,5 +1,5 @@
 jaime0.png
-  Fondo original de Jaime0: malla digital oscura, lineas geometricas y puntos verdes
+  Fondo original de ZYRON: malla digital oscura, lineas geometricas y puntos verdes
   sobre negro (#080b0d), 2560x1440.
   Generado de forma determinista (semilla fija) con scripts/generar-fondo.py del
-  repositorio de Jaime0. Licencia MIT, como el resto del trabajo original del proyecto.
+  repositorio de ZYRON. Licencia MIT, como el resto del trabajo original del proyecto.

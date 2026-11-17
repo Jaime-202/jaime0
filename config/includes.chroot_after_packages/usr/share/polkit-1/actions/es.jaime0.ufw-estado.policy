@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
-<!-- Control Center de Jaime0: ver las reglas del cortafuegos. Solo lectura. -->
+<!-- Control Center de ZYRON: ver las reglas del cortafuegos. Solo lectura. -->
 <policyconfig>
-  <vendor>Jaime0</vendor>
+  <vendor>ZYRON</vendor>
   <action id="es.jaime0.ufw-estado">
     <description>Ver las reglas del cortafuegos</description>
     <message>Para ver las reglas del cortafuegos hace falta tu contraseña. Solo se leen; no se cambia nada.</message>

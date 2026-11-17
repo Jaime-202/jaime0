@@ -1,7 +1,7 @@
 # jaime0_servicio.hardware: capa de deteccion de hardware (evolucion, fase 8). Dice, para cada
-# componente, si Jaime0 puede usarlo en ESTE equipo, para que las vistas se adapten y nunca se
+# componente, si ZYRON puede usarlo en ESTE equipo, para que las vistas se adapten y nunca se
 # muestre un dato de algo que no existe. Estados:
-#   compatible     esta y Jaime0 lo lee o lo usa
+#   compatible     esta y ZYRON lo lee o lo usa
 #   detectado      esta, pero falta algo para usarlo (controlador, modulo, herramienta)
 #   no_disponible  este equipo no lo tiene
 #   error_lectura  esta, pero leerlo ha fallado

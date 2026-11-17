@@ -28,7 +28,7 @@ Item {
 
     readonly property var r: rangos[rango]
 
-    // Deteccion de hardware (orden "hardware"): que tiene este equipo y si Jaime0 puede leerlo.
+    // Deteccion de hardware (orden "hardware"): que tiene este equipo y si ZYRON puede leerlo.
     property var hardware: null
     function textoHw(e) { return ({ compatible: "COMPATIBLE", detectado: "DETECTADO", no_disponible: "NO DISPONIBLE", error_lectura: "ERROR DE LECTURA" })[e] || e; }
     function colorHw(e) { return ({ compatible: Tema.verde, detectado: Tema.ambar, error_lectura: Tema.rojo })[e] || Tema.apagado; }

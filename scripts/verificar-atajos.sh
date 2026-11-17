@@ -75,7 +75,7 @@ done
 grep -q '^atajosMultimedia = {}' "$LUA" && [ "$(grep -c '^multimedia("XF86' "$LUA")" -eq 10 ] && ok "10 teclas multimedia, agrupadas en atajosMultimedia" || fallo "atajosMultimedia"
 grep -q 'exec_cmd("inactividad")' "$LUA" && ok "inactividad en el autostart" || fallo "inactividad sin arrancar"
 grep -q '\[ -d /run/live/medium \] && exit 0' $BIN/inactividad && ok "inactividad no bloquea la sesion en vivo" || fallo "inactividad en vivo"
-grep -q 'ring-ver-color=54e58aff' $SKEL/swaylock/config && grep -q 'image=/usr/share/backgrounds/jaime0/jaime0.png' $SKEL/swaylock/config && ok "swaylock (respaldo) con tema y fondo de Jaime0" || fallo "tema de swaylock"
+grep -q 'ring-ver-color=54e58aff' $SKEL/swaylock/config && grep -q 'image=/usr/share/backgrounds/jaime0/jaime0.png' $SKEL/swaylock/config && ok "swaylock (respaldo) con tema y fondo de ZYRON" || fallo "tema de swaylock"
 # Bloqueo: hyprlock sin captura de pantalla (falla con algunas graficas) y relevo a swaylock.
 grep -q '^    disable_screencopy = true' $SKEL/hypr/hyprlock.conf && grep -q '^source = ~/.config/jaime0/generado/hyprlock.conf' $SKEL/hypr/hyprlock.conf && ok "hyprlock.conf sin screencopy y con acento generado" || fallo "hyprlock.conf"
 grep -q 'exec swaylock' $BIN/bloquear && grep -q 'allow_session_lock_restore = true' "$LUA" && ok "bloquear pasa a swaylock si hyprlock falla" || fallo "relevo de bloqueo"

@@ -122,7 +122,7 @@ def duracion(segundos):
 def resumen(instante, estado, parado=False):
     """Texto legible en espanol a partir de los documentos del servicio."""
     nombre_estado = instante.get("estado") or (estado or {}).get("estado") or "N/D"
-    L = [f"Jaime0 · SYSTEM {nombre_estado}"]
+    L = [f"ZYRON · SYSTEM {nombre_estado}"]
     if parado:
         L.append("Servicio parado: medición puntual")
     L.append(f"Tiempo encendido: {duracion(instante.get('uptime'))}")
@@ -185,14 +185,14 @@ def barra():
         perfil = perfil_actual_sin_servicio()
         icono = ICONOS_PERFIL.get(perfil, ICONO_DESCONOCIDO)
         return {"text": f"{icono} ", "class": "parado",
-                "tooltip": "Servicio de Jaime0 parado" + (f"\nPerfil: {perfil}" if perfil else "")}
+                "tooltip": "Servicio de ZYRON parado" + (f"\nPerfil: {perfil}" if perfil else "")}
     nombre = estado.get("estado") if estado.get("estado") in ("ONLINE", "WARNING", "CRITICAL") else "ONLINE"
     perfil = estado.get("perfil") or {}
     icono = ICONOS_PERFIL.get(perfil.get("activo"), ICONO_DESCONOCIDO)
     alerta = f" {ICONO_ALERTA}" if nombre in ("WARNING", "CRITICAL") else ""
     if alerta and len(estado.get("motivos") or []) > 0:
         alerta += f" {len(estado['motivos'])}"
-    lineas = [f"Jaime0 · SYSTEM {nombre}", f"Perfil: {texto_perfil(perfil)}"]
+    lineas = [f"ZYRON · SYSTEM {nombre}", f"Perfil: {texto_perfil(perfil)}"]
     for m in (estado.get("motivos") or [])[:4]:
         lineas.append(f"· {m.get('texto', '')}")
     lineas.append("Clic: Control Center")
@@ -311,7 +311,7 @@ def cmd_serie(argv):
     try:
         s = pedir_socket({"orden": "serie", "rango": args.rango})
     except (OSError, ValueError):
-        print(f"{PROGRAMA}: el servicio de Jaime0 no está en marcha: no hay series sin él "
+        print(f"{PROGRAMA}: el servicio de ZYRON no está en marcha: no hay series sin él "
               "(systemctl --user status jaime0-servicio).", file=sys.stderr)
         return 1
     if not s.get("ok"):
@@ -331,7 +331,7 @@ def main(argv=None):
         return cmd_incidencias(argv[1:])
     if argv[:1] == ["serie"]:
         return cmd_serie(argv[1:])
-    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Estado de salud del sistema de Jaime0. "
+    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Estado de salud del sistema de ZYRON. "
                                  "Otras órdenes: incidencias [--json] [-n N], serie RANGO [--json].")
     ap.add_argument("orden", nargs="?", default="ahora", choices=["ahora", "barra"],
                     help="ahora (resumen, por defecto) o barra (una línea JSON para Waybar)")

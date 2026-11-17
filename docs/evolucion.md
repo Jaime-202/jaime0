@@ -1,6 +1,6 @@
 # Evolución del sistema (fases 1 a 10)
 
-Auditoría, refactorización y evolución de Jaime0 sobre la 0.4.0-beta.1, hecha en noviembre de 2026. Objetivo: que cada función, nueva o existente, sea útil, estable, coherente y esté bien integrada, sin añadir funciones por tenerlas. Este documento resume qué cambió y por qué; el detalle de cada parte está en su guía.
+Auditoría, refactorización y evolución de ZYRON sobre la 0.4.0-beta.1, hecha en noviembre de 2026. Objetivo: que cada función, nueva o existente, sea útil, estable, coherente y esté bien integrada, sin añadir funciones por tenerlas. Este documento resume qué cambió y por qué; el detalle de cada parte está en su guía.
 
 ## Resumen por fase
 
@@ -21,7 +21,7 @@ Auditoría, refactorización y evolución de Jaime0 sobre la 0.4.0-beta.1, hecha
 
 - **Un solo proceso, sin servicios nuevos.** Todo lo nuevo (actualizaciones, diagnóstico, energía, hardware) son módulos de `jaime0-servicio` o programas que se ejecutan y terminan. Lo lento va en hilos propios (comprobación de actualizaciones, diagnóstico) o en el hilo de efectos; el bucle de medidas y el socket nunca esperan.
 - **Nada se repara ni se instala sin permiso.** Las acciones con privilegios (instalar, revertir, reparar) abren una terminal que enseña las órdenes y pide confirmación.
-- **Un dueño por ajuste.** El perfil de energía lo pone el perfil de Jaime0; la inactividad, `jaime0-ajustes`; las reacciones a la batería y al cargador, las reglas. POWER muestra y elige, no duplica.
+- **Un dueño por ajuste.** El perfil de energía lo pone el perfil de ZYRON; la inactividad, `jaime0-ajustes`; las reacciones a la batería y al cargador, las reglas. POWER muestra y elige, no duplica.
 - **Datos reales o nada.** Cada dato dice si es medido, calculado o estimado; lo que no existe sale como N/D, NO DISPONIBLE o NOT APPLICABLE, nunca como un problema ni como una protección.
 
 ## Medidas finales (VM, 4 GiB, 4 CPU, sesión en vivo con todos los cambios)

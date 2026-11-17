@@ -1,4 +1,4 @@
-# Jaime0 para el Acer Nitro AN515-55: Intel i7-10750H con UHD Graphics (Comet Lake),
+# ZYRON para el Acer Nitro AN515-55: Intel i7-10750H con UHD Graphics (Comet Lake),
 # NVIDIA GTX 1650 Ti (Turing), Wi-Fi y Bluetooth Intel AX201, sonido Intel SOF con codec
 # Realtek, Ethernet Killer E2600 (driver alx, sin firmware) y SSD NVMe.
 
@@ -32,7 +32,7 @@ mokutil
 # Energia del portatil: perfiles (ahorro, equilibrado, rendimiento) e indicador en la barra;
 # thermald evita que el procesador se caliente de mas.
 power-profiles-daemon
-# Eventos de bateria y cargador para el servicio de Jaime0 (Control Center).
+# Eventos de bateria y cargador para el servicio de ZYRON (Control Center).
 upower
 thermald
 

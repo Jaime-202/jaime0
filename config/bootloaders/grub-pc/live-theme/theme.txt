@@ -1,7 +1,7 @@
 desktop-color: "#080b0d"
 title-color: "#54e58a"
 title-font: "Unifont Regular 16"
-title-text: "Jaime0"
+title-text: "ZYRON"
 message-font: "Unifont Regular 16"
 terminal-font: "Unifont Regular 16"
 

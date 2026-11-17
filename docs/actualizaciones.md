@@ -1,11 +1,11 @@
 # Actualizaciones
 
-Jaime0 se actualiza por dos caminos, cada uno con lo suyo:
+ZYRON se actualiza por dos caminos, cada uno con lo suyo:
 
 | Qué | Con qué | Cómo |
 |---|---|---|
 | **Paquetes de Debian**: núcleo, Hyprland, programas, bibliotecas, Brave, el controlador de NVIDIA | `apt`, desde sus repositorios oficiales | `actualizaciones` (o `sudo apt full-upgrade`) |
-| **Lo propio de Jaime0**: configuración de Hyprland y la barra (`/etc/skel` y tu `~/.config`), scripts de `/usr/local/bin`, el servicio y la ventana del Control Center, temas, fondo, unidades de systemd propias | `jaime0-update`, desde publicaciones firmadas de GitHub Releases | `jaime0-update` |
+| **Lo propio de ZYRON**: configuración de Hyprland y la barra (`/etc/skel` y tu `~/.config`), scripts de `/usr/local/bin`, el servicio y la ventana del Control Center, temas, fondo, unidades de systemd propias | `jaime0-update`, desde publicaciones firmadas de GitHub Releases | `jaime0-update` |
 
 No hay un gestor de paquetes paralelo ni `git pull` sobre el sistema. Ninguno de los dos instala nada por su cuenta: avisan, y tú decides.
 
@@ -14,9 +14,9 @@ No hay un gestor de paquetes paralelo ni `git pull` sobre el sistema. Ninguno de
 Una vez al día (y diez minutos después de entrar) el temporizador de usuario `actualizaciones-aviso.timer` ejecuta, en este orden:
 
 1. `actualizaciones comprobar --notificar --silencioso`: mira las listas de `apt` (las refresca `apt-daily`) y, con **debsecan**, cuáles de los paquetes pendientes corrigen vulnerabilidades conocidas.
-2. `jaime0-update comprobar --notificar --silencioso`: mira si hay una versión de Jaime0 más nueva en tu canal. No repite la consulta de `apt`: usa lo que acaba de dejar el paso anterior.
+2. `jaime0-update comprobar --notificar --silencioso`: mira si hay una versión de ZYRON más nueva en tu canal. No repite la consulta de `apt`: usa lo que acaba de dejar el paso anterior.
 
-El icono de la barra (`actualizaciones barra`, sin red) aparece si hay correcciones de seguridad de Debian (ámbar) o una versión de Jaime0 más nueva que la instalada; el texto emergente dice cuál. Los paquetes normales pendientes no molestan: Forky (testing) recibe cambios a diario. Llega una notificación por cada conjunto nuevo de correcciones de seguridad y otra por cada versión nueva de Jaime0. Al pulsar el icono se abre una terminal con `actualizaciones`. Al instalar, el icono desaparece solo.
+El icono de la barra (`actualizaciones barra`, sin red) aparece si hay correcciones de seguridad de Debian (ámbar) o una versión de ZYRON más nueva que la instalada; el texto emergente dice cuál. Los paquetes normales pendientes no molestan: Forky (testing) recibe cambios a diario. Llega una notificación por cada conjunto nuevo de correcciones de seguridad y otra por cada versión nueva de ZYRON. Al pulsar el icono se abre una terminal con `actualizaciones`. Al instalar, el icono desaparece solo.
 
 Para desactivarlo: `systemctl --user disable --now actualizaciones-aviso.timer`.
 
@@ -26,13 +26,13 @@ Para desactivarlo: `systemctl --user disable --now actualizaciones-aviso.timer`.
 actualizaciones
 ```
 
-Muestra lo pendiente (y si hay una versión nueva de Jaime0) y pregunta si instalarlo con `sudo apt full-upgrade`. También vale directamente `sudo apt update && sudo apt full-upgrade`. `jaime0-update` te lo ofrece igualmente al terminar.
+Muestra lo pendiente (y si hay una versión nueva de ZYRON) y pregunta si instalarlo con `sudo apt full-upgrade`. También vale directamente `sudo apt update && sudo apt full-upgrade`. `jaime0-update` te lo ofrece igualmente al terminar.
 
 Si instalaste en **Btrfs**, cada operación de `apt` crea una instantánea antes y otra después (snapper) y se puede deshacer: ver [recuperacion.md](recuperacion.md).
 
 Cuando `apt` instala un núcleo nuevo, DKMS vuelve a compilar el módulo de NVIDIA y lo firma con la clave de tu instalación, ya registrada. Si tras reiniciar `jaime0-nvidia` dice que el módulo no está cargado, el detalle está en `journalctl -b -k | grep -i nvidia`.
 
-## Lo propio de Jaime0: `jaime0-update`
+## Lo propio de ZYRON: `jaime0-update`
 
 ```bash
 jaime0-update
@@ -51,7 +51,7 @@ Busca la versión más nueva de tu canal y enseña la versión, el canal, la fec
 | `jaime0-update conflictos` | Archivos tuyos que no se han sobrescrito |
 | `jaime0-update resolver RUTA --diferencias\|--usar-nueva\|--mantener` | Resolver un conflicto |
 | `jaime0-update historial [-n N] [--json]` | Registro de operaciones |
-| `jaime0-update revertir [--usuario]` | Deshacer la última actualización de los archivos de Jaime0 |
+| `jaime0-update revertir [--usuario]` | Deshacer la última actualización de los archivos de ZYRON |
 | `jaime0-update recuperar` | Deshacer una actualización que se cortó a medias |
 | `jaime0-update usuario` | Aplicar a tu carpeta la configuración nueva (útil para otros usuarios del equipo) |
 
@@ -65,7 +65,7 @@ Busca la versión más nueva de tu canal y enseña la versión, el canal, la fec
 | `beta` | Estables y beta | `vX.Y.Z-beta.N` (pre-release) |
 | `experimental` | Todo | `vX.Y.Z-exp.N` (pre-release) |
 
-El canal está en `/etc/jaime0/update.conf`. El canal va **dentro del manifiesto firmado** y se comprueba que corresponda a la versión: un sistema en `stable` nunca recibe una beta. Al volver a un canal más estable no se desinstala nada. Orden: `0.5.0-exp.1 < 0.5.0-beta.1 < 0.5.0 < 0.5.1`. Mientras Jaime0 solo publique betas, usa `jaime0-update canal beta`.
+El canal está en `/etc/jaime0/update.conf`. El canal va **dentro del manifiesto firmado** y se comprueba que corresponda a la versión: un sistema en `stable` nunca recibe una beta. Al volver a un canal más estable no se desinstala nada. Orden: `0.5.0-exp.1 < 0.5.0-beta.1 < 0.5.0 < 0.5.1`. Mientras ZYRON solo publique betas, usa `jaime0-update canal beta`.
 
 ### Desde el Control Center
 
@@ -104,8 +104,8 @@ Cada archivo se clasifica comparando tres huellas SHA-256: la del disco, la de l
 | Es nuevo en esta versión | Se crea |
 | Lo borraste tú (en tu carpeta o en `/etc`) | No se vuelve a crear |
 | Un archivo de sistema de `/usr` borrado | Se repone |
-| Jaime0 lo retira y no lo has tocado | Se borra (con copia) |
-| Jaime0 lo retira pero lo has cambiado | Se conserva |
+| ZYRON lo retira y no lo has tocado | Se borra (con copia) |
+| ZYRON lo retira pero lo has cambiado | Se conserva |
 | Es un enlace simbólico, o su carpeta apunta fuera de tu carpeta personal | No se toca |
 | `/etc/jaime0/update.conf` | Solo se crea si falta: tu canal no cambia |
 | Versión, manifiesto y clave de `/usr/share/jaime0` | Son del actualizador: siempre se reemplazan |
@@ -135,7 +135,7 @@ Lo hace `jaime0-update` solo, según lo que haya cambiado:
 | De tu configuración | `version` de `~/.local/state/jaime0/estado.json` | La última versión aplicada a tu carpeta personal |
 | Del actualizador | `VERSION_ACTUALIZADOR` en `jaime0-update` (entero; ahora 2) | Un manifiesto puede exigir uno mínimo (`requisitos.actualizador_minimo`). Si el tuyo es más viejo, no se instala nada y el error dice cómo actualizarlo a mano (abajo) |
 
-El formato del manifiesto sigue siendo `1`: los campos nuevos son opcionales y un actualizador que no los conoce los ignora. `requisitos.version_minima` sigue funcionando igual (versión de Jaime0 instalada mínima).
+El formato del manifiesto sigue siendo `1`: los campos nuevos son opcionales y un actualizador que no los conoce los ignora. `requisitos.version_minima` sigue funcionando igual (versión de ZYRON instalada mínima).
 
 ## Seguridad
 
@@ -153,7 +153,7 @@ El formato del manifiesto sigue siendo `1`: los campos nuevos son opcionales y u
 - Antes de cambiar un archivo se copia y se anota en un diario que llega al disco **antes** del cambio. Cada archivo se escribe en un temporal y se renombra: nunca queda uno a medias. La versión se escribe la última.
 - Copias del sistema: `/var/backups/jaime0/` (solo root); las tuyas: `~/.local/state/jaime0/copias/`. Se conservan las 5 últimas. Registro: `/var/log/jaime0-update.log` y `~/.local/state/jaime0/registro.log`.
 - **Corte a mitad** (apagón, Ctrl+C, error): la siguiente ejecución lo deshace antes de seguir, o `jaime0-update recuperar`. Mientras tanto, `/var/lib/jaime0/transaccion-abierta.json` deja ver a cualquiera (también al Control Center) que algo quedó a medias.
-- **`jaime0-update revertir`** devuelve los archivos de Jaime0 a como estaban antes de la última actualización (guardando antes lo que había) y repite lo de «Después de instalar».
+- **`jaime0-update revertir`** devuelve los archivos de ZYRON a como estaban antes de la última actualización (guardando antes lo que había) y repite lo de «Después de instalar».
 
 ### Qué NO se puede revertir
 

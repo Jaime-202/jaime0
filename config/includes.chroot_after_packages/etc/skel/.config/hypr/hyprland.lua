@@ -1,5 +1,5 @@
 -- ~/.config/hypr/hyprland.lua
--- Configuracion de Hyprland de Jaime0, sobre Debian Forky (sintaxis Lua de Hyprland 0.56 y 0.57).
+-- Configuracion de Hyprland de ZYRON, sobre Debian Forky (sintaxis Lua de Hyprland 0.56 y 0.57).
 -- Paleta jaime0: negro #080b0d, verde #54e58a (solo lo activo) y bordes #26343a.
 -- Separaciones, bordes, esquinas, efectos, acento y fondo salen de jaime0-ajustes.
 --

@@ -1,6 +1,6 @@
 # NVIDIA GTX 1650 Ti
 
-El portátil tiene dos gráficas. Jaime0 las reparte así:
+El portátil tiene dos gráficas. ZYRON las reparte así:
 
 | Gráfica | Para qué | Estado normal |
 |---|---|---|

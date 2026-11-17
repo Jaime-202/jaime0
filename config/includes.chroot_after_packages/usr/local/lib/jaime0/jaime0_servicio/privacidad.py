@@ -44,7 +44,7 @@ TIMEOUT_REGLAS = 120                # el usuario puede tardar en escribir su con
 MAX_HISTORIAL_PRIVACIDAD = 300      # lineas de privacidad.jsonl
 DISPOSITIVOS_CADA_RAPIDO = 10       # segundos entre consultas de dispositivos con la ventana abierta
 MAX_DESTINOS = 20                   # destinos listados por proceso en las conexiones
-TEXTO_SIN_FLATPAK = ("Flatpak no está instalado en Jaime0: no hay permisos por aplicación. Los programas "
+TEXTO_SIN_FLATPAK = ("Flatpak no está instalado en ZYRON: no hay permisos por aplicación. Los programas "
                      "de Debian se ejecutan con el acceso de tu usuario (tus carpetas, tus dispositivos).")
 PALABRAS_PANTALLA = ("xdph", "xdg-desktop-portal", "screencast")
 POLITICAS_UFW = {"DEFAULT_INPUT_POLICY": "entrante", "DEFAULT_OUTPUT_POLICY": "saliente",
@@ -446,7 +446,7 @@ def telemetria(ejecutar=None, ciudad=_AUTO):
     """Comprobaciones reales, sin red, de lo que podria enviar datos fuera del equipo.
     ciudad: la de los ajustes (se lee con jaime0-ajustes si no se da); None = no se pudo leer."""
     ejecutar = ejecutar or subprocess.run
-    lista = [{"elemento": "Jaime0", "estado": "NINGUNA", "texto": "Sin telemetría: nada sale del equipo"}]
+    lista = [{"elemento": "ZYRON", "estado": "NINGUNA", "texto": "Sin telemetría: nada sale del equipo"}]
     instalado = False
     try:
         r = ejecutar(["dpkg-query", "-W", "-f=${Status}", "popularity-contest"],
@@ -591,7 +591,7 @@ def categorias_privacidad(doc, apparmor=None, secure_boot=None):
     activa.append(_elemento(
         "telemetria", "Telemetría", "WARNING" if envia else "ACTIVE",
         "popularity-contest envía estadísticas de paquetes a Debian" if envia else
-        "Jaime0 no envía nada" + ("; {} elemento(s) se conectan a internet".format(len(conectan)) if conectan else ""),
+        "ZYRON no envía nada" + ("; {} elemento(s) se conectan a internet".format(len(conectan)) if conectan else ""),
         ["{}: {}".format(t.get("elemento"), t.get("texto")) for t in telem]))
 
     permisos = []

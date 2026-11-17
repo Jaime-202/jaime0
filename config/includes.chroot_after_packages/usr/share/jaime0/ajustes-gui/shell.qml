@@ -1,5 +1,5 @@
 //@ pragma Env QT_QUICK_BACKEND=software
-// Aplicacion de ajustes de Jaime0. La abre "jaime0-ajustes" sin argumentos:
+// Aplicacion de ajustes de ZYRON. La abre "jaime0-ajustes" sin argumentos:
 //   quickshell -p /usr/share/jaime0/ajustes-gui/shell.qml
 // Lee los ajustes con "jaime0-ajustes ver --json" y los cambia con "poner" y
 // "restablecer", que validan, guardan y aplican. Tras cada cambio se vuelven a leer.

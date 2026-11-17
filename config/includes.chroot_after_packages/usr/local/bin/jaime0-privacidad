@@ -17,7 +17,7 @@ import os
 import sys
 
 PROGRAMA = "jaime0-privacidad"
-SIN_SERVICIO = "el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio"
+SIN_SERVICIO = "el servicio de ZYRON no está en marcha: systemctl --user start jaime0-servicio"
 AVISO_REGLAS = "Se pedirá tu contraseña para leer las reglas (solo lectura)"
 ND = "N/D"
 

@@ -93,7 +93,7 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 92
             ident: "X0"
-            etiqueta: "JAIME0 DIAGNOSTICS"
+            etiqueta: "ZYRON DIAGNOSTICS"
             acento: vista.ultimo && (vista.ultimo.resumen.CRITICAL || vista.ultimo.resumen.ERROR) ? Tema.rojo
                    : vista.ultimo && vista.ultimo.resumen.WARNING ? Tema.ambar : Tema.verde
             RowLayout {

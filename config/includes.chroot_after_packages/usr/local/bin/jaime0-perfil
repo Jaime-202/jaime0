@@ -18,7 +18,7 @@ import os
 import sys
 
 PROGRAMA = "jaime0-perfil"
-SIN_SERVICIO = "el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio"
+SIN_SERVICIO = "el servicio de ZYRON no está en marcha: systemctl --user start jaime0-servicio"
 
 
 def directorio_ejecucion():

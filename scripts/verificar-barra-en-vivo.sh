@@ -18,7 +18,7 @@ fallo() { echo "[FALLO] $1"; }
 
 # Sin aceleracion 3D (p. ej. VM de construccion con VMSVGA sin 3D) Mesa no puede crear la
 # pantalla EGL y Hyprland aborta al crear el backend, antes de abrir su socket: no es un fallo
-# de Jaime0, y todo lo que sigue dependeria de la sesion. Solo se acepta si Hyprland ya no
+# de ZYRON, y todo lo que sigue dependeria de la sesion. Solo se acepta si Hyprland ya no
 # corre y su salida tiene la huella de Mesa; cualquier otro motivo sigue siendo un fallo.
 HUELLA_SIN_3D='No 3D enabled|failed to create dri2 screen|MESA-LOADER: failed to open'
 sin_3d() {

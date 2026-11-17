@@ -5,7 +5,7 @@
 #   jaime0-control cerrar    la cierra si esta abierta
 #
 # La ventana no mide nada: muestra lo que publica jaime0-servicio, que se arranca aqui si
-# no estaba en marcha. Sin Quickshell el resto de Jaime0 funciona igual; el estado se
+# no estaba en marcha. Sin Quickshell el resto de ZYRON funciona igual; el estado se
 # consulta con "jaime0-salud".
 
 QML=/usr/share/jaime0/control/shell.qml
@@ -38,7 +38,7 @@ systemctl --user start jaime0-servicio.service 2>/dev/null
 if ! command -v quickshell >/dev/null 2>&1 || [ ! -f "$QML" ]; then
     MSG="Falta Quickshell: no se puede abrir el Control Center. El estado del sistema se ve con: jaime0-salud"
     echo "jaime0-control: $MSG" >&2
-    notify-send --app-name=Jaime0 "Control Center" "$MSG" 2>/dev/null
+    notify-send --app-name=ZYRON "Control Center" "$MSG" 2>/dev/null
     exit 1
 fi
 if [ -z "${WAYLAND_DISPLAY:-}" ]; then

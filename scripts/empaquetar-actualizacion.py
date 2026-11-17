@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Empaqueta una version de Jaime0 para jaime0-update.
+"""Empaqueta una version de ZYRON para jaime0-update.
 
 Uso:
   scripts/empaquetar-actualizacion.py --clave ~/.jaime0/firma-actualizaciones.pem
@@ -261,7 +261,7 @@ def main():
     print(f"  {len(archivos)} archivos, {len(cambiados)} cambiados desde {manifiesto['desde'] or 'el principio'}, "
           f"carga {len(carga) / 1024:.0f} KiB, firma comprobada")
     prerelease = "" if manifiesto["canal"] == "stable" else " --prerelease"
-    print(f"  Subir: gh release create v{version}{prerelease} --title 'Jaime0 {version}' "
+    print(f"  Subir: gh release create v{version}{prerelease} --title 'ZYRON {version}' "
           f"--notes-file {destino}/notas.md {destino}/manifiesto.json {destino}/manifiesto.json.sig "
           f"{destino}/{nombre_carga}")
 

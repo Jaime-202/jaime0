@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-# jaime0-ajustes: ajustes centralizados de Jaime0.
+# jaime0-ajustes: ajustes centralizados de ZYRON.
 #
 #   /usr/share/jaime0/ajustes.predeterminados  valores de fabrica y temas (del sistema)
 #   ~/.config/jaime0/ajustes                   solo lo que cambia el usuario (suyo; ninguna
@@ -290,7 +290,7 @@ def efectivos():
     avisos = []
     for clave, texto in leer(archivo_usuario()).items():
         if clave not in ESQUEMA:
-            avisos.append(f"Se ignora '{clave}': no es un ajuste de Jaime0")
+            avisos.append(f"Se ignora '{clave}': no es un ajuste de ZYRON")
             continue
         try:
             valores[clave] = validar(clave, texto, temas)
@@ -318,7 +318,7 @@ def color_acento(valor, temas):
 # ------------------------------------------------------------------------------------
 # Escritura
 # ------------------------------------------------------------------------------------
-CABECERA = """# ~/.config/jaime0/ajustes: tus ajustes de Jaime0.
+CABECERA = """# ~/.config/jaime0/ajustes: tus ajustes de ZYRON.
 # Solo guarda lo que cambias; el resto sale de /usr/share/jaime0/ajustes.predeterminados.
 # Ninguna actualizacion toca este archivo. Cambialo con jaime0-ajustes o a mano
 # (clave = valor) y luego ejecuta: jaime0-ajustes aplicar
@@ -430,7 +430,7 @@ def animaciones_del_sistema(ejecutar=None):
 
 
 def nivel_animaciones(nivel, sistema=None):
-    """El nivel de Jaime0, salvo que el escritorio pida no animar: entonces "no". En modo de
+    """El nivel de ZYRON, salvo que el escritorio pida no animar: entonces "no". En modo de
     prueba (raiz falsa) no se consulta el sistema."""
     if nivel == "no":
         return nivel

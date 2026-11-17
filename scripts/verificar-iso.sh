@@ -1,9 +1,9 @@
 #!/bin/bash
-# Verifica una ISO de Jaime0 YA GENERADA, sin arrancarla: que una ISO se haya creado sin
+# Verifica una ISO de ZYRON YA GENERADA, sin arrancarla: que una ISO se haya creado sin
 # errores no basta para darla por buena. No necesita root ni modifica la ISO.
 #
-#     scripts/verificar-iso.sh JAIME0.iso                 comprobaciones de la imagen
-#     scripts/verificar-iso.sh JAIME0.iso --repo .        ademas, comparada con el repositorio
+#     scripts/verificar-iso.sh ZYRON.iso                 comprobaciones de la imagen
+#     scripts/verificar-iso.sh ZYRON.iso --repo .        ademas, comparada con el repositorio
 #
 # Comprueba: arranque BIOS y UEFI (El Torito, shim, GRUB, nucleo e initrd), que el sistema
 # de archivos se lee entero, los archivos imprescindibles y sus permisos, que no haya claves
@@ -14,7 +14,7 @@ set -u
 ISO=${1:-}
 REPO=""
 [ "${2:-}" = "--repo" ] && REPO=$(readlink -f "${3:-.}")
-[ -f "$ISO" ] || { echo "Uso: $0 JAIME0.iso [--repo CARPETA]" >&2; exit 2; }
+[ -f "$ISO" ] || { echo "Uso: $0 ZYRON.iso [--repo CARPETA]" >&2; exit 2; }
 for H in xorriso unsquashfs sha256sum; do
     command -v "$H" >/dev/null 2>&1 || { echo "falta $H" >&2; exit 2; }
 done
@@ -49,7 +49,7 @@ done
 grep -qE '^/live/vmlinuz' "$T/archivos" && ok "nucleo en /live" || fallo "falta el nucleo (/live/vmlinuz*)"
 grep -qE '^/live/initrd' "$T/archivos" && ok "initrd en /live" || fallo "falta el initrd (/live/initrd*)"
 xorriso -osirrox on -indev "$ISO" -extract /boot/grub/grub.cfg "$T/grub.cfg" >/dev/null 2>&1
-grep -q 'Jaime0' "$T/grub.cfg" 2>/dev/null && ok "menu de arranque con Jaime0" || fallo "menu de arranque sin Jaime0"
+grep -q 'ZYRON' "$T/grub.cfg" 2>/dev/null && ok "menu de arranque con ZYRON" || fallo "menu de arranque sin ZYRON"
 
 seccion "Sistema de archivos"
 if ! xorriso -osirrox on -indev "$ISO" -extract /live/filesystem.squashfs "$T/fs.squashfs" >/dev/null 2>&1; then
@@ -112,7 +112,7 @@ seccion "Version"
 V=$(cat "$T/raiz/usr/share/jaime0/version" 2>/dev/null | head -n 1)
 if [ -n "$V" ]; then
     ok "version $V"
-    case "$(basename "$ISO")" in *"$V"*) ok "el nombre de la ISO lleva la version" ;; *jaime0-amd64.hybrid.iso) aviso "ISO sin renombrar (la de lb build): no se comprueba el nombre" ;; *) fallo "el nombre de la ISO no lleva la version $V" ;; esac
+    case "$(basename "$ISO")" in *"$V"*) ok "el nombre de la ISO lleva la version" ;; *-amd64.hybrid.iso) aviso "ISO sin renombrar (la de lb build): no se comprueba el nombre" ;; *) fallo "el nombre de la ISO no lleva la version $V" ;; esac
 else
     fallo "sin /usr/share/jaime0/version"
 fi

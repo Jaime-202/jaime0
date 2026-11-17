@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="160" viewBox="0 0 560 160">
+  <!-- Logotipo de ZYRON: simbolo y nombre en trazos geometricos (no depende de ninguna fuente). -->
+  <rect width="560" height="160" fill="#080b0d"/>
+  <g transform="translate(16 16) scale(0.5)">
+    <polygon points="128,22 220,75 220,181 128,234 36,181 36,75" fill="#080b0d" stroke="#54e58a" stroke-width="11" stroke-linejoin="miter"/>
+    <path d="M84 88H172L84 168H172" fill="none" stroke="#d8e2e8" stroke-width="15" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="2"/>
+    <circle cx="128" cy="128" r="15" fill="#080b0d"/>
+    <circle cx="128" cy="128" r="8" fill="#55cde0"/>
+  </g>
+  <g transform="translate(176 52)" fill="none" stroke="#d8e2e8" stroke-width="8" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="2">
+    <path d="M0 0H44L0 56H44"/>
+    <path d="M66 0L88 28L110 0M88 28V56"/>
+    <path d="M132 56V0H168L176 8V20L168 28H132M160 28L176 56"/>
+    <path d="M206 0H234L242 8V48L234 56H206L198 48V8Z" stroke="#54e58a"/>
+    <path d="M264 56V0L308 56V0"/>
+  </g>
+</svg>

@@ -24,7 +24,7 @@ Algunos firmwares dan 0 ciclos porque no los cuentan: se muestra el 0 con esa no
 
 ## Gráficas y NVIDIA
 
-Jaime0 usa **PRIME render offload**: el escritorio va en la gráfica integrada y la NVIDIA duerme hasta que abres algo con `prime-run PROGRAMA`. POWER:
+ZYRON usa **PRIME render offload**: el escritorio va en la gráfica integrada y la NVIDIA duerme hasta que abres algo con `prime-run PROGRAMA`. POWER:
 
 - Nunca despierta la NVIDIA: con ella dormida no ejecuta `nvidia-smi` (su consumo sale «sin medir»).
 - Lista los programas que tienen abierta `/dev/nvidiaN`: mientras sigan abiertos la gráfica no puede dormir. Sin root solo se ven los tuyos, y lo dice.
@@ -36,7 +36,7 @@ Cada ajuste tiene un único dueño, para que POWER, PROFILES y las reglas no se 
 
 | Ajuste | Dueño | Desde POWER |
 |---|---|---|
-| Perfil de energía (power-profiles-daemon) | El perfil de Jaime0 activo (PROFILES) | Botones BALANCED, PERFORMANCE, POWER SAVER y CUSTOM: aplican ese perfil de Jaime0 |
+| Perfil de energía (power-profiles-daemon) | El perfil de ZYRON activo (PROFILES) | Botones BALANCED, PERFORMANCE, POWER SAVER y CUSTOM: aplican ese perfil de ZYRON |
 | CPU (EPP, turbo, perfil de plataforma) | power-profiles-daemon, según el perfil de energía | Solo se muestra |
 | Bloquear, apagar pantalla y suspender por inactividad | `jaime0-ajustes` (`inactividad_*`, `suspender_con_cargador`) | `−` y `+`, y SÍ/NO para suspender con cargador |
 | Evitar el bloqueo un rato | El perfil MULTIMEDIA (o CUSTOM) con un inhibidor | Se avisa cuando está activo |
@@ -61,7 +61,7 @@ jaime0-ajustes poner suspender_con_cargador no    # con el cargador conectado no
 
 Los valores de fábrica son los de siempre (10, 11 y 30 min). A los 5 min de inactividad se avisa siempre al motor de reglas (evento «inactivo»).
 
-Si has editado tu `~/.config/hypr/hypridle.conf` (ya no es igual al de `/etc/skel`), manda el tuyo: `inactividad` lo usa y POWER avisa de que estos ajustes no se aplican. Para volver a los de Jaime0, borra o restaura ese archivo.
+Si has editado tu `~/.config/hypr/hypridle.conf` (ya no es igual al de `/etc/skel`), manda el tuyo: `inactividad` lo usa y POWER avisa de que estos ajustes no se aplican. Para volver a los de ZYRON, borra o restaura ese archivo.
 
 ## Histórico
 

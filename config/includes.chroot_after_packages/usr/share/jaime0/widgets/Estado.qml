@@ -3,7 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Paleta de Jaime0 y configuracion de los widgets (~/.config/jaime0/generado/widgets.json,
+// Paleta de ZYRON y configuracion de los widgets (~/.config/jaime0/generado/widgets.json,
 // que escribe jaime0-ajustes). shell.qml llama a cargar() cada vez que cambia el archivo.
 Singleton {
     readonly property color fondo: "#080b0d"
@@ -25,7 +25,7 @@ Singleton {
     property bool doceHoras: false
     property string ciudad: ""
     property var widgets: ({})          // clave -> posicion, solo los activados
-    // Nivel de animacion de Jaime0 (no, sutil, suave) y la duracion que le corresponde.
+    // Nivel de animacion de ZYRON (no, sutil, suave) y la duracion que le corresponde.
     property string animaciones: "sutil"
     readonly property int duracion: animaciones === "no" ? 0 : animaciones === "suave" ? 420 : 220
 

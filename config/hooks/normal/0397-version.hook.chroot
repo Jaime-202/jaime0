@@ -1,7 +1,7 @@
 #!/bin/sh
-# Version de Jaime0 y jaime0-update: version visible para cualquier programa (fastfetch,
+# Version de ZYRON y jaime0-update: version visible para cualquier programa (fastfetch,
 # hostnamectl...), punto de partida del actualizador y aviso diario (actualizaciones-aviso:
-# paquetes de Debian con "actualizaciones" y versiones nuevas de Jaime0 con jaime0-update).
+# paquetes de Debian con "actualizaciones" y versiones nuevas de ZYRON con jaime0-update).
 set -e
 
 chown root:root /usr/local/bin/jaime0-update /usr/local/bin/actualizaciones

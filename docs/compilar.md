@@ -70,8 +70,8 @@ Para recompilar, ejecuta `sudo lb clean` y repite desde `lb config`. Forky cambi
 | `.github/workflows/` | Validación automática en GitHub Actions (no publica nada) |
 | `docs/` | [Arquitectura](arquitectura.md), [actualizaciones](actualizaciones.md), [ajustes](ajustes.md), [NVIDIA](nvidia.md), [recuperación y seguridad](recuperacion.md), [Control Center](control-center.md), [compilar](compilar.md) y [pruebas](pruebas.md) |
 | `capturas/` | Capturas del sistema |
-| `.claude/`, `CLAUDE-ROUTING.md` | Configuración de los agentes de Claude Code usados para desarrollar Jaime0 |
+| `.claude/`, `CLAUDE-ROUTING.md` | Configuración de los agentes de Claude Code usados para desarrollar ZYRON |
 
 ## Cambiar el nombre del sistema
 
-Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca/marca.conf` y recompila. Llevan el nombre escrito a mano: `--iso-volume`, `--iso-application`, `--image-name` y `hostname=` en `auto/config`; `--greeting` en `etc/greetd/config.toml`; y `template` en `etc/calamares/modules/users.conf`. El logo es `etc/calamares/branding/hypr/logo.svg`.
+Edita `PRODUCTO` en `config/includes.chroot_after_packages/usr/local/share/marca/marca.conf` y recompila. Llevan el nombre escrito a mano: `--iso-volume`, `--iso-application`, `--image-name` y `hostname=` en `auto/config`; `--greeting` en `etc/greetd/config.toml`; y `template` en `etc/calamares/modules/users.conf`. El logo está en `usr/local/share/marca/` (`zyron-simbolo.svg` y `zyron-logo.svg`; el del instalador, `etc/calamares/branding/hypr/logo.svg`, es una copia del símbolo) y la animación de arranque en `usr/share/plymouth/themes/zyron/` (ver [arranque.md](arranque.md)). Los títulos internos de ventana («Jaime0 Control Center», «Ajustes de Jaime0») y los identificadores (`jaime0-*`, rutas, servicios) no cambian con el nombre: los usan las reglas de Hyprland y las instalaciones existentes.

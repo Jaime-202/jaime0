@@ -1,5 +1,5 @@
 [Unit]
-Description=Comprueba una vez al dia las actualizaciones de Debian y de Jaime0
+Description=Comprueba una vez al dia las actualizaciones de Debian y de ZYRON
 
 [Timer]
 OnStartupSec=10min

@@ -1,6 +1,6 @@
-# Arquitectura de Jaime0
+# Arquitectura de ZYRON
 
-Jaime0 está pensado para un equipo concreto: un **Acer Nitro AN515-55** (Intel i7-10750H con UHD Graphics, NVIDIA GTX 1650 Ti, Wi-Fi y Bluetooth Intel AX201, sonido Intel SOF, SSD NVMe, pantalla de 15,6" a 1920x1080, Secure Boot activado). Arranca en otros equipos y en máquinas virtuales, pero solo lleva el firmware de ese portátil.
+ZYRON está pensado para un equipo concreto: un **Acer Nitro AN515-55** (Intel i7-10750H con UHD Graphics, NVIDIA GTX 1650 Ti, Wi-Fi y Bluetooth Intel AX201, sonido Intel SOF, SSD NVMe, pantalla de 15,6" a 1920x1080, Secure Boot activado). Arranca en otros equipos y en máquinas virtuales, pero solo lleva el firmware de ese portátil.
 
 ## Base
 
@@ -16,7 +16,7 @@ Jaime0 está pensado para un equipo concreto: un **Acer Nitro AN515-55** (Intel 
 | Acceso | greetd + tuigreet en la consola (`iniciar-sesion` lanza Hyprland y explica el fallo si no abre) |
 | Instalador | Calamares con marca propia; se retira al instalar (`hypr-limpiar-vivo`). Pasos propios: snapper si es Btrfs y la clave de firma de NVIDIA |
 | Sonido, red | PipeWire + WirePlumber, NetworkManager (`nmtui` desde la barra), BlueZ + blueman |
-| Actualizaciones | `apt` para todo lo que viene en paquetes; aviso de seguridad en la barra (`actualizaciones`). Lo propio de Jaime0, con `jaime0-update` (publicaciones firmadas de GitHub; también desde UPDATES en el Control Center). Ver [actualizaciones.md](actualizaciones.md) |
+| Actualizaciones | `apt` para todo lo que viene en paquetes; aviso de seguridad en la barra (`actualizaciones`). Lo propio de ZYRON, con `jaime0-update` (publicaciones firmadas de GitHub; también desde UPDATES en el Control Center). Ver [actualizaciones.md](actualizaciones.md) |
 | Ajustes | `jaime0-ajustes`: predeterminados en `/usr/share/jaime0/ajustes.predeterminados`, cambios del usuario en `~/.config/jaime0/ajustes`. Ver [ajustes.md](ajustes.md) |
 | Seguridad | UFW (entrante denegado), avisos de seguridad con debsecan, cifrado LUKS opcional. Ver [recuperacion.md](recuperacion.md) |
 | Widgets | `jaime0-widgets` arranca un único Quickshell solo si hay widgets activos. El tiempo, de `jaime0-tiempo` (Open-Meteo, con caché) |
@@ -40,8 +40,8 @@ scripts/verificar-*.sh                                         comprobaciones so
 
 | Decisión | Motivo |
 |---|---|
-| Actualizador propio solo para lo de Jaime0 | `jaime0-update` (retirado en la 0.3 mientras el repositorio era privado, recuperado en la 0.5 al hacerlo público): manifiesto firmado con Ed25519 y huellas por archivo, sin tocar lo que el usuario cambió. Lo que viene en paquetes sigue siendo cosa de `apt`; no hay un gestor de paquetes paralelo |
-| NVIDIA sin el metapaquete `nvidia-driver` | El metapaquete arrastra el controlador de Xorg, que Jaime0 bloquea. Las bibliotecas EGL, Vulkan, CUDA y NVENC se instalan sueltas |
+| Actualizador propio solo para lo de ZYRON | `jaime0-update` (retirado en la 0.3 mientras el repositorio era privado, recuperado en la 0.5 al hacerlo público): manifiesto firmado con Ed25519 y huellas por archivo, sin tocar lo que el usuario cambió. Lo que viene en paquetes sigue siendo cosa de `apt`; no hay un gestor de paquetes paralelo |
+| NVIDIA sin el metapaquete `nvidia-driver` | El metapaquete arrastra el controlador de Xorg, que ZYRON bloquea. Las bibliotecas EGL, Vulkan, CUDA y NVENC se instalan sueltas |
 | Intel para el escritorio, NVIDIA bajo demanda | La NVIDIA apagada ahorra batería y calor; Hyprland en la Intel evita los problemas de Wayland con NVIDIA. `prime-run` la usa para lo que lo merece |
 | Clave de firma de NVIDIA por instalación | La ISO no lleva ninguna clave privada: el instalador crea una propia y recompila el módulo. Con Secure Boot se registra una vez (MokManager) |
 | Firmware solo del portátil | La ISO es para este equipo: sobra el firmware de Broadcom, AMD, Qualcomm, Marvell... |

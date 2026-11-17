@@ -1,5 +1,5 @@
 //@ pragma Env QT_QUICK_BACKEND=software
-// Widgets de escritorio de Jaime0. Los arranca y para "jaime0-widgets" segun los ajustes:
+// Widgets de escritorio de ZYRON. Los arranca y para "jaime0-widgets" segun los ajustes:
 //   quickshell -p /usr/share/jaime0/widgets/shell.qml
 // Lee ~/.config/jaime0/generado/widgets.json (lo escribe jaime0-ajustes) y se reconfigura
 // en caliente cuando cambia. Un panel por cada posicion usada, en la capa de debajo de las

@@ -1,6 +1,6 @@
 # Recuperación y mantenimiento
 
-Qué hace Jaime0 para volver atrás cuando algo sale mal, qué no puede hacer y por qué.
+Qué hace ZYRON para volver atrás cuando algo sale mal, qué no puede hacer y por qué.
 
 ## Lo que hay
 

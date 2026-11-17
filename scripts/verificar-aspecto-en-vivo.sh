@@ -15,7 +15,7 @@ fallo() { echo "[FALLO] $1"; }
 
 # Sin aceleracion 3D (p. ej. VM de construccion con VMSVGA sin 3D) Mesa no puede crear la
 # pantalla EGL y Hyprland aborta al crear el backend, antes de abrir su socket: no es un fallo
-# de Jaime0, y todo lo que sigue dependeria de la sesion. Solo se acepta si Hyprland ya no
+# de ZYRON, y todo lo que sigue dependeria de la sesion. Solo se acepta si Hyprland ya no
 # corre y su salida tiene la huella de Mesa; cualquier otro motivo sigue siendo un fallo.
 HUELLA_SIN_3D='No 3D enabled|failed to create dri2 screen|MESA-LOADER: failed to open'
 sin_3d() {
@@ -23,8 +23,8 @@ sin_3d() {
 }
 
 # Lo que no necesita Hyprland: se comprueba tambien sin 3D. La salida de fastfetch se reconoce
-# por su linea OS con Jaime0 (la de WM/Hyprland solo aparece con la sesion en marcha).
-FF='OS.*Jaime0'
+# por su linea OS con ZYRON (la de WM/Hyprland solo aparece con la sesion en marcha).
+FF='OS.*ZYRON'
 CON_SESION=1
 sin_sesion() {
     P=$(STARSHIP_SHELL= starship prompt 2>&1); echo "$P" | grep -q '❯' && ok "starship genera prompt con la config propia" || fallo "starship prompt: $P"
@@ -41,7 +41,7 @@ sin_sesion() {
     SAL=$(zsh -c "fastfetch --pipe; true" 2>&1)
     echo "$SAL" | grep -iE "zsh|bash|sh " | head -2 | sed "s/^/Linea de shell: /"
     # WM y Hyprland solo salen con la sesion en marcha.
-    CLAVES="OS PC zsh Jaime0"; [ "$CON_SESION" = 1 ] && CLAVES="OS WM PC Hyprland zsh Jaime0"
+    CLAVES="OS PC zsh ZYRON"; [ "$CON_SESION" = 1 ] && CLAVES="OS WM PC Hyprland zsh ZYRON"
     for K in $CLAVES; do echo "$SAL" | grep -q "$K" && ok "fastfetch muestra $K" || fallo "fastfetch sin $K"; done
     N=$(echo "$SAL" | grep -c "│ ├"); [ "$N" -ge 7 ] && ok "fastfetch en arbol: $N ramas" || fallo "fastfetch sin arbol ($N)"
     echo "$SAL" | grep -q "$(id -un)@" && ok "fastfetch muestra usuario@host" || fallo "fastfetch sin usuario@host"

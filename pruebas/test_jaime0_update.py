@@ -144,7 +144,7 @@ class Escenario:
         (self.raiz / "var/lib/jaime0").mkdir(parents=True)
         (self.raiz / "usr/lib").mkdir(parents=True, exist_ok=True)
         (self.raiz / "usr/lib/os-release").write_bytes(
-            f'NAME="Jaime0"\nID=jaime0\nVERSION="{version}"\nVERSION_ID={version}\n'.encode())
+            f'NAME="ZYRON"\nID=jaime0\nVERSION="{version}"\nVERSION_ID={version}\n'.encode())
         (self.raiz / "var/lib/jaime0/manifiesto-instalacion.json").write_bytes(json.dumps(m).encode())
         for r, datos in archivos.items():
             self.historico.setdefault(r, []).append(sha(datos))
@@ -294,7 +294,7 @@ class Actualizacion(unittest.TestCase):
         # Nuevo: se crea. Borrado por el usuario: no vuelve
         self.assertEqual(e.leer("~/.config/fastfetch/config.jsonc"), b"{}\n")
         self.assertTrue(e.existe("~/.config/dunst/dunstrc") is False)
-        # Retirado de Jaime0 pero modificado: se conserva
+        # Retirado de ZYRON pero modificado: se conserva
         self.assertEqual(e.leer("~/.config/rofi/viejo.rasi"), b"/* lo toque */\n")
         # Sistema: script cambiado por el admin = conflicto; borrado en /usr = se repone;
         # retirado y sin tocar = se elimina
@@ -305,7 +305,7 @@ class Actualizacion(unittest.TestCase):
         self.assertFalse(e.existe("etc/skel/.config/rofi/viejo.rasi"))
         self.assertEqual(json.loads(e.leer("usr/share/jaime0/manifiesto.json"))["version"], "0.2.1")
         self.assertIn(b'VERSION="0.2.1"', e.leer("usr/lib/os-release"))
-        self.assertIn(b'NAME="Jaime0"', e.leer("usr/lib/os-release"))
+        self.assertIn(b'NAME="ZYRON"', e.leer("usr/lib/os-release"))
         # El canal del usuario no se pisa
         self.assertIn(b"canal=stable", e.leer("etc/jaime0/update.conf"))
 
@@ -328,7 +328,7 @@ class Actualizacion(unittest.TestCase):
         self.assertEqual(rc, 0, salida)
         self.assertIn("al día", salida)
 
-        # Revertir el sistema vuelve a 0.2.0 (solo archivos de Jaime0)
+        # Revertir el sistema vuelve a 0.2.0 (solo archivos de ZYRON)
         rc, salida = e.ejecutar("revertir", "--si")
         self.assertEqual(rc, 0, salida)
         self.assertEqual(e.leer("usr/share/jaime0/version"), b"0.2.0\n")
@@ -406,7 +406,7 @@ class Actualizacion(unittest.TestCase):
         self.assertNotIn("version", guardado)
         self.assertIsInstance(guardado["comprobado"], int)
         self.assertEqual(barra()["text"], "")
-        # Jaime0 al dia pero con correcciones de seguridad de Debian: el icono aparece.
+        # ZYRON al dia pero con correcciones de seguridad de Debian: el icono aparece.
         debian = json.dumps({"paquetes": 12, "seguridad": ["libssl3t64", "openssl"], "comprobado": "x"})
         rc, salida = e.ejecutar("comprobar", entorno={"JAIME0_PRUEBA_DEBIAN": debian})
         self.assertEqual(rc, 0, salida)
@@ -465,7 +465,7 @@ class Actualizacion(unittest.TestCase):
         self.assertEqual(e.leer("usr/share/jaime0/version"), b"0.2.0\n")
 
     def test_ruta_fuera_firmada(self):
-        """Ni con firma valida se escribe fuera de las rutas de Jaime0."""
+        """Ni con firma valida se escribe fuera de las rutas de ZYRON."""
         e = self.e
         mala = siguiente(self.base, "0.2.1")
         mala["etc/sudoers.d/puerta"] = b"ALL ALL=(ALL) NOPASSWD: ALL\n"
@@ -1157,7 +1157,7 @@ ACTUALIZACIONES = REPO / "config/includes.chroot_after_packages/usr/local/bin/ac
 
 @unittest.skipUnless(ACTUALIZACIONES.exists(), "sin el programa actualizaciones")
 class BarraDeActualizaciones(unittest.TestCase):
-    """"actualizaciones barra" muestra tambien la version de Jaime0 que encontro la ultima
+    """"actualizaciones barra" muestra tambien la version de ZYRON que encontro la ultima
     comprobacion de jaime0-update, sin red y sin ejecutarlo."""
 
     def setUp(self):
@@ -1188,7 +1188,7 @@ class BarraDeActualizaciones(unittest.TestCase):
         d = self.barra()
         self.assertEqual(d["class"], "disponible")
         self.assertEqual(d["text"], "\U000f06b0")
-        self.assertEqual(d["tooltip"], "Jaime0 0.2.1 disponible (canal stable). Para instalarla: jaime0-update\n"
+        self.assertEqual(d["tooltip"], "ZYRON 0.2.1 disponible (canal stable). Para instalarla: jaime0-update\n"
                                        "Clic: ver los detalles")
         # Con correcciones de seguridad de Debian: manda el color de seguridad y salen las dos.
         (self.estado / "actualizaciones.json").write_text(
@@ -1197,9 +1197,9 @@ class BarraDeActualizaciones(unittest.TestCase):
         self.assertEqual(d["class"], "seguridad")
         self.assertEqual(d["tooltip"].splitlines(), [
             "Debian: 1 actualización de seguridad (12 paquetes por actualizar en total)",
-            "Jaime0 0.2.1 disponible (canal stable). Para instalarla: jaime0-update",
+            "ZYRON 0.2.1 disponible (canal stable). Para instalarla: jaime0-update",
             "Clic: verlas e instalarlas"])
-        # Instalada la version: desaparece la linea de Jaime0 aunque nadie vuelva a comprobar.
+        # Instalada la version: desaparece la linea de ZYRON aunque nadie vuelva a comprobar.
         self.assertEqual(e.ejecutar("--si", "--sin-paquetes")[0], 0)
         self.assertEqual(self.barra()["tooltip"].splitlines(), [
             "Debian: 1 actualización de seguridad (12 paquetes por actualizar en total)",

@@ -26,7 +26,7 @@ ShellRoot {
         { id: "SYSTEM", titulo: "OVERVIEW" },
         { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES" },
         { id: "PROFILES", titulo: "SMART PROFILES" },
-        { id: "AUTOMATION", titulo: "JAIME0 RULES" },
+        { id: "AUTOMATION", titulo: "ZYRON RULES" },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" },
@@ -210,7 +210,7 @@ ShellRoot {
                     spacing: 10
                     Rectangle { width: 8; height: 8; color: Tema.verde; anchors.verticalCenter: parent.verticalCenter }
                     Text {
-                        text: "JAIME0 // CONTROL CENTER"
+                        text: "ZYRON // CONTROL CENTER"
                         color: Tema.texto
                         font.family: Tema.mono
                         font.pixelSize: 14

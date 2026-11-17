@@ -16,7 +16,7 @@ jaime0-diagnostico reparar ID          # aplica la reparación de un problema
 | Área | Comprobaciones |
 |---|---|
 | HARDWARE | sensores de temperatura, gráficas detectadas, programas cerrados por falta de memoria en este arranque (`oom_kill`), raíz llena (menos de 1 GiB o 98 %) o en solo lectura, SMART (con `--sudo`), salud de la batería (menos del 50 %) |
-| SYSTEM | unidades fallidas del sistema y de usuario (con sus últimas líneas del diario), mensajes críticos del arranque, `dpkg --audit`, errores de configuración de Hyprland, JSON de Waybar, avisos de `jaime0-ajustes`, permisos de lo que se ejecuta como root (ayudante de pkexec, política `es.jaime0.*` y `/usr/local/lib/jaime0`), actualización de Jaime0 interrumpida, seguridad de Debian pendiente |
+| SYSTEM | unidades fallidas del sistema y de usuario (con sus últimas líneas del diario), mensajes críticos del arranque, `dpkg --audit`, errores de configuración de Hyprland, JSON de Waybar, avisos de `jaime0-ajustes`, permisos de lo que se ejecuta como root (ayudante de pkexec, política `es.jaime0.*` y `/usr/local/lib/jaime0`), actualización de ZYRON interrumpida, seguridad de Debian pendiente |
 | GRAPHICS | NVIDIA (módulo cargado, construido para el núcleo en uso y para el siguiente, clave de Secure Boot, nouveau), sesión de Hyprland, monitores desactivados o sin usar, aceleración (modo seguro, sin controlador) |
 | CONNECTIVITY | NetworkManager, conectividad (completa, limitada, portal), Wi-Fi (chip sin interfaz, bloqueos), Bluetooth (adaptador, bloqueos, servicio) |
 | POWER | power-profiles-daemon (fallido, rendimiento limitado), batería y cargador, fallos al suspender o reanudar en este arranque |
@@ -48,11 +48,11 @@ Cada ejecución se guarda en `~/.local/state/jaime0/diagnosticos.jsonl` (las úl
 | Paquetes a medio instalar | `sudo /usr/bin/dpkg --configure -a` |
 | Raíz llena | `sudo /usr/bin/apt-get clean` |
 | Permisos inseguros | `chown root:root` y `chmod go-w` solo en las rutas afectadas |
-| Actualización de Jaime0 interrumpida | `sudo /usr/local/bin/jaime0-update recuperar` |
+| Actualización de ZYRON interrumpida | `sudo /usr/local/bin/jaime0-update recuperar` |
 | NVIDIA sin módulo para un núcleo | `sudo /usr/sbin/dkms autoinstall -k NÚCLEO` (con la clave que ya hay); sin clave, `sudo /usr/local/bin/jaime0-nvidia recompilar` |
 | NVIDIA instalada pero sin cargar | `sudo /usr/sbin/modprobe` del módulo |
 | Configuración de Hyprland con errores | `hyprctl reload` (solo sirve si ya corregiste el archivo) |
 | `config.jsonc` de Waybar roto | copia la de fábrica; antes guarda la tuya como `config.jsonc.antes-de-reparar-FECHA` |
 | Wi-Fi o Bluetooth apagados | `nmcli radio wifi on` / `rfkill unblock bluetooth` |
 
-Tras `sudo` van siempre rutas completas (el `secure_path` de Jaime0 no incluye `/usr/local/bin`). Límite: nada que borre datos, nada sobre tus archivos sin copia, y nada que necesite decidir por ti (registrar la clave MOK, instalar cabeceras o paquetes, editar tu configuración): eso queda en «qué hacer».
+Tras `sudo` van siempre rutas completas (el `secure_path` de ZYRON no incluye `/usr/local/bin`). Límite: nada que borre datos, nada sobre tus archivos sin copia, y nada que necesite decidir por ti (registrar la clave MOK, instalar cabeceras o paquetes, editar tu configuración): eso queda en «qué hacer».

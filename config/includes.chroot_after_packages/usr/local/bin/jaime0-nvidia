@@ -107,7 +107,7 @@ aviso() {
     else
         texto="Para usarla, registra su clave una vez: abre una terminal y ejecuta jaime0-nvidia registrar"
     fi
-    notify-send --app-name=Jaime0 --icon=video-display "La NVIDIA aun no esta lista" "$texto"
+    notify-send --app-name=ZYRON --icon=video-display "La NVIDIA aun no esta lista" "$texto"
 }
 
 case "${1:-estado}" in

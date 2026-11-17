@@ -1,6 +1,8 @@
-# Jaime0
+# ZYRON
 
-**Jaime0 es un sistema operativo personal hecho a medida de un portátil: el Acer Nitro AN515-55.** Es Debian con un escritorio montado pieza a pieza alrededor de Hyprland. Se prueba desde un USB sin tocar el disco, se instala con un asistente gráfico y funciona nada más instalarlo: el firmware, los controladores, el navegador y los visores ya vienen dentro.
+![ZYRON](config/includes.chroot_after_packages/usr/local/share/marca/zyron-logo.svg)
+
+**ZYRON es un sistema operativo personal hecho a medida de un portátil: el Acer Nitro AN515-55.** Es Debian con un escritorio montado pieza a pieza alrededor de Hyprland. Se prueba desde un USB sin tocar el disco, se instala con un asistente gráfico y funciona nada más instalarlo: el firmware, los controladores, el navegador y los visores ya vienen dentro.
 
 ![Escritorio con btop, Neovim y Fastfetch en mosaico](capturas/mosaico.png)
 
@@ -21,9 +23,9 @@
 
 Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medido en una máquina virtual). Más detalle de cómo encaja todo en [docs/arquitectura.md](docs/arquitectura.md).
 
-**La barra.** A la izquierda, los escritorios (el verde es el actual); en el centro, las aplicaciones ancladas; a la derecha, CPU, memoria, volumen y red, el icono de Jaime0 (perfil y estado; abre el Control Center), batería, notificaciones, fecha, hora y menú de energía. Cada indicador abre su herramienta al pulsarlo.
+**La barra.** A la izquierda, los escritorios (el verde es el actual); en el centro, las aplicaciones ancladas; a la derecha, CPU, memoria, volumen y red, el icono de ZYRON (perfil y estado; abre el Control Center), batería, notificaciones, fecha, hora y menú de energía. Cada indicador abre su herramienta al pulsarlo.
 
-![Barra de Jaime0 ampliada](capturas/barra.png)
+![Barra de ZYRON ampliada](capturas/barra.png)
 
 | Escritorio al entrar | Con widgets (opcionales) |
 |---|---|
@@ -48,6 +50,10 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
 | Instalador | Elegir el disco | Acceso tras instalar |
 |---|---|---|
 | ![Bienvenida del instalador](capturas/instalador.png) | ![Borrar el disco, ext4 o Btrfs y cifrado](capturas/instalador-disco.png) | ![Pantalla de acceso](capturas/acceso.png) |
+
+Al encender, ZYRON activa su núcleo: un escaneo verde, el hexágono que se construye, la Z, el núcleo cian y el progreso real del arranque. Con disco cifrado, la clave se pide en la misma pantalla. Cómo arrancar sin la animación: [docs/arranque.md](docs/arranque.md).
+
+![Animación de arranque de ZYRON](capturas/arranque.png)
 
 ## Cómo se usa
 
@@ -78,7 +84,7 @@ El comando `atajos` muestra la lista real y permite añadir los tuyos (`atajos a
 
 ### Control Center
 
-Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la batería). Dentro, las teclas `1`–`9` y `0` cambian de sección (o `Ctrl+Tab` a la siguiente), `Tab` recorre los botones, `Intro` o `Espacio` los pulsa y `Esc` cierra. El tamaño se cambia en SETTINGS › ACCESSIBILITY. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
+Se abre con `SUPER + I` o con el icono de ZYRON de la barra (junto a la batería). Dentro, las teclas `1`–`9` y `0` cambian de sección (o `Ctrl+Tab` a la siguiente), `Tab` recorre los botones, `Intro` o `Espacio` los pulsa y `Esc` cierra. El tamaño se cambia en SETTINGS › ACCESSIBILITY. Solo muestra datos reales: lo que el equipo no tiene sale como `N/D` o «no disponible», con el motivo (en las capturas, una máquina virtual sin sensores de temperatura ni NVIDIA).
 
 ![Control Center: SYSTEM](capturas/cc-sistema.png)
 
@@ -91,7 +97,7 @@ Se abre con `SUPER + I` o con el icono de Jaime0 de la barra (junto a la baterí
 | **PRIVACY & SECURITY** | Tres bloques: ACTIVE SECURITY (cortafuegos, puertos, AppArmor, Secure Boot, servicios, telemetría), APPLICATION PERMISSIONS (micrófono, cámara, pantalla, privilegios, Flatpak) y SYSTEM VISIBILITY (lo que no se puede comprobar o no aplica, que nunca cuenta como problema) | `jaime0-privacidad` |
 | **HEALTH** | Cómo evoluciona el sistema: gráficas e histórico, temperaturas, almacenamiento, batería, incidencias y SENSORS & TRENDS (mínimo, media y pico del rango) | `jaime0-salud incidencias` |
 | **SETTINGS** | Animaciones (no, sutil, suave), frecuencia de medida, umbrales de alerta, avisos, el atajo y el tamaño de la ventana | `jaime0-ajustes` |
-| **UPDATES** | Versión instalada y disponible de Jaime0 (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
+| **UPDATES** | Versión instalada y disponible de ZYRON (firmada), cambios, qué archivos cambiarán, paquetes de Debian pendientes y de seguridad, y tus archivos en conflicto. Instalar y revertir piden autorización en una terminal | `jaime0-update` |
 | **DIAGNOSTICS** | Busca problemas reales (servicios caídos, configuración rota, permisos, gráficos, disco…) y explica cada uno: qué se ha visto, causas posibles, consecuencias y qué hacer. Las reparaciones enseñan las órdenes, piden confirmación y guardan copia | `jaime0-diagnostico comprobar` |
 | **POWER** | Batería en detalle (salud, ciclos, consumo, autonomía), gráficas (integrada, NVIDIA y qué programas la usan), perfil de energía, tiempos de bloqueo y suspensión, e histórico de consumo por perfil. Cada dato dice si es medido, calculado o estimado | `jaime0-ajustes poner inactividad_suspender 30` |
 
@@ -123,7 +129,7 @@ jaime0-ajustes restablecer acento
 
 Cambia el color de acento, el fondo, los bordes, las esquinas, el desenfoque, las animaciones, la barra y los widgets de escritorio (reloj, música, tiempo...). Se aplica al momento y se guarda en `~/.config/jaime0/ajustes`, que solo contiene lo que has cambiado. Sin argumentos abre su ventana. Todos los ajustes: [docs/ajustes.md](docs/ajustes.md).
 
-![Ventana de ajustes de Jaime0](capturas/ajustes.png)
+![Ventana de ajustes de ZYRON](capturas/ajustes.png)
 
 ### Aplicaciones ancladas: `jaime0-anclar`
 
@@ -155,12 +161,12 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 ### Actualizar y volver atrás
 
 - **Debian, Brave y la NVIDIA:** el icono de actualizaciones de la barra (o la orden `actualizaciones`) muestra lo pendiente, marca lo que corrige fallos de seguridad y lo instala cuando quieras. Nunca instala nada solo.
-- **Lo propio de Jaime0** (configuración, scripts, Control Center): `jaime0-update`, o la sección **UPDATES** del Control Center, descarga la versión nueva firmada, enseña qué archivos cambian y no pisa los que hayas modificado. Se puede revertir (`jaime0-update revertir`). Las instalaciones 0.3 y 0.4 no lo traen: se instala una vez a mano ([docs/actualizaciones.md](docs/actualizaciones.md)).
+- **Lo propio de ZYRON** (configuración, scripts, Control Center): `jaime0-update`, o la sección **UPDATES** del Control Center, descarga la versión nueva firmada, enseña qué archivos cambian y no pisa los que hayas modificado. Se puede revertir (`jaime0-update revertir`). Las instalaciones 0.3 y 0.4 no lo traen: se instala una vez a mano ([docs/actualizaciones.md](docs/actualizaciones.md)).
 - **Volver atrás:** si instalaste con **Btrfs**, se guarda una instantánea antes y después de cada actualización y se puede deshacer. Con ext4 no hay instantáneas. Ver [docs/actualizaciones.md](docs/actualizaciones.md) y [docs/recuperacion.md](docs/recuperacion.md).
 
 ### Si algo falla
 
-- **No arranca el escritorio:** en GRUB, **Opciones avanzadas** → **(modo seguro)**. Jaime0 muestra la causa más probable y una consola para repararlo.
+- **No arranca el escritorio:** en GRUB, **Opciones avanzadas** → **(modo seguro)**. ZYRON muestra la causa más probable y una consola para repararlo.
 - **Algo no funciona y no sabes por qué:** `jaime0-diagnostico comprobar --sudo` revisa hardware, sistema, gráficos, red y energía, y explica cada problema con su causa probable y qué hacer; algunos se reparan con `jaime0-diagnostico reparar ID`, que enseña las órdenes y pide confirmación. Ver [docs/diagnostico.md](docs/diagnostico.md).
 - **Informe del equipo** para una incidencia, sin datos personales (ni MAC, ni IP, ni usuario, ni números de serie):
 
@@ -181,8 +187,9 @@ Como en cualquier Debian. Brave se actualiza igual, desde su repositorio. Lo ins
 | [energia.md](docs/energia.md) | La sección POWER: de dónde sale cada dato, NVIDIA, quién manda en cada ajuste e inactividad |
 | [compilar.md](docs/compilar.md) | Compilar la ISO y estructura del repositorio |
 | [pruebas.md](docs/pruebas.md) | Qué se ha probado, qué falta y problemas conocidos |
+| [arranque.md](docs/arranque.md) | La animación de arranque, arrancar sin ella, modo seguro y la entrada EFI |
 | [evolucion.md](docs/evolucion.md) | La evolución del sistema (fases 1 a 10): qué cambió, por qué, medidas y lo que queda |
 
 ## Licencia
 
-El trabajo original es [MIT](LICENSE). Lo derivado de otros proyectos y el software de la ISO conservan sus licencias: ver [CREDITS.md](CREDITS.md) y [SOURCES.md](SOURCES.md). Jaime0 no está afiliado al proyecto Debian.
+El trabajo original es [MIT](LICENSE). Lo derivado de otros proyectos y el software de la ISO conservan sus licencias: ver [CREDITS.md](CREDITS.md) y [SOURCES.md](SOURCES.md). ZYRON no está afiliado al proyecto Debian.

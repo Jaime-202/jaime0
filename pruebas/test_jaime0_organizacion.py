@@ -126,7 +126,7 @@ class PruebasCategoriasPrivacidad(Base):
              "privilegios": {"grupos": [{"grupo": "sudo", "texto": "sudo: ..."}]},
              "servicios": [{"nombre": "ssh", "estado": "no instalado", "texto": "x"},
                            {"nombre": "cups", "estado": "activo", "texto": "Impresión"}],
-             "telemetria": [{"elemento": "Jaime0", "estado": "NINGUNA", "texto": "nada"}]}
+             "telemetria": [{"elemento": "ZYRON", "estado": "NINGUNA", "texto": "nada"}]}
         d.update(cambios)
         return d
 

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Abre el navegador instalado (Jaime0 trae Brave). Si no hay ninguno, lo avisa.
+# Abre el navegador instalado (ZYRON trae Brave). Si no hay ninguno, lo avisa.
 for N in brave-browser brave-browser-stable firefox-esr firefox chromium; do
     if command -v "$N" >/dev/null 2>&1; then
         exec "$N" "$@"
     fi
 done
 notify-send --app-name=navegador --expire-time=8000 "No hay navegador instalado" \
-    "Instala uno, por ejemplo: sudo apt install firefox-esr. Para Brave, mira el README de Jaime0." || true
+    "Instala uno, por ejemplo: sudo apt install firefox-esr. Para Brave, mira el README de ZYRON." || true
 exit 1

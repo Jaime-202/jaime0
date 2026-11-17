@@ -6,7 +6,7 @@
 #   inactividad suspender   suspende, salvo con el cargador conectado (lo usa hypridle
 #                           cuando suspender_con_cargador = no)
 #
-# Los tiempos son ajustes de Jaime0 (inactividad_*, POWER en el Control Center) y
+# Los tiempos son ajustes de ZYRON (inactividad_*, POWER en el Control Center) y
 # jaime0-ajustes los escribe en ~/.config/jaime0/generado/hypridle.conf. Si has cambiado tu
 # ~/.config/hypr/hypridle.conf (ya no es el de /etc/skel), manda el tuyo y esos ajustes no se
 # aplican. Si hypridle no esta instalado (sistema actualizado a medias), se usa swayidle con
@@ -38,7 +38,7 @@ fi
 
 if ! command -v swayidle >/dev/null 2>&1; then
     echo "inactividad: faltan hypridle y swayidle; no hay bloqueo ni suspension por inactividad" >&2
-    command -v notify-send >/dev/null 2>&1 && notify-send --app-name=Jaime0 \
+    command -v notify-send >/dev/null 2>&1 && notify-send --app-name=ZYRON \
         "Sin bloqueo por inactividad" "Falta hypridle. Reinstálalo con: sudo apt install hypridle"
     exit 1
 fi

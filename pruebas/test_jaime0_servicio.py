@@ -557,7 +557,7 @@ class PruebasSalud(Base):
         r = H.barra()
         self.assertEqual(r["class"], "online")
         self.assertEqual(r["text"], "\U000f0f85 ")
-        self.assertEqual(r["tooltip"].splitlines()[0], "Jaime0 · SYSTEM ONLINE")
+        self.assertEqual(r["tooltip"].splitlines()[0], "ZYRON · SYSTEM ONLINE")
         self.assertIn("Perfil: BALANCED · energía balanced", r["tooltip"])
         self.assertTrue(r["tooltip"].endswith("Clic: Control Center"))
 
@@ -594,7 +594,7 @@ class PruebasSalud(Base):
             r = H.barra()
         self.assertEqual(r["class"], "parado")
         self.assertEqual(r["text"], "\U000f0f86 ")
-        self.assertTrue(r["tooltip"].startswith("Servicio de Jaime0 parado"))
+        self.assertTrue(r["tooltip"].startswith("Servicio de ZYRON parado"))
 
     def test_barra_parado_sin_estado_y_sin_powerprofilesctl(self):
         with mock.patch.object(H.subprocess, "run", side_effect=FileNotFoundError):
@@ -1463,7 +1463,7 @@ class PruebasIntervalosYAvisos(Base):
         sv.avisar_incidencias([self.linea("WARNING"), self.linea("NORMAL"), self.linea("CRITICAL")])
         self.assertEqual(len(self.avisos), 1)
         orden = self.avisos[0]
-        self.assertEqual(orden[:3], ["notify-send", "--app-name=Jaime0", "--urgency=critical"])
+        self.assertEqual(orden[:3], ["notify-send", "--app-name=ZYRON", "--urgency=critical"])
         self.assertEqual(orden[-2:], ["ESPACIO EN DISCO · CRITICAL", "Disco / al 90 %. Libera espacio"])
 
     def test_todas_avisa_de_warning_y_critical_pero_no_de_recuperaciones(self):

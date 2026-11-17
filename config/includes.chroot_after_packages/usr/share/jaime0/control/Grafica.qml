@@ -1,6 +1,6 @@
 import QtQuick
 
-// Grafica tecnica de Jaime0 (HEALTH). Dibuja SOLO datos reales:
+// Grafica tecnica de ZYRON (HEALTH). Dibuja SOLO datos reales:
 //   t        lista de tiempos (epoch, s), uno por punto
 //   series   [{nombre, color, med:[...], min:[...]?, max:[...]?}]  (null = sin dato)
 //   huecos   [[ini, fin], ...]   tramos sin datos: se rayan, nunca se rellenan

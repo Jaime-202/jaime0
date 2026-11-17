@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Genera el fondo propio de Jaime0 (2560x1440, PNG) de forma determinista.
+# Genera el fondo propio de ZYRON (2560x1440, PNG) de forma determinista.
 #
 #   python3 scripts/generar-fondo.py [destino]
 #

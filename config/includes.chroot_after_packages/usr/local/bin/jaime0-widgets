@@ -1,5 +1,5 @@
 #!/bin/sh
-# Widgets de escritorio de Jaime0: un solo proceso de Quickshell para todos.
+# Widgets de escritorio de ZYRON: un solo proceso de Quickshell para todos.
 # Solo se arranca si hay algun widget activado en los ajustes (jaime0-ajustes); si se
 # desactivan todos, se para. Si Quickshell falla o no esta, el escritorio sigue igual.
 #

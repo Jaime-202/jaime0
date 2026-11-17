@@ -37,7 +37,7 @@ def cargar():
 
 D = cargar()
 
-SECCIONES = ["Jaime0", "Sistema", "CPU y memoria", "Gráfica y monitores", "Sonido", "Red", "Bluetooth",
+SECCIONES = ["ZYRON", "Sistema", "CPU y memoria", "Gráfica y monitores", "Sonido", "Red", "Bluetooth",
              "Portátil", "Almacenamiento", "USB", "Firmware que falta", "Sesión gráfica", "Paquetes clave"]
 
 # Salida de ejemplo con datos personales mezclados con datos tecnicos que deben quedar.
@@ -115,9 +115,9 @@ class PruebasLimpiar(unittest.TestCase):
 
     def test_hostname_generico_no_borra_el_nombre_del_producto(self):
         # En el sistema en vivo el equipo se llama "jaime0", igual que el producto.
-        t = D.limpiar("Jaime0 0.2.0 en jaime0, pipewire [1.6.9, user@jaime0, pid:1]; hostname=jaime0",
+        t = D.limpiar("ZYRON 0.2.0 en jaime0, pipewire [1.6.9, user@jaime0, pid:1]; hostname=jaime0",
                       usuario="user", casa="/home/user", equipo="jaime0")
-        self.assertIn("Jaime0 0.2.0 en jaime0", t)
+        self.assertIn("ZYRON 0.2.0 en jaime0", t)
         self.assertIn("<usuario>@<equipo>", t)
         self.assertIn("hostname=jaime0", t)
 
@@ -244,7 +244,7 @@ class PruebasPrograma(unittest.TestCase):
         e.archivo("run/live/medium/.disk", "")
         e.archivo("proc/sys/kernel/hostname", "portatil-de-maria\n")
         e.archivo("proc/sys/kernel/osrelease", "6.12.0-1-amd64\n")
-        e.archivo("etc/os-release", 'PRETTY_NAME="Jaime0"\nVERSION_CODENAME=forky\n')
+        e.archivo("etc/os-release", 'PRETTY_NAME="ZYRON"\nVERSION_CODENAME=forky\n')
         e.archivo("sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c",
                   b"\x06\x00\x00\x00\x01")
         e.archivo("proc/cmdline", "BOOT_IMAGE=/vmlinuz root=UUID=3f2b8c1e-9a4d-4c7e-b1f0-2d6e8a9c0b1d "
@@ -362,7 +362,7 @@ def stat_root(camino):
 
 
 class BaseDiagnostico(unittest.TestCase):
-    """Portatil sano parecido al de Jaime0: Intel + NVIDIA (cargada), bateria, Wi-Fi y Bluetooth."""
+    """Portatil sano parecido al de ZYRON: Intel + NVIDIA (cargada), bateria, Wi-Fi y Bluetooth."""
 
     def setUp(self):
         self.tmp = pathlib.Path(tempfile.mkdtemp(prefix="jaime0-diagnostico-"))

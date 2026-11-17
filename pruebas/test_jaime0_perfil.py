@@ -1003,7 +1003,7 @@ class PruebasCliente(unittest.TestCase):
         for argv in ([], ["poner", "focus"], ["anterior"], ["personalizado", "energia=balanced"], ["personalizado"]):
             codigo, out, err, _env = self.correr(argv, OSError("no hay socket"))
             self.assertEqual((codigo, out), (1, ""), argv)
-            self.assertIn("el servicio de Jaime0 no está en marcha: systemctl --user start jaime0-servicio", err)
+            self.assertIn("el servicio de ZYRON no está en marcha: systemctl --user start jaime0-servicio", err)
 
     def test_respuesta_rota_cuenta_como_sin_servicio(self):
         codigo, _out, err, _env = self.correr([], ValueError("json"))

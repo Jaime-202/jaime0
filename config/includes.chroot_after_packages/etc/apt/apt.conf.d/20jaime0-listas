@@ -1,4 +1,4 @@
-// Jaime0: apt-daily refresca una vez al dia las listas de paquetes para que el aviso de
+// ZYRON: apt-daily refresca una vez al dia las listas de paquetes para que el aviso de
 // actualizaciones (actualizaciones comprobar) sepa que hay pendiente. Solo las listas: no
 // descarga ni instala nada por su cuenta. Las actualizaciones se instalan cuando tu quieras
 // (actualizaciones, o sudo apt full-upgrade).

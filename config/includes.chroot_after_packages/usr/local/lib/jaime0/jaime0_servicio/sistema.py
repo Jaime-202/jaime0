@@ -94,7 +94,7 @@ CARPETA_PROGRAMAS = os.path.normpath(os.path.join(os.path.dirname(os.path.realpa
 
 
 def programa_hermano(nombre):
-    """Otro programa de Jaime0: junto al lanzador jaime0-servicio o en PATH. Este modulo vive en
+    """Otro programa de ZYRON: junto al lanzador jaime0-servicio o en PATH. Este modulo vive en
     usr/local/lib/jaime0/jaime0_servicio y los programas en usr/local/bin (en el repositorio y
     en el sistema instalado)."""
     junto = os.path.join(CARPETA_PROGRAMAS, nombre)

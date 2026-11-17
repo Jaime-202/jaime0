@@ -1,5 +1,5 @@
 #!/bin/sh
-# Fondo de Jaime0: jaime0.png, propio, generado con scripts/generar-fondo.py (Python y Pillow,
+# Fondo de ZYRON: jaime0.png, propio, generado con scripts/generar-fondo.py (Python y Pillow,
 # semilla fija) y guardado en el repositorio. Llega por includes.chroot_after_packages: la
 # compilacion ya no descarga ni instala nada para el fondo.
 set -e

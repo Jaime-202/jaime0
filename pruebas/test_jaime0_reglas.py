@@ -1449,7 +1449,7 @@ class PruebasAcciones(Base):
             ({"accion": "no_molestar", "estado": "activar"}, ["swaync-client", "--dnd-on", "--skip-wait"]),
             ({"accion": "no_molestar", "estado": "desactivar"}, ["swaync-client", "--dnd-off", "--skip-wait"]),
             ({"accion": "notificar", "titulo": "-t", "texto": "Texto"},
-             ["notify-send", "--app-name=Jaime0", "--", "-t", "Texto"]),
+             ["notify-send", "--app-name=ZYRON", "--", "-t", "Texto"]),
             ({"accion": "volumen", "nivel": 35}, ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "35%"]),
             ({"accion": "silenciar", "estado": "si"}, ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1"]),
             ({"accion": "silenciar", "estado": "no"}, ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "0"]),
@@ -1987,7 +1987,7 @@ class PruebasCliente(unittest.TestCase):
             with self.subTest(argv=argv):
                 codigo, out, err = cliente(argv, sin_servicio)
                 self.assertEqual(codigo, 1)
-                self.assertIn("el servicio de Jaime0 no está en marcha", err)
+                self.assertIn("el servicio de ZYRON no está en marcha", err)
                 self.assertEqual(out, "")
 
     def test_evento_sin_servicio_sale_en_silencio_con_0(self):

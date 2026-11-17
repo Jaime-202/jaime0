@@ -1,5 +1,5 @@
 [D-BUS Service]
-# Jaime0: el nombre que usa swaync-client (la campana de la barra). El del paquete
+# ZYRON: el nombre que usa swaync-client (la campana de la barra). El del paquete
 # arranca swaync.service por systemd; si la campana pregunta antes de que swaync este en
 # marcha, habria dos instancias y la unidad quedaria "failed". Como con
 # org.freedesktop.Notifications, quien arranca swaync es "notificaciones iniciar".

@@ -45,7 +45,7 @@ grep -q '"usr/local/lib/jaime0/jaime0_servicio/servicio.py"' chroot/usr/share/ja
 
 echo "== Aviso diario =="
 [ -L chroot/etc/systemd/user/timers.target.wants/actualizaciones-aviso.timer ] && ok "temporizador activado para todos" || fallo "temporizador no activado"
-grep -qx 'ExecStart=-/usr/local/bin/jaime0-update comprobar --notificar --silencioso' chroot/usr/lib/systemd/user/actualizaciones-aviso.service && ok "el aviso tambien comprueba Jaime0" || fallo "servicio de aviso sin jaime0-update"
+grep -qx 'ExecStart=-/usr/local/bin/jaime0-update comprobar --notificar --silencioso' chroot/usr/lib/systemd/user/actualizaciones-aviso.service && ok "el aviso tambien comprueba ZYRON" || fallo "servicio de aviso sin jaime0-update"
 ! grep -E '^ExecStart' chroot/usr/lib/systemd/user/actualizaciones-aviso.service | grep -qE 'actualizar|_sistema|--si( |$)' && ok "el aviso nunca instala" || fallo "el aviso podria instalar"
 [ ! -e chroot/usr/lib/systemd/user/jaime0-update-aviso.timer ] && ok "sin la unidad retirada jaime0-update-aviso" || fallo "queda jaime0-update-aviso"
 

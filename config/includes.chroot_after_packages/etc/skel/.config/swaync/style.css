@@ -1,8 +1,8 @@
 @import url("../jaime0/generado/swaync.css");
 
-/* Sway Notification Center de Jaime0.
+/* Sway Notification Center de ZYRON.
    El color de acento (@acento) lo genera jaime0-ajustes en ~/.config/jaime0/generado.
-   Paleta Jaime0: fondo #080b0d, superficies #101519 / #151c21, borde #26343a,
+   Paleta ZYRON: fondo #080b0d, superficies #101519 / #151c21, borde #26343a,
    texto #d8e2e8, secundario #71818c, criticas #d9625b. Sin sombras ni transparencias. */
 
 @define-color fondo #080b0d;

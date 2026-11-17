@@ -3,7 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Colores y fuente de la identidad de Jaime0. "acento" lo pone shell.qml con el valor
+// Colores y fuente de la identidad de ZYRON. "acento" lo pone shell.qml con el valor
 // actual de jaime0-ajustes.
 Singleton {
     readonly property color fondo: "#080b0d"

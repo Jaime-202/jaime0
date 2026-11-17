@@ -8,7 +8,7 @@ systemctl --global enable pipewire-pulse.socket
 systemctl --global enable wireplumber.service
 
 # Waybar, swaync, hypridle, hyprsunset y wob se activan solos al instalarse para
-# graphical-session.target. En Jaime0 los arranca la sesion (hyprland.lua, notificaciones,
+# graphical-session.target. En ZYRON los arranca la sesion (hyprland.lua, notificaciones,
 # inactividad, modo-noche) y wob se activa por su socket: si se alcanzara ese target, habria
 # dos barras, dos hypridle y el modo noche siempre encendido. Se quitan esas activaciones.
 for UNIDAD in waybar swaync hypridle hyprsunset wob; do

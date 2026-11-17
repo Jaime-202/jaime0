@@ -1,6 +1,6 @@
 # Ajustes: `jaime0-ajustes`
 
-Los ajustes visuales de Jaime0 están en un solo sitio. Se cambian con una orden y se aplican al momento, sin editar a mano la configuración de Hyprland, Waybar o rofi.
+Los ajustes visuales de ZYRON están en un solo sitio. Se cambian con una orden y se aplican al momento, sin editar a mano la configuración de Hyprland, Waybar o rofi.
 
 | Archivo | De quién es | Qué contiene |
 |---|---|---|

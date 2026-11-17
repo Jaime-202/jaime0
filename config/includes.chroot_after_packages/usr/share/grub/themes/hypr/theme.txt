@@ -1,5 +1,5 @@
 desktop-color: "#080b0d"
-title-text: "Jaime0"
+title-text: "ZYRON"
 title-color: "#54e58a"
 title-font: "Unifont Regular 16"
 message-font: "Unifont Regular 16"

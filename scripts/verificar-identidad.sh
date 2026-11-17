@@ -1,5 +1,5 @@
 #!/bin/bash
-# Verificacion: marca Jaime0, sistema ligero, acceso greetd, agente polkit, fondo y
+# Verificacion: marca ZYRON, sistema ligero, acceso greetd, agente polkit, fondo y
 # comando atajos. Ejecutar con sudo desde ~/isolab despues de lb build (o lb chroot).
 # Crea un usuario de prueba en el chroot: despues hay que ejecutar lb clean.
 export LC_ALL=C
@@ -13,11 +13,11 @@ instalado() { chroot chroot dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep
 
 echo "== Marca =="
 . config/includes.chroot_after_packages/usr/local/share/marca/marca.conf
-[ "$PRODUCTO" = "Jaime0" ] && ok "producto Jaime0" || fallo "producto: $PRODUCTO"
-grep -qx 'NAME="Jaime0"' chroot/usr/lib/os-release && grep -qx 'ID=jaime0' chroot/usr/lib/os-release && grep -qx 'ID_LIKE=debian' chroot/usr/lib/os-release && ok "os-release: Jaime0, ID_LIKE=debian" || fallo "os-release: $(tr '\n' ' ' < chroot/usr/lib/os-release)"
+[ "$PRODUCTO" = "ZYRON" ] && ok "producto ZYRON" || fallo "producto: $PRODUCTO"
+grep -qx 'NAME="ZYRON"' chroot/usr/lib/os-release && grep -qx 'ID=jaime0' chroot/usr/lib/os-release && grep -qx 'ID_LIKE=debian' chroot/usr/lib/os-release && ok "os-release: ZYRON, ID_LIKE=debian" || fallo "os-release: $(tr '\n' ' ' < chroot/usr/lib/os-release)"
 grep -q 'hostname=jaime0' config/binary && ok "equipo en vivo: jaime0" || fallo "hostname en vivo"
-grep -q 'template: "jaime0"' chroot/etc/calamares/modules/users.conf && ok "equipo instalado por defecto: jaime0" || fallo "template del equipo"
-grep -q -- '--iso-volume "Jaime0"' auto/config && ok "volumen de la ISO: Jaime0" || fallo "volumen de la ISO"
+grep -q 'template: "zyron"' chroot/etc/calamares/modules/users.conf && ok "equipo instalado por defecto: zyron" || fallo "template del equipo"
+grep -q -- '--iso-volume "ZYRON"' auto/config && ok "volumen de la ISO: ZYRON" || fallo "volumen de la ISO"
 grep -q 'J0' chroot/etc/calamares/branding/hypr/logo.svg && ! grep -qi 'debian' chroot/etc/calamares/branding/hypr/logo.svg && ok "logo propio J0, sin el de Debian" || fallo "logo"
 
 echo "== Ligereza: lo que ya no esta =="

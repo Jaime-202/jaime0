@@ -3,7 +3,7 @@
 set -e
 
 # --- Cortafuegos (ufw) ---
-# Entrante denegado, saliente permitido y sin reglas abiertas: Jaime0 no trae servidores.
+# Entrante denegado, saliente permitido y sin reglas abiertas: ZYRON no trae servidores.
 # Las reglas base de ufw (before.rules) ya dejan pasar lo necesario como cliente: respuestas
 # a conexiones propias, DHCP, ICMP/ICMPv6 (descubrimiento de vecinos, SLAAC) y mDNS.
 # En el chroot no hay kernel propio ni systemd en marcha, asi que "ufw enable" no sirve: se

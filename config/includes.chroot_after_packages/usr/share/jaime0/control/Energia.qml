@@ -5,7 +5,7 @@ import Quickshell.Io
 // POWER: estado energetico (orden "energia" de jaime0-servicio) y lo que se puede ajustar sin
 // root. Cada dato dice de donde sale: MEDIDO (lo da el hardware), CALCULADO, ESTIMADO (supone
 // que el consumo sigue igual) o N/D. Cada ajuste tiene un unico dueno: el perfil de energia lo
-// pone el perfil de Jaime0 (PROFILES; aqui solo se elige), la inactividad son ajustes de
+// pone el perfil de ZYRON (PROFILES; aqui solo se elige), la inactividad son ajustes de
 // jaime0-ajustes y las reacciones al cargador o a la bateria son reglas de AUTOMATION. Lo que
 // necesita root (logind, limite de carga, gobernador) solo se muestra.
 Item {
@@ -147,7 +147,7 @@ Item {
                         color: Tema.cian; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1
                     }
                     Text {
-                        text: vista.datos && vista.datos.perfil.retencion ? "Retenido por el perfil de Jaime0 (power-profiles-daemon)" : vista.datos && vista.datos.perfil.degradado ? "△ power-profiles-daemon limita el rendimiento: " + vista.datos.perfil.degradado : ""
+                        text: vista.datos && vista.datos.perfil.retencion ? "Retenido por el perfil de ZYRON (power-profiles-daemon)" : vista.datos && vista.datos.perfil.degradado ? "△ power-profiles-daemon limita el rendimiento: " + vista.datos.perfil.degradado : ""
                         color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                     }
                 }

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Simbolo de ZYRON: un nucleo hexagonal (verde) con una Z geometrica (gris claro) cuya
+       diagonal atraviesa el centro, donde se enciende el nucleo (cian). -->
+  <polygon points="128,22 220,75 220,181 128,234 36,181 36,75" fill="#080b0d" stroke="#54e58a" stroke-width="11" stroke-linejoin="miter"/>
+  <path d="M84 88H172L84 168H172" fill="none" stroke="#d8e2e8" stroke-width="15" stroke-linecap="square" stroke-linejoin="miter" stroke-miterlimit="2"/>
+  <circle cx="128" cy="128" r="15" fill="#080b0d"/>
+  <circle cx="128" cy="128" r="8" fill="#55cde0"/>
+</svg>
