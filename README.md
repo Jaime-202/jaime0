@@ -43,7 +43,7 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
      ```
 3. **Arranca desde el USB:** con el portátil apagado, enciéndelo pulsando **F12** y elige el USB. Secure Boot puede seguir activado. Entra solo en la sesión en vivo (usuario `user`, contraseña `live`).
 4. **Instala:** `SUPER + Espacio` y busca **Instalar el sistema**. Puedes borrar el disco, instalar junto a Windows o particionar a mano, con cifrado opcional y con ext4 o Btrfs.
-5. **Primer arranque:** entra con tu usuario. Si aparece el aviso de la NVIDIA, registra su clave una vez: `jaime0-nvidia registrar`, reinicia y elige **Enroll MOK** en la pantalla azul ([docs/nvidia.md](docs/nvidia.md)). Hasta entonces todo va con la Intel.
+5. **Primer arranque:** entra con tu usuario. Se abre la **Bienvenida**, que revisa la red, la gráfica, tu cuenta y los atajos (después, búscala en el lanzador). Si aparece el aviso de la NVIDIA, registra su clave una vez: `jaime0-nvidia registrar`, reinicia y elige **Enroll MOK** en la pantalla azul ([docs/nvidia.md](docs/nvidia.md)). Hasta entonces todo va con la Intel.
 
 ¿Pantalla en negro? En el menú de arranque elige **Modo seguro**.
 
@@ -53,7 +53,11 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
 
 Al encender, ZYRON activa su núcleo: un escaneo verde, el hexágono que se construye, la Z, el núcleo cian y el progreso real del arranque. Con disco cifrado, la clave se pide en la misma pantalla. Cómo arrancar sin la animación: [docs/arranque.md](docs/arranque.md).
 
-![Animación de arranque de ZYRON](capturas/arranque.png)
+| Menú de arranque | Animación de arranque |
+|---|---|
+| ![Menú de arranque de ZYRON](capturas/grub.png) | ![Animación de arranque de ZYRON](capturas/arranque.png) |
+
+![Bienvenida del primer arranque: red, gráfica, cuenta y atajos](capturas/bienvenida.png)
 
 ## Cómo se usa
 
