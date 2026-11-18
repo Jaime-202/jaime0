@@ -766,6 +766,19 @@ class TemasDeArranque(unittest.TestCase):
         J.acciones_posteriores(["usr/share/grub/themes/hypr/theme.txt"])
         self.assertFalse((self.tmp / "boot").exists())
 
+    def activar(self, nuevos, actual):
+        llamadas = []
+        with unittest.mock.patch.object(J, "tema_de_arranque", lambda: actual),              unittest.mock.patch.object(J.subprocess, "run", lambda orden, **k: llamadas.append(orden)):
+            J.acciones_posteriores([J.TEMA_ZYRON], nuevos=nuevos)
+        return [o for o in llamadas if o[0] == "plymouth-set-default-theme"]
+
+    def test_la_animacion_nueva_se_activa_si_llega_por_primera_vez(self):
+        self.assertEqual(self.activar({J.TEMA_ZYRON}, "jaime0"), [["plymouth-set-default-theme", "zyron"]])
+
+    def test_no_pisa_un_tema_elegido_despues(self):
+        self.assertEqual(self.activar(set(), "jaime0"), [])          # ya existia: se eligio jaime0
+        self.assertEqual(self.activar({J.TEMA_ZYRON}, "spinner"), [])  # otro tema elegido a mano
+
     def test_animacion_de_arranque_pide_reinicio(self):
         self.assertIn("reinicio", J.acciones_posteriores(["usr/share/plymouth/themes/zyron/zyron.script"]))
         self.assertEqual(J.componente_de("usr/share/plymouth/themes/zyron/z.png"), "temas")

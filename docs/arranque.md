@@ -34,6 +34,8 @@ La consola de emergencia y el modo de rescate de systemd no dependen de Plymouth
 
 ## Lo que no cambia
 
+El menú está en español: la cuenta atrás se muestra en texto («Arranca en 2 s»), las entradas dicen «con Linux» y «modo seguro», y los otros sistemas, «(en /dev/…)». Con el disco cifrado, la clave se pide dentro de la animación y, si no es correcta, lo dice en español y sin el identificador interno del disco. La pantalla de acceso (tuigreet) también sale en español; solo «Password:» sigue en inglés, porque ese texto lo pone PAM.
+
 GRUB conserva sus opciones: tiempo de espera, otros sistemas (Windows) con os-prober, núcleos anteriores en «Opciones avanzadas», modo seguro y el tema del menú. Snapper y Btrfs, NVIDIA (PRIME offload) y el cifrado funcionan igual: el tema solo dibuja.
 
 ## Entrada EFI en equipos instalados como Jaime0

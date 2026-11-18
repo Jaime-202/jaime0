@@ -1160,8 +1160,20 @@ def copiar_tema_grub():
     os.replace(temporal, destino)
 
 
-def acciones_posteriores(cambiados):
-    """Lo que hay que hacer tras cambiar ciertos archivos. Devuelve avisos para el usuario."""
+TEMA_ZYRON = "usr/share/plymouth/themes/zyron/zyron.plymouth"
+
+
+def tema_de_arranque():
+    """Tema de Plymouth en uso ("" si no se sabe)."""
+    if MODO_PRUEBA or not shutil.which("plymouth-set-default-theme"):
+        return ""
+    r = subprocess.run(["plymouth-set-default-theme"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def acciones_posteriores(cambiados, nuevos=()):
+    """Lo que hay que hacer tras cambiar ciertos archivos. Devuelve avisos para el usuario.
+    nuevos: los que no existian antes (para activar una sola vez lo que llega por primera vez)."""
     avisos = set()
     if any(r.startswith(DIR_LIB + "/") for r in cambiados):
         preparar_paquete_servicio()
@@ -1177,6 +1189,10 @@ def acciones_posteriores(cambiados):
         avisos.add("reinicio")
     # La animacion de arranque se lee del initramfs: hay que rehacerlo para que se vea.
     if any(r.startswith("usr/share/plymouth/themes/") for r in cambiados):
+        # Equipos de la 0.4: la animacion de ZYRON llega nueva y se usa el tema anterior
+        # (jaime0), que era el unico. Se cambia esa vez; si despues se elige otro, se respeta.
+        if TEMA_ZYRON in nuevos and tema_de_arranque() == "jaime0":
+            subprocess.run(["plymouth-set-default-theme", "zyron"], stderr=subprocess.DEVNULL)
         if not MODO_PRUEBA and shutil.which("update-initramfs"):
             subprocess.run(["update-initramfs", "-u"], stdout=subprocess.DEVNULL)
         avisos.add("reinicio")
@@ -1279,7 +1295,7 @@ def _fase_sistema(version, opciones, progreso):
     posterior = instantanea("post", f"jaime0-update {instalada or '?'} -> {version}", previa) if previa else None
 
     cambiados = [p["rel"] for p in plan if p["accion"] in ("nuevo", "restaurar", "actualizar", "eliminar")]
-    avisos = acciones_posteriores(cambiados)
+    avisos = acciones_posteriores(cambiados, nuevos={p["rel"] for p in plan if p["accion"] == "nuevo"})
     podar_copias(DIR_COPIAS)
     n_conf = sum(1 for p in plan if p["accion"] == "conflicto")
     snaps = f"; instantáneas {previa}..{posterior}" if previa and posterior else ""

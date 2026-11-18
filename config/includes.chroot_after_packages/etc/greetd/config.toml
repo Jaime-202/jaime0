@@ -2,10 +2,12 @@
 # Acceso de ZYRON: greetd con tuigreet en la consola, sin servidor grafico propio.
 # Los colores son los de la consola, que el kernel toma de la paleta jaime0 (vt.default_*).
 # En el sistema en vivo, live-config anade [initial_session] para entrar sin clave.
+# tuigreet solo trae su traduccion al espanol como es-CL: con es_ES saldria en ingles. Solo
+# afecta a la pantalla de acceso; la sesion toma el idioma de /etc/default/locale.
 
 [terminal]
 vt = 1
 
 [default_session]
-command = "tuigreet --time --time-format '%a %d/%m  %H:%M' --remember --asterisks --greeting '@PRODUCTO@' --width 56 --window-padding 1 --container-padding 2 --prompt-padding 1 --theme 'border=darkgray;title=green;greet=white;prompt=green;input=white;text=gray;time=darkgray;action=green;button=green;container=black' --cmd iniciar-sesion"
+command = "env LANG=es_CL.UTF-8 LC_MESSAGES=es_CL.UTF-8 LC_TIME=es_ES.UTF-8 tuigreet --time --time-format '%a %d/%m  %H:%M' --remember --asterisks --greeting '@PRODUCTO@' --width 56 --window-padding 1 --container-padding 2 --prompt-padding 1 --theme 'border=darkgray;title=green;greet=white;prompt=green;input=white;text=gray;time=darkgray;action=green;button=green;container=black' --cmd iniciar-sesion"
 user = "_greetd"

@@ -367,6 +367,20 @@ class PruebasPrimerArranque(unittest.TestCase):
             for imagen in imagenes:
                 self.assertTrue((carpeta / imagen).is_file(), f"{carpeta}: falta {imagen}")
 
+    def test_la_cuenta_atras_de_grub_es_texto(self):
+        """Una barra de progreso de GRUB reserva la altura de una linea: queda gruesa."""
+        for tema in (I / "usr/share/grub/themes/hypr/theme.txt", REPO / "config/bootloaders/grub-pc/live-theme/theme.txt"):
+            texto = leer(tema)
+            self.assertNotIn("progress_bar", texto)
+            self.assertRegex(texto, r'(?s)\+ label \{\s*id = "__timeout__".*?text = "[^"]*%d[^"]*"')
+
+    def test_menu_y_clave_de_cifrado_en_espanol(self):
+        self.assertIn('GRUB_RECOVERY_TITLE="modo seguro"', leer(I / "etc/default/grub.d/90-hypr.cfg"))
+        instalar = leer(I / "usr/local/sbin/hypr-instalar-grub")
+        for texto in ("con Linux %s", "(en %s)", "La clave no es correcta", "Demasiados intentos",
+                      'plymouth message --text="$*"'):
+            self.assertIn(texto, instalar)
+
     def test_el_tema_de_grub_se_lee_desde_boot(self):
         """Con el disco cifrado GRUB no lee /usr: el instalador copia el tema a /boot."""
         self.assertIn("/boot/grub/themes/hypr/theme.txt", leer(I / "etc/default/grub.d/90-hypr.cfg"))
@@ -384,6 +398,12 @@ class PruebasPrimerArranque(unittest.TestCase):
         sesion = leer(I / "usr/local/bin/iniciar-sesion")
         self.assertIn('start-hyprland >"${registro}" 2>&1', sesion)
         self.assertIn("registro=/dev/null", sesion)   # sin carpeta de estado, arranca igual
+
+    def test_el_acceso_sale_en_espanol(self):
+        """tuigreet solo trae es-CL; con el idioma del sistema (es_ES) saldria en ingles."""
+        acceso = leer(I / "etc/greetd/config.toml")
+        self.assertIn('command = "env LANG=es_CL.UTF-8 LC_MESSAGES=es_CL.UTF-8 ', acceso)
+        self.assertIn("--cmd iniciar-sesion", acceso)
 
     def test_la_bienvenida_sale_una_vez_y_no_en_vivo(self):
         lanzador = leer(I / "usr/local/bin/jaime0-bienvenida")

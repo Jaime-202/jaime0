@@ -123,7 +123,7 @@ Lo hace `jaime0-update` solo, según lo que haya cambiado:
 
 - **Siempre** (también tras `revertir` y `recuperar`): `/usr/local/lib/jaime0` queda `root:root` con directorios 755 y archivos 644; los ayudantes `/usr/local/libexec/jaime0-*`, `root:root` 755; las políticas `/usr/share/polkit-1/actions/es.jaime0.*`, `root:root` 644. Si alguien pudiera escribir en ellos, podría cambiar lo que `pkexec` ejecuta como root.
 - Paquete del servicio: borra los `__pycache__` y lo vuelve a compilar (`python3 -m compileall -q /usr/local/lib/jaime0`).
-- GRUB: copia el tema a `/boot/grub/themes/hypr` (con el disco cifrado GRUB no lee `/usr`) y `update-grub` (y pide reiniciar). Animación de arranque: `update-initramfs -u` (y pide reiniciar). Esquemas de GLib: `glib-compile-schemas`. `/etc/systemd`: `systemctl daemon-reload`. Temporizadores de usuario nuevos: `systemctl --global enable`. Versión: `VERSION` y `VERSION_ID` de `/usr/lib/os-release`.
+- GRUB: copia el tema a `/boot/grub/themes/hypr` (con el disco cifrado GRUB no lee `/usr`) y `update-grub` (y pide reiniciar). Animación de arranque: `update-initramfs -u` (y pide reiniciar); si llega por primera vez y se usaba el tema anterior (`jaime0`), la deja por defecto, una sola vez. Esquemas de GLib: `glib-compile-schemas`. `/etc/systemd`: `systemctl daemon-reload`. Temporizadores de usuario nuevos: `systemctl --global enable`. Versión: `VERSION` y `VERSION_ID` de `/usr/lib/os-release`.
 - Fase de usuario: si cambió el servicio o la ventana del Control Center (por la huella de sus componentes), `systemctl --user try-restart jaime0-servicio.service` (sin sesión no pasa nada: arrancará con la versión nueva al volver a entrar) y avisa de cerrar y abrir el Control Center.
 
 ## Versiones

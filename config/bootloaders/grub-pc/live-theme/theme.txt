@@ -1,5 +1,6 @@
 # Menu de arranque de ZYRON: negro, simbolo arriba, menu enmarcado como la animacion de
-# arranque, la entrada elegida con barra verde y la cuenta atras como una linea fina.
+# arranque, la entrada elegida con barra verde y la cuenta atras en texto (una barra
+# de progreso de GRUB reserva siempre la altura de una linea y queda gruesa).
 # Posiciones en porcentaje: se adapta a cualquier resolucion. title-text lo pone el hook de
 # marca con el nombre de marca.conf. Mismo tema que el instalado (usr/share/grub/themes/hypr).
 desktop-color: "#080b0d"
@@ -42,16 +43,15 @@ terminal-font: "Unifont Regular 16"
         scrollbar = false
 }
 
-+ progress_bar {
++ label {
         id = "__timeout__"
-        left = 30%
+        left = 0
         top = 78%
-        height = 3
-        width = 40%
-        fg_color = "#54e58a"
-        bg_color = "#151c21"
-        border_color = "#151c21"
-        show_text = false
+        width = 100%
+        align = "center"
+        color = "#54e58a"
+        font = "Unifont Regular 16"
+        text = "Arranca en %d s"
 }
 
 + label {
