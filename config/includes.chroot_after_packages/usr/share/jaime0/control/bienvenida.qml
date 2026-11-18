@@ -13,7 +13,7 @@ ShellRoot {
     id: raiz
 
     property int paso: 0
-    readonly property var pasos: ["BIENVENIDA", "RED", "GRAFICA", "CUENTA", "ATAJOS", "LISTO"]
+    readonly property var pasos: ["BIENVENIDA", "RED", "GRÁFICA", "CUENTA", "ATAJOS", "LISTO"]
     property string red: ""
     property string nvidia: ""
     property var atajos: []
@@ -141,15 +141,15 @@ ShellRoot {
                         font.family: Tema.mono
                         font.pixelSize: 18
                         text: ["Te damos la bienvenida a " + Tema.producto,
-                               "Conexion a internet",
-                               "Grafica NVIDIA",
+                               "Conexión a internet",
+                               "Gráfica NVIDIA",
                                "Tu cuenta",
                                "Atajos para empezar",
                                "Todo listo"][raiz.paso]
                     }
                     Texto {
                         visible: raiz.paso === 0
-                        text: "El sistema ya esta instalado. Estos pasos revisan lo que conviene tener a punto el primer dia: la red, la grafica, tu cuenta y los atajos de teclado.\n\nNo cambian nada por si solos: cada boton abre la herramienta que hace falta. Puedes cerrar esta ventana cuando quieras; se vuelve a abrir buscando \"Bienvenida\" en el lanzador (SUPER + Espacio)."
+                        text: "El sistema ya está instalado. Estos pasos revisan lo que conviene tener a punto el primer día: la red, la gráfica, tu cuenta y los atajos de teclado.\n\nNo cambian nada por sí solos: cada botón abre la herramienta que hace falta. Puedes cerrar esta ventana cuando quieras; se vuelve a abrir buscando \"Bienvenida\" en el lanzador (SUPER + Espacio)."
                     }
 
                     // ── Red ──
@@ -159,11 +159,11 @@ ShellRoot {
                         text: raiz.red === "" ? "Comprobando..." :
                               raiz.red === "connected" ? "Conectado a internet." :
                               raiz.red.indexOf("connected") === 0 ? "Conectado, pero sin salida completa a internet (" + raiz.red + ")." :
-                              "Sin conexion (" + raiz.red + ")."
+                              "Sin conexión (" + raiz.red + ")."
                     }
                     Texto {
                         visible: raiz.paso === 1
-                        text: "Las actualizaciones y la instalacion de programas necesitan red. La red y el Wi-Fi se configuran desde el icono de la barra o con SUPER + W."
+                        text: "Las actualizaciones y la instalación de programas necesitan red. La red y el Wi-Fi se configuran desde el icono de la barra o con SUPER + W."
                     }
                     Row {
                         visible: raiz.paso === 1
@@ -180,7 +180,7 @@ ShellRoot {
                     }
                     Texto {
                         visible: raiz.paso === 2 && raiz.nvidia.indexOf("jaime0-nvidia registrar") >= 0
-                        text: "Con Secure Boot hay que registrar una vez la clave del controlador: este boton abre una terminal que explica cada paso."
+                        text: "Con Secure Boot hay que registrar una vez la clave del controlador: este botón abre una terminal que explica cada paso."
                     }
                     Row {
                         visible: raiz.paso === 2
@@ -196,7 +196,7 @@ ShellRoot {
                     // ── Cuenta ──
                     Texto {
                         visible: raiz.paso === 3
-                        text: "Usuario: " + raiz.usuario + "\n\nLa clave que elegiste al instalar sirve para entrar, desbloquear la pantalla y para sudo. Si el disco va cifrado, su clave es aparte y se pide al arrancar.\n\nLa privacidad (cortafuegos, ubicacion, camara) se revisa en el Control Center, seccion PRIVACY & SECURITY."
+                        text: "Usuario: " + raiz.usuario + "\n\nLa clave que elegiste al instalar sirve para entrar, desbloquear la pantalla y para sudo. Si el disco va cifrado, su clave es aparte y se pide al arrancar.\n\nLa privacidad (cortafuegos, ubicación, cámara) se revisa en el Control Center, sección PRIVACY & SECURITY."
                     }
                     Row {
                         visible: raiz.paso === 3
@@ -228,7 +228,7 @@ ShellRoot {
                     // ── Listo ──
                     Texto {
                         visible: raiz.paso === 5
-                        text: "Conviene buscar actualizaciones ahora: la instalacion trae los paquetes del dia en que se compilo el sistema.\n\nEl Control Center (SUPER + I) reune el estado del equipo, los perfiles, la energia y las actualizaciones."
+                        text: "Conviene buscar actualizaciones ahora: la instalación trae los paquetes del día en que se compiló el sistema.\n\nEl Control Center (SUPER + I) reúne el estado del equipo, los perfiles, la energía y las actualizaciones."
                     }
                     Row {
                         visible: raiz.paso === 5
@@ -250,7 +250,7 @@ ShellRoot {
                 anchors.bottom: parent.bottom
                 anchors.margins: 28
                 spacing: 10
-                Boton { visible: raiz.paso > 0; texto: "Atras"; onPulsado: raiz.paso-- }
+                Boton { visible: raiz.paso > 0; texto: "Atrás"; onPulsado: raiz.paso-- }
                 Boton {
                     texto: raiz.paso < raiz.pasos.length - 1 ? "Siguiente" : "Terminar"
                     principal: true

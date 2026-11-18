@@ -7,12 +7,12 @@
     "logo": {
         "type": "kitty-direct",
         "source": "/usr/local/share/marca/zyron-simbolo.png",
-        "width": 22,
-        "height": 11,
+        "width": 16,
+        "height": 8,
         "padding": {
             "top": 1,
             "left": 2,
-            "right": 3
+            "right": 2
         }
     },
     "display": {
