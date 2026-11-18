@@ -22,4 +22,4 @@ Waybar se compila aparte con [`scripts/construir-waybar.sh`](scripts/construir-w
 - **Traducciones del instalador:** los archivos `.qm` y `.mo` salen de las traducciones de [Calamares](https://github.com/calamares/calamares) con las correcciones de `scripts/construir-traduccion.py` y `scripts/construir-traduccion-extra.py`.
 - **Configuración de Jaime0:** este repositorio.
 
-Si necesitas el código de alguna versión y no lo encuentras, abre una [incidencia](https://github.com/Jaime-202/jaime0/issues).
+Si necesitas el código de alguna versión y no lo encuentras, abre una [incidencia](https://github.com/Jaime-202/zyron/issues).

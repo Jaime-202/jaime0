@@ -17,8 +17,24 @@ import json
 import os
 import sys
 
+
+def _producto():
+    """Nombre del sistema: PRODUCTO en marca.conf, el unico sitio donde se escribe."""
+    marca = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, "share", "marca", "marca.conf")
+    try:
+        with open(marca, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("PRODUCTO="):
+                    return linea.split("=", 1)[1].strip().strip('"') or "ZYRON"
+    except OSError:
+        pass
+    return "ZYRON"
+
+
+PRODUCTO = _producto()
+
 PROGRAMA = "jaime0-perfil"
-SIN_SERVICIO = "el servicio de ZYRON no está en marcha: systemctl --user start jaime0-servicio"
+SIN_SERVICIO = f"el servicio de {PRODUCTO} no está en marcha: systemctl --user start jaime0-servicio"
 
 
 def directorio_ejecucion():

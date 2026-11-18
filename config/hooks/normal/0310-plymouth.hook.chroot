@@ -1,12 +1,14 @@
 #!/bin/sh
 # Arranque de ZYRON con Plymouth.
-#  - zyron: la animacion de activacion del nucleo (plugin script). Sus capas PNG se generan
-#    aqui desde capas/*.svg, para que el tema sea vectorial en el repositorio y nitido.
+#  - zyron: la animacion de activacion del nucleo (plugin script). Sus capas PNG van en el
+#    repositorio, renderizadas desde capas/*.svg (docs/arranque.md): asi jaime0-update las
+#    reparte tal cual y no las ve como cambios locales.
 #  - jaime0: el tema sencillo de siempre (negro, basado en spinner), que se conserva por si
 #    se quiere volver a el: sudo plymouth-set-default-theme -R jaime0
 # El de ZYRON queda por defecto. Sin "splash" en la linea del nucleo (modo seguro de GRUB)
 # o con plymouth.enable=0 no se muestra ninguno; Esc enseña los mensajes de arranque.
 set -e
+. /usr/local/share/marca/marca.conf
 
 # -- Tema sencillo (alternativa) -------------------------------------------------------
 ORIGEN="/usr/share/plymouth/themes/spinner"
@@ -19,7 +21,7 @@ mv "${DESTINO}/spinner.plymouth" "${DESTINO}/${TEMA}.plymouth"
 
 sed -i \
     -e '/^Name\[/d' \
-    -e 's|^Name=.*|Name=ZYRON (sencillo)|' \
+    -e "s|^Name=.*|Name=${PRODUCTO} (sencillo)|" \
     -e 's|^Description=.*|Description=Arranque negro.|' \
     -e 's|^Font=.*|Font=Noto Sans 12|' \
     -e 's|^TitleFont=.*|TitleFont=Noto Sans 30|' \
@@ -31,12 +33,7 @@ sed -i \
     "${DESTINO}/${TEMA}.plymouth"
 
 # -- Tema de ZYRON -----------------------------------------------------------------------
-# rsvg-convert se instala solo para esto; 0395-marca lo vuelve a usar y lo desinstala.
 ZYRON=/usr/share/plymouth/themes/zyron
-apt-get -y -qq --no-install-recommends install librsvg2-bin
-for SVG in "${ZYRON}"/capas/*.svg; do
-    rsvg-convert "${SVG}" -o "${ZYRON}/$(basename "${SVG}" .svg).png"
-done
 for CAPA in halo hexagono z nucleo onda anillo escaneo marca esquina-si esquina-sd esquina-ii esquina-id \
             caja barra-fondo barra cabeza; do
     [ -s "${ZYRON}/${CAPA}.png" ] || { echo "falta la capa ${CAPA}.png del tema de ZYRON" >&2; exit 1; }

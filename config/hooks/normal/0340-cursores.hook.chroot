@@ -15,7 +15,7 @@ else
     cat > "${TEMA}" <<FIN
 [Icon Theme]
 Name=Default
-Comment=Cursor por defecto de ZYRON
+Comment=Cursor por defecto del sistema
 Inherits=Adwaita
 FIN
 fi

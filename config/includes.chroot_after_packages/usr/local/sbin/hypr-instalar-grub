@@ -13,6 +13,12 @@ fi
 
 dpkg -i /var/cache/hypr-grub/${PAQUETE}_*.deb
 
+# Tema del menu en /boot, que no va cifrado: con el disco cifrado GRUB no puede leer /usr
+# (90-hypr.cfg lo usa desde aqui si existe).
+mkdir -p /boot/grub/themes
+rm -rf /boot/grub/themes/hypr
+cp -r /usr/share/grub/themes/hypr /boot/grub/themes/hypr
+
 # Oculta los textos "Loading Linux" e "initial ramdisk" antes de Plymouth.
 sed -i 's/^quiet_boot="0"/quiet_boot="1"/' /etc/grub.d/10_linux
 

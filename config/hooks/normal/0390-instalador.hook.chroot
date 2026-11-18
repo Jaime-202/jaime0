@@ -21,7 +21,6 @@ chmod 755 /usr/local/bin/setxkbmap
 . /usr/local/share/marca/marca.conf
 MARCA=/etc/calamares/branding/hypr
 sed -i "s/@PRODUCTO@/${PRODUCTO}/g" "${MARCA}/branding.desc"
-sed -i "s/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR=\"${PRODUCTO}\"/" /etc/default/grub.d/90-hypr.cfg
 sed -i "s/^title-text: .*/title-text: \"${PRODUCTO}\"/" /usr/share/grub/themes/hypr/theme.txt
 
 mkdir -p /var/cache/hypr-grub

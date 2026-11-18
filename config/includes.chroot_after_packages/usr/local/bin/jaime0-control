@@ -8,6 +8,9 @@
 # no estaba en marcha. Sin Quickshell el resto de ZYRON funciona igual; el estado se
 # consulta con "jaime0-salud".
 
+# Nombre del sistema: PRODUCTO de marca.conf, el unico sitio donde se escribe.
+PRODUCTO=$(sed -n 's/^PRODUCTO="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$(dirname "$(readlink -f "$0")")/../share/marca/marca.conf" 2>/dev/null)
+PRODUCTO=${PRODUCTO:-ZYRON}
 QML=/usr/share/jaime0/control/shell.qml
 
 # Procesos que se llaman exactamente "quickshell" y llevan esta configuracion.
@@ -38,7 +41,7 @@ systemctl --user start jaime0-servicio.service 2>/dev/null
 if ! command -v quickshell >/dev/null 2>&1 || [ ! -f "$QML" ]; then
     MSG="Falta Quickshell: no se puede abrir el Control Center. El estado del sistema se ve con: jaime0-salud"
     echo "jaime0-control: $MSG" >&2
-    notify-send --app-name=ZYRON "Control Center" "$MSG" 2>/dev/null
+    notify-send --app-name="$PRODUCTO" "Control Center" "$MSG" 2>/dev/null
     exit 1
 fi
 if [ -z "${WAYLAND_DISPLAY:-}" ]; then

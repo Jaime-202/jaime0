@@ -12,6 +12,9 @@
 # aplican. Si hypridle no esta instalado (sistema actualizado a medias), se usa swayidle con
 # los tiempos de siempre.
 
+# Nombre del sistema: PRODUCTO de marca.conf, el unico sitio donde se escribe.
+PRODUCTO=$(sed -n 's/^PRODUCTO="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$(dirname "$(readlink -f "$0")")/../share/marca/marca.conf" 2>/dev/null)
+PRODUCTO=${PRODUCTO:-ZYRON}
 cargador_conectado() {
     for f in /sys/class/power_supply/*; do
         [ "$(cat "$f/type" 2>/dev/null)" = Mains ] && [ "$(cat "$f/online" 2>/dev/null)" = 1 ] && return 0
@@ -38,7 +41,7 @@ fi
 
 if ! command -v swayidle >/dev/null 2>&1; then
     echo "inactividad: faltan hypridle y swayidle; no hay bloqueo ni suspension por inactividad" >&2
-    command -v notify-send >/dev/null 2>&1 && notify-send --app-name=ZYRON \
+    command -v notify-send >/dev/null 2>&1 && notify-send --app-name="$PRODUCTO" \
         "Sin bloqueo por inactividad" "Falta hypridle. Reinstálalo con: sudo apt install hypridle"
     exit 1
 fi

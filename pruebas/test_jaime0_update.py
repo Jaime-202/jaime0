@@ -731,6 +731,46 @@ class PermisosForzados(unittest.TestCase):
         self.assertIn("servicio", J.acciones_posteriores(["usr/share/jaime0/control/shell.qml"]))
 
 
+class TemasDeArranque(unittest.TestCase):
+    """Tema de GRUB copiado a /boot y animacion de arranque (initramfs) tras actualizarlos."""
+
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp(prefix="jaime0-arranque-"))
+        self.parches = [unittest.mock.patch.object(J, "RAIZ", str(self.tmp)),
+                        unittest.mock.patch.object(J, "MODO_PRUEBA", True),
+                        unittest.mock.patch.object(J, "asegurar_permisos", lambda: None)]
+        for p in self.parches:
+            p.start()
+
+    def tearDown(self):
+        for p in reversed(self.parches):
+            p.stop()
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_tema_de_grub_tambien_en_boot(self):
+        """Con el disco cifrado GRUB solo lee /boot: el tema se copia alli, sin restos viejos."""
+        tema = self.tmp / "usr/share/grub/themes/hypr"
+        tema.mkdir(parents=True)
+        (tema / "theme.txt").write_text("nuevo")
+        viejo = self.tmp / "boot/grub/themes/hypr"
+        viejo.mkdir(parents=True)
+        (viejo / "sobrante.png").write_bytes(b"x")
+        self.assertIn("reinicio", J.acciones_posteriores(["usr/share/grub/themes/hypr/theme.txt"]))
+        self.assertEqual((viejo / "theme.txt").read_text(), "nuevo")
+        self.assertFalse((viejo / "sobrante.png").exists())
+
+    def test_sin_boot_grub_no_crea_nada(self):
+        tema = self.tmp / "usr/share/grub/themes/hypr"
+        tema.mkdir(parents=True)
+        (tema / "theme.txt").write_text("nuevo")
+        J.acciones_posteriores(["usr/share/grub/themes/hypr/theme.txt"])
+        self.assertFalse((self.tmp / "boot").exists())
+
+    def test_animacion_de_arranque_pide_reinicio(self):
+        self.assertIn("reinicio", J.acciones_posteriores(["usr/share/plymouth/themes/zyron/zyron.script"]))
+        self.assertEqual(J.componente_de("usr/share/plymouth/themes/zyron/z.png"), "temas")
+
+
 class ServicioYJson(unittest.TestCase):
     def setUp(self):
         self.e = Escenario()

@@ -7,5 +7,5 @@
 vt = 1
 
 [default_session]
-command = "tuigreet --time --time-format '%a %d/%m  %H:%M' --remember --asterisks --greeting 'ZYRON' --width 56 --window-padding 1 --container-padding 2 --prompt-padding 1 --theme 'border=darkgray;title=green;greet=white;prompt=green;input=white;text=gray;time=darkgray;action=green;button=green;container=black' --cmd iniciar-sesion"
+command = "tuigreet --time --time-format '%a %d/%m  %H:%M' --remember --asterisks --greeting '@PRODUCTO@' --width 56 --window-padding 1 --container-padding 2 --prompt-padding 1 --theme 'border=darkgray;title=green;greet=white;prompt=green;input=white;text=gray;time=darkgray;action=green;button=green;container=black' --cmd iniciar-sesion"
 user = "_greetd"

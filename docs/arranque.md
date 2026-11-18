@@ -8,12 +8,19 @@ Sobre negro profundo aparece un marco de esquinas, como un visor. Una línea de 
 
 - **Duración:** la entrada dura unos 2 segundos y **nunca retrasa el arranque**; Plymouth se cierra en cuanto el sistema está listo, haya terminado la animación o no.
 - **Resolución:** se escala a cualquier pantalla (diseño a 1920 × 1080).
-- **Consumo:** son capas PNG generadas al compilar desde SVG. El anillo se gira cada tres cuadros y la onda se escala cada dos, para gastar poca CPU.
+- **Consumo:** son capas PNG renderizadas desde SVG. El anillo se gira cada tres cuadros y la onda se escala cada dos, para gastar poca CPU.
 - **Apagar y reiniciar:** se muestra el símbolo ya activado, sin entrada.
 - **Clave del disco cifrado y preguntas:** se piden en un recuadro bajo la marca. Los mensajes del sistema salen abajo, en gris.
 - **Mensajes de arranque:** `Esc` muestra el texto de siempre, como con cualquier tema.
 
-El tema está en `/usr/share/plymouth/themes/zyron/` (`zyron.script` y `capas/*.svg`); el hook `0310-plymouth` genera las capas y lo deja por defecto.
+El tema está en `/usr/share/plymouth/themes/zyron/` (`zyron.script`, las capas PNG y sus originales en `capas/*.svg`); el hook `0310-plymouth` comprueba las capas y lo deja por defecto. Las actualizaciones (`jaime0-update`) también lo reparten y rehacen el initramfs.
+
+Si se cambia un SVG, hay que volver a renderizar su PNG (en Linux, con `librsvg2-bin`):
+
+```sh
+cd config/includes.chroot_after_packages/usr/share/plymouth/themes/zyron
+for s in capas/*.svg; do rsvg-convert "$s" -o "$(basename "$s" .svg).png"; done
+```
 
 ## Arrancar sin la animación
 

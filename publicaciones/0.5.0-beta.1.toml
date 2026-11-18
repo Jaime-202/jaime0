@@ -1,0 +1,21 @@
+# Notas de ZYRON 0.5.0-beta.1 (las lee scripts/empaquetar-actualizacion.py).
+fecha = "2026-11-18"
+cambios = [
+    "Nueva identidad: el sistema se llama ZYRON. El nombre se escribe en un solo sitio (marca.conf) y de ahí lo toman los programas, el menú de arranque y el instalador.",
+    "Animación de arranque nueva (activación del núcleo); la clave de cifrado se pide dentro de ella.",
+    "Menú de arranque (GRUB) con el aspecto de ZYRON; con el disco cifrado se lee desde /boot.",
+    "Ya no se ven líneas de texto entre la animación y el escritorio: lo que escribe Hyprland va a ~/.local/state/jaime0/sesion.log.",
+    "Bienvenida en el primer arranque: red, gráfica NVIDIA, cuenta y atajos (después, «Bienvenida» en el lanzador).",
+    "Las actualizaciones también llevan la animación de arranque y copian el tema de GRUB a /boot.",
+    "fastfetch muestra el símbolo de ZYRON.",
+    "Control Center reorganizado: Update Manager, diagnósticos con reparaciones, Power Manager, reglas con prioridad y conflictos, y accesibilidad (contraste, teclado, escala).",
+    "El repositorio pasa a llamarse Jaime-202/zyron (las direcciones antiguas redirigen).",
+]
+problemas_conocidos = [
+    "Todavía no se ha probado en el portátil real: la NVIDIA, Secure Boot con la clave propia, los sensores y la batería están pendientes.",
+    "En un equipo instalado con una versión anterior, la animación nueva se activa con: sudo plymouth-set-default-theme -R zyron",
+]
+paquetes = ["python3-gi", "gir1.2-glib-2.0"]
+
+[requisitos]
+version_minima = "0.4.0-beta.1"

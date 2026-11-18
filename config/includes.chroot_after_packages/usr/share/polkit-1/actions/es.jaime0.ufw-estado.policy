@@ -3,7 +3,7 @@
  "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
 <!-- Control Center de ZYRON: ver las reglas del cortafuegos. Solo lectura. -->
 <policyconfig>
-  <vendor>ZYRON</vendor>
+  <vendor>@PRODUCTO@</vendor>
   <action id="es.jaime0.ufw-estado">
     <description>Ver las reglas del cortafuegos</description>
     <message>Para ver las reglas del cortafuegos hace falta tu contraseña. Solo se leen; no se cambia nada.</message>

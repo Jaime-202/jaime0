@@ -11,6 +11,7 @@ import threading
 import time
 import traceback
 
+from .base import PRODUCTO
 from .base import (
     PROGRAMA, VERSION_DATOS, INTERVALO_NORMAL, INTERVALO_RAPIDO, DURACION_RAPIDO,
     REFRESCO_LENTO, TAMANO_ANILLO, VOLCADO_CADA, SMART_CADA, MAX_EVENTOS, MAX_INCIDENCIAS,
@@ -300,7 +301,7 @@ class Servicio:
                 continue
             nombre = NOMBRES_COMPONENTE.get(d.get("componente"), d.get("componente") or "").upper()
             cuerpo = ". ".join(t.rstrip(".") for t in (d.get("descripcion"), d.get("recomendacion")) if t)
-            self.aviso_lanzar(["notify-send", "--app-name=ZYRON",
+            self.aviso_lanzar(["notify-send", f"--app-name={PRODUCTO}",
                                "--urgency=" + ("critical" if d["gravedad"] == "CRITICAL" else "normal"),
                                "--", f"{nombre} · {d['gravedad']}", cuerpo])
 
@@ -885,7 +886,7 @@ def medir():
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog=PROGRAMA, description="Servicio de salud del sistema de ZYRON.")
+    ap = argparse.ArgumentParser(prog=PROGRAMA, description=f"Servicio de salud del sistema de {PRODUCTO}.")
     sub = ap.add_subparsers(dest="orden", required=True)
     sub.add_parser("ejecutar", help="ejecuta el servicio (bucle de GLib)")
     pm = sub.add_parser("medir", help="una medicion inmediata en JSON")

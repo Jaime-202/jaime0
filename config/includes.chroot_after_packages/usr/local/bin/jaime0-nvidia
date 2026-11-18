@@ -12,6 +12,9 @@
 # carga si esa clave esta registrada: se hace una vez con "jaime0-nvidia registrar" y una
 # pantalla azul (MokManager) en el siguiente arranque.
 
+# Nombre del sistema: PRODUCTO de marca.conf, el unico sitio donde se escribe.
+PRODUCTO=$(sed -n 's/^PRODUCTO="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$(dirname "$(readlink -f "$0")")/../share/marca/marca.conf" 2>/dev/null)
+PRODUCTO=${PRODUCTO:-ZYRON}
 CLAVE=/var/lib/dkms/mok.pub
 
 grafica() {
@@ -107,7 +110,7 @@ aviso() {
     else
         texto="Para usarla, registra su clave una vez: abre una terminal y ejecuta jaime0-nvidia registrar"
     fi
-    notify-send --app-name=ZYRON --icon=video-display "La NVIDIA aun no esta lista" "$texto"
+    notify-send --app-name="$PRODUCTO" --icon=video-display "La NVIDIA aun no esta lista" "$texto"
 }
 
 case "${1:-estado}" in

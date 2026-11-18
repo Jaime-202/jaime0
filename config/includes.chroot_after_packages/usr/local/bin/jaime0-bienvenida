@@ -1,0 +1,40 @@
+#!/bin/sh
+# jaime0-bienvenida: primeros pasos tras instalar (red, grafica, cuenta y atajos).
+#
+#   jaime0-bienvenida          abre la ventana de bienvenida
+#   jaime0-bienvenida inicio   la abre solo la primera vez que se entra en el escritorio
+#                              (lo llama hyprland.lua); en la sesion en vivo no
+#
+# Es una ventana de Quickshell, como el Control Center. Cada paso muestra el estado real
+# del equipo y abre las herramientas que ya existen (nmtui, jaime0-nvidia, passwd, atajos).
+
+QML=/usr/share/jaime0/control/bienvenida.qml
+ESTADO="${XDG_STATE_HOME:-${HOME}/.local/state}/jaime0"
+VISTA="${ESTADO}/bienvenida-vista"
+
+case "${1:-}" in
+    inicio)
+        [ -d /run/live/medium ] && exit 0
+        [ -e "${VISTA}" ] && exit 0
+        # Se marca antes de abrirla: si se cierra, no vuelve a salir en cada arranque.
+        mkdir -p "${ESTADO}" && chmod 700 "${ESTADO}" && : > "${VISTA}" || exit 1
+        ;;
+    "") ;;
+    *) echo "Uso: jaime0-bienvenida [inicio]" >&2; exit 2 ;;
+esac
+
+if ! command -v quickshell >/dev/null 2>&1 || [ ! -f "${QML}" ]; then
+    echo "jaime0-bienvenida: falta Quickshell; los atajos se ven con: atajos" >&2
+    exit 1
+fi
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    echo "jaime0-bienvenida: no hay sesion grafica (WAYLAND_DISPLAY)." >&2
+    exit 1
+fi
+
+# Una sola ventana: si ya esta abierta, no se abre otra.
+for p in $(pgrep -x -u "$(id -u)" quickshell 2>/dev/null); do
+    tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF -- "-p ${QML}" && exit 0
+done
+
+setsid -f quickshell -p "${QML}" >/dev/null 2>&1 </dev/null

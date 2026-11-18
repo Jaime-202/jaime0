@@ -147,7 +147,7 @@ Item {
                         color: Tema.cian; font.family: Tema.mono; font.pixelSize: Tema.letraMini; font.letterSpacing: 1
                     }
                     Text {
-                        text: vista.datos && vista.datos.perfil.retencion ? "Retenido por el perfil de ZYRON (power-profiles-daemon)" : vista.datos && vista.datos.perfil.degradado ? "△ power-profiles-daemon limita el rendimiento: " + vista.datos.perfil.degradado : ""
+                        text: vista.datos && vista.datos.perfil.retencion ? "Retenido por el perfil de " + Tema.producto + " (power-profiles-daemon)" : vista.datos && vista.datos.perfil.degradado ? "△ power-profiles-daemon limita el rendimiento: " + vista.datos.perfil.degradado : ""
                         color: Tema.secundario; font.family: Tema.mono; font.pixelSize: Tema.letraMini
                     }
                 }

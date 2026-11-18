@@ -128,7 +128,7 @@ VM de VirtualBox 7.1 en Windows 11: UEFI, 4 GB, 4 CPU, aceleración 3D. Las prue
 
 ## 4. Pruebas en hardware real (pendientes)
 
-Ninguna de estas se ha hecho todavía. Para cada equipo, adjunta a una [incidencia](https://github.com/Jaime-202/jaime0/issues) el informe de `jaime0-diagnostico` (no recoge datos personales) y la salida de `bash scripts/verificar-sesion.sh`.
+Ninguna de estas se ha hecho todavía. Para cada equipo, adjunta a una [incidencia](https://github.com/Jaime-202/zyron/issues) el informe de `jaime0-diagnostico` (no recoge datos personales) y la salida de `bash scripts/verificar-sesion.sh`.
 
 | Área | Qué comprobar |
 |---|---|

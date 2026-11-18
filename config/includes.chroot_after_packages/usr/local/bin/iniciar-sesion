@@ -29,8 +29,19 @@ if [ -n "${intel}" ]; then
     fi
 fi
 
+# Lo que Hyprland escribe al arrancar va a un registro y no a la consola: si no, se ve un
+# instante entre la animacion de arranque y el escritorio.
+estado_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/jaime0"
+registro="${estado_dir}/sesion.log"
+# Si el directorio no se puede crear, la sesion arranca igual (sin registro propio).
+if mkdir -p "${estado_dir}" 2>/dev/null && chmod 700 "${estado_dir}" && [ -w "${estado_dir}" ]; then
+    [ -f "${registro}" ] && mv -f "${registro}" "${registro}.anterior"
+else
+    registro=/dev/null
+fi
+
 inicio=$(date +%s)
-start-hyprland
+start-hyprland >"${registro}" 2>&1
 estado=$?
 duracion=$(( $(date +%s) - inicio ))
 
@@ -51,10 +62,16 @@ Lo mas probable es que este equipo no tenga una aceleracion grafica compatible:
   - Grafica NVIDIA: el escritorio usa la Intel; el estado de la NVIDIA: jaime0-nvidia
   - Maquina virtual: activa la aceleracion 3D.
 
-El detalle esta en:  journalctl -b -p err
+El detalle esta en:  ${registro}
+              y en:  journalctl -b -p err
 
 Tienes una consola para reparar el sistema: la red se configura con  nmtui
 Escribe  exit  para volver a la pantalla de acceso.
 
 FIN
+if [ -f "${registro}" ] && [ -s "${registro}" ]; then
+    echo "Ultimas lineas del registro:"
+    tail -n 8 "${registro}"
+    echo
+fi
 exec "${SHELL:-/bin/sh}" -l

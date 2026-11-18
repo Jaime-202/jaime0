@@ -1,5 +1,5 @@
 [Unit]
-Description=Aviso de actualizaciones de Debian y de ZYRON
+Description=Aviso de actualizaciones de Debian y del sistema
 # Solo en el sistema instalado.
 ConditionPathExists=!/run/live/medium
 

@@ -1,10 +1,13 @@
 #!/bin/sh
 # Abre el navegador instalado (ZYRON trae Brave). Si no hay ninguno, lo avisa.
+# Nombre del sistema: PRODUCTO de marca.conf, el unico sitio donde se escribe.
+PRODUCTO=$(sed -n 's/^PRODUCTO="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$(dirname "$(readlink -f "$0")")/../share/marca/marca.conf" 2>/dev/null)
+PRODUCTO=${PRODUCTO:-ZYRON}
 for N in brave-browser brave-browser-stable firefox-esr firefox chromium; do
     if command -v "$N" >/dev/null 2>&1; then
         exec "$N" "$@"
     fi
 done
 notify-send --app-name=navegador --expire-time=8000 "No hay navegador instalado" \
-    "Instala uno, por ejemplo: sudo apt install firefox-esr. Para Brave, mira el README de ZYRON." || true
+    "Instala uno, por ejemplo: sudo apt install firefox-esr. Para Brave, mira el README de ${PRODUCTO}." || true
 exit 1

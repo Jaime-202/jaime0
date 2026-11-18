@@ -45,6 +45,22 @@ import time
 import urllib.parse
 import urllib.request
 
+
+def _producto():
+    """Nombre del sistema: PRODUCTO en marca.conf, el unico sitio donde se escribe."""
+    marca = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, "share", "marca", "marca.conf")
+    try:
+        with open(marca, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("PRODUCTO="):
+                    return linea.split("=", 1)[1].strip().strip('"') or "ZYRON"
+    except OSError:
+        pass
+    return "ZYRON"
+
+
+PRODUCTO = _producto()
+
 try:
     import fcntl
 except ImportError:  # Solo en las pruebas fuera de Linux
@@ -52,7 +68,7 @@ except ImportError:  # Solo en las pruebas fuera de Linux
 
 PROGRAMA = "jaime0-update"
 RUTA_PROGRAMA = "/usr/local/bin/jaime0-update"
-API_DEFECTO = "https://api.github.com/repos/Jaime-202/jaime0/releases?per_page=100"
+API_DEFECTO = "https://api.github.com/repos/Jaime-202/zyron/releases?per_page=100"
 CANALES = ("stable", "beta", "experimental")
 CANAL_DE_SUFIJO = {"": "stable", "beta": "beta", "exp": "experimental"}
 NIVEL_CANAL = {"experimental": 0, "beta": 1, "stable": 2}
@@ -67,7 +83,7 @@ FORMATO_MANIFIESTO = 1
 VERSION_ACTUALIZADOR = 2
 COPIAS_CONSERVADAS = 5
 NUEVO = ".jaime0-nuevo"
-URL_DOCUMENTACION = "https://github.com/Jaime-202/jaime0/blob/main/docs/actualizaciones.md"
+URL_DOCUMENTACION = "https://github.com/Jaime-202/zyron/blob/main/docs/actualizaciones.md"
 
 # Rutas que una actualizacion puede tocar. Aunque el manifiesto este firmado, nada fuera
 # de aqui se escribe ni se borra nunca (defensa en profundidad). Lo que queda fuera a
@@ -90,6 +106,7 @@ PREFIJOS_PERMITIDOS = (
     "usr/share/backgrounds/jaime0/",
     "usr/share/glib-2.0/schemas/",
     "usr/share/grub/themes/",
+    "usr/share/plymouth/themes/zyron/",         # animacion de arranque (va en el initramfs)
     "usr/share/polkit-1/actions/es.jaime0.",    # politicas de esos ayudantes
     "usr/share/qt6ct/",
 )
@@ -561,7 +578,7 @@ def comprobar_requisitos(manifiesto, instalada):
     req = manifiesto.get("requisitos") or {}
     minimo = req.get("actualizador_minimo")
     if minimo and minimo > VERSION_ACTUALIZADOR:
-        raise Fallo(f"ZYRON {manifiesto['version']} necesita jaime0-update {minimo} o posterior y este es el "
+        raise Fallo(f"{PRODUCTO} {manifiesto['version']} necesita jaime0-update {minimo} o posterior y este es el "
                     f"{VERSION_ACTUALIZADOR}. No se ha instalado nada. Actualiza jaime0-update a mano con los pasos "
                     f"de «Instalar o actualizar jaime0-update a mano» en {URL_DOCUMENTACION} y vuelve a ejecutarlo.")
     minima = req.get("version_minima")
@@ -696,7 +713,8 @@ def componente_de(rel):
         return "control-center"
     if rel.startswith("usr/local/bin/"):
         return "herramientas"
-    if rel.startswith(("usr/share/backgrounds/", "usr/share/grub/themes/", "usr/share/qt6ct/")):
+    if rel.startswith(("usr/share/backgrounds/", "usr/share/grub/themes/", "usr/share/plymouth/themes/",
+                       "usr/share/qt6ct/")):
         return "temas"
     return "sistema"
 
@@ -1125,6 +1143,23 @@ def preparar_paquete_servicio():
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+def copiar_tema_grub():
+    """El tema de GRUB, tambien en /boot/grub/themes/hypr: con el disco cifrado GRUB no puede
+    leer /usr, y 90-hypr.cfg lo usa desde /boot (como lo deja el instalador)."""
+    origen = os.path.join(RAIZ, "usr/share/grub/themes/hypr")
+    boot_grub = os.path.join(RAIZ, "boot/grub")
+    if not os.path.isdir(origen) or not os.path.isdir(boot_grub):
+        return
+    destino = os.path.join(boot_grub, "themes/hypr")
+    temporal = destino + NUEVO
+    if os.path.isdir(temporal):
+        shutil.rmtree(temporal)
+    shutil.copytree(origen, temporal)
+    if os.path.isdir(destino):
+        shutil.rmtree(destino)
+    os.replace(temporal, destino)
+
+
 def acciones_posteriores(cambiados):
     """Lo que hay que hacer tras cambiar ciertos archivos. Devuelve avisos para el usuario."""
     avisos = set()
@@ -1136,8 +1171,14 @@ def acciones_posteriores(cambiados):
     if "usr/share/jaime0/version" in cambiados:
         actualizar_os_release()
     if any(r.startswith("etc/default/grub.d/") or r.startswith("usr/share/grub/") for r in cambiados):
+        copiar_tema_grub()
         if not MODO_PRUEBA and shutil.which("update-grub"):
             subprocess.run(["update-grub"], stdout=subprocess.DEVNULL)
+        avisos.add("reinicio")
+    # La animacion de arranque se lee del initramfs: hay que rehacerlo para que se vea.
+    if any(r.startswith("usr/share/plymouth/themes/") for r in cambiados):
+        if not MODO_PRUEBA and shutil.which("update-initramfs"):
+            subprocess.run(["update-initramfs", "-u"], stdout=subprocess.DEVNULL)
         avisos.add("reinicio")
     if any(r.startswith("usr/share/glib-2.0/schemas/") for r in cambiados) and not MODO_PRUEBA:
         subprocess.run(["glib-compile-schemas", "/usr/share/glib-2.0/schemas"], stderr=subprocess.DEVNULL)
@@ -1208,7 +1249,7 @@ def _fase_sistema(version, opciones, progreso):
         r = subprocess.run(["apt-get", "install", "-y", "--no-install-recommends"] + faltan)
         if r.returncode != 0:
             raise Fallo("apt no pudo instalar los paquetes necesarios. No se ha cambiado ningún archivo de "
-                        "ZYRON; revisa con apt si quedó algún paquete a medias.")
+                        f"{PRODUCTO}; revisa con apt si quedó algún paquete a medias.")
         progreso.fase("instalando", "archivos del sistema")
 
     plan = plan_sistema(manifiesto)
@@ -1231,7 +1272,7 @@ def _fase_sistema(version, opciones, progreso):
         registrar(REGISTRO_SISTEMA, f"ERROR {instalada} -> {version}: {e!r}; cambios deshechos")
         if isinstance(e, Fallo):
             raise
-        raise Fallo(f"Actualización interrumpida ({e}). Los archivos de ZYRON siguen en {instalada}.")
+        raise Fallo(f"Actualización interrumpida ({e}). Los archivos de {PRODUCTO} siguen en {instalada}.")
     transaccion.terminar({"plan": [{k: p[k] for k in ("rel", "accion")} for p in plan]})
     quitar_marca_abierta()
     escribir_json(CONFLICTOS_SISTEMA, conflictos)
@@ -1391,9 +1432,9 @@ def revisar_componentes_en_memoria(estado_ruta, estado, manifiesto):
     if not cambio:
         return
     if reiniciar_servicio():
-        info(verde("✓") + " Servicio de ZYRON reiniciado con la versión nueva.")
+        info(verde("✓") + f" Servicio de {PRODUCTO} reiniciado con la versión nueva.")
     else:
-        info(tenue("El servicio de ZYRON cargará la versión nueva al volver a entrar en la sesión."))
+        info(tenue(f"El servicio de {PRODUCTO} cargará la versión nueva al volver a entrar en la sesión."))
     info(ambar("Si tienes abierto el Control Center, ciérralo y vuelve a abrirlo (SUPER + I) para ver la versión nueva."))
 
 
@@ -1491,7 +1532,7 @@ def mostrar_publicacion(manifiesto):
         info("Compatible  " + ", ".join(f"{k} {v}" for k, v in compat.items()))
     req = manifiesto.get("requisitos") or {}
     if req.get("version_minima"):
-        info(f"Requiere    ZYRON {req['version_minima']} o posterior")
+        info(f"Requiere    {PRODUCTO} {req['version_minima']} o posterior")
     if manifiesto.get("componentes"):
         info("Componentes " + ", ".join(manifiesto["componentes"]))
     if manifiesto.get("paquetes"):
@@ -1579,7 +1620,7 @@ def cmd_estado(opciones):
         return 0
     conf = leer_conf()
     instalada = version_instalada()
-    titulo("ZYRON")
+    titulo(f"{PRODUCTO}")
     info(f"Versión instalada  {verde(instalada or 'desconocida')}")
     info(f"Canal              {conf['canal']}")
     info(f"Actualizador       {VERSION_ACTUALIZADOR}")
@@ -1628,7 +1669,7 @@ def cmd_comprobar(opciones):
         if opciones.json:
             imprimir_json(dict({"ok": True}, **vacio))
         elif not opciones.silencioso:
-            info(verde("✓") + f" ZYRON {instalada or ''} está al día en el canal {conf['canal']}.")
+            info(verde("✓") + f" {PRODUCTO} {instalada or ''} está al día en el canal {conf['canal']}.")
         return 0
     guardar_disponible(manifiesto, debian)
     if opciones.notificar:
@@ -1738,7 +1779,7 @@ def notificar_seguridad(debian):
     os.makedirs(os.path.dirname(avisado), exist_ok=True)
     with open(avisado, "w", encoding="utf-8") as f:
         f.write(huella + "\n")
-    subprocess.run(["notify-send", "--app-name=ZYRON", "--icon=security-high",
+    subprocess.run(["notify-send", f"--app-name={PRODUCTO}", "--icon=security-high",
                     "Actualizaciones de seguridad de Debian",
                     f"{len(seg)} paquete{'s' if len(seg) != 1 else ''} con correcciones de seguridad. "
                     "Para instalarlas: sudo apt full-upgrade"],
@@ -1780,7 +1821,7 @@ def cmd_barra(opciones):
     seguridad = debian.get("seguridad") or []
     lineas = []
     if nueva:
-        lineas.append(f"ZYRON {disponible} disponible (canal {datos.get('canal') or '?'})")
+        lineas.append(f"{PRODUCTO} {disponible} disponible (canal {datos.get('canal') or '?'})")
     if seguridad:
         lineas.append(f"Debian: {len(seguridad)} {'actualizaciones' if len(seguridad) != 1 else 'actualización'} de seguridad "
                       f"({debian.get('paquetes', 0)} paquetes por actualizar en total)")
@@ -1810,9 +1851,9 @@ def notificar(manifiesto):
         f.write(manifiesto["version"] + "\n")
     try:
         r = subprocess.run(
-            ["notify-send", "--app-name=ZYRON", "--icon=system-software-update", "--wait",
+            ["notify-send", f"--app-name={PRODUCTO}", "--icon=system-software-update", "--wait",
              "--action=cambios=Ver los cambios",
-             f"ZYRON {manifiesto['version']} disponible",
+             f"{PRODUCTO} {manifiesto['version']} disponible",
              f"Canal {manifiesto['canal']}. Cuando quieras, ejecuta: {PROGRAMA}"],
             capture_output=True, text=True, timeout=900)
     except (OSError, subprocess.TimeoutExpired):
@@ -1838,14 +1879,14 @@ def cmd_cambios(opciones):
             if not manifiesto:
                 raise Fallo("No hay actualizaciones ni manifiesto instalado.")
             info(tenue("No hay actualizaciones: estos son los cambios de la versión instalada."))
-    titulo(f"ZYRON {manifiesto['version']}")
+    titulo(f"{PRODUCTO} {manifiesto['version']}")
     mostrar_publicacion(manifiesto)
     return 0
 
 
 def cmd_actualizar(opciones):
     if en_vivo():
-        raise Fallo("Estás en la sesión en vivo: instala ZYRON antes de actualizarlo.")
+        raise Fallo(f"Estás en la sesión en vivo: instala {PRODUCTO} antes de actualizarlo.")
     conf = leer_conf()
     instalada = version_instalada()
     titulo("Buscando actualizaciones")
@@ -1866,7 +1907,7 @@ def cmd_actualizar(opciones):
         mostrar_plan(plan, detalle=opciones.detalle)
         if opciones.revisar:
             mostrar_diferencias(plan, nuevos)
-        if not preguntar(f"¿Instalar ZYRON {manifiesto['version']}?", opciones):
+        if not preguntar(f"¿Instalar {PRODUCTO} {manifiesto['version']}?", opciones):
             info("No se ha instalado nada.")
             return 0
         argumentos = ["_sistema", manifiesto["version"],
@@ -1879,7 +1920,7 @@ def cmd_actualizar(opciones):
         info(verde("✓") + f" Sistema actualizado a {manifiesto['version']}.")
         hecho_sistema = True
     else:
-        info(verde("✓") + " Los componentes de ZYRON están al día.")
+        info(verde("✓") + f" Los componentes de {PRODUCTO} están al día.")
 
     if not es_root():
         fase_usuario(opciones)
@@ -2029,7 +2070,7 @@ def cmd_resolver(opciones):
             actual = []
         with open(nuevo, encoding="utf-8") as f:
             propuesta = f.read().splitlines(keepends=True)
-        for linea in difflib.unified_diff(actual, propuesta, "tuyo", "nuevo de ZYRON"):
+        for linea in difflib.unified_diff(actual, propuesta, "tuyo", f"nuevo de {PRODUCTO}"):
             linea = linea.rstrip("\n")
             print(verde(linea) if linea.startswith("+") else rojo(linea) if linea.startswith("-") else linea)
         if not (opciones.usar_nueva or opciones.mantener):
@@ -2154,7 +2195,7 @@ def cmd_revertir(opciones):
     datos = leer_json(diario)
     titulo(f"Revertir {alcance}: {datos.get('hasta')} → {datos.get('desde')}")
     info(f"Se restauran {len(datos['entradas'])} archivos desde {mostrar_ruta(os.path.dirname(diario))}.")
-    info(tenue("Solo los archivos de ZYRON; los paquetes de Debian no cambian."))
+    info(tenue(f"Solo los archivos de {PRODUCTO}; los paquetes de Debian no cambian."))
     ultima_ruta = os.path.join(DIR_ESTADO, "ultima.json")
     snaps = (leer_json(ultima_ruta, {}) or {}).get("instantaneas") if alcance == "sistema" else None
     if snaps and len(snaps) == 2:
@@ -2195,7 +2236,7 @@ def cmd_revertir(opciones):
     registrar(registro_actual(), f"revertido {alcance} {datos.get('hasta')} -> {datos.get('desde')}")
     info(verde("✓") + f" Revertido. Lo que había antes de revertir está en {mostrar_ruta(previa.dir)}")
     if "servicio" in avisos:
-        info(ambar("Cambió el servicio de ZYRON: ejecuta 'systemctl --user restart jaime0-servicio' como tu "
+        info(ambar(f"Cambió el servicio de {PRODUCTO}: ejecuta 'systemctl --user restart jaime0-servicio' como tu "
                    "usuario (o vuelve a entrar en la sesión) y vuelve a abrir el Control Center."))
     return 0
 
@@ -2221,7 +2262,7 @@ def cmd_recuperar(opciones):
 def construir_argumentos():
     p = argparse.ArgumentParser(
         prog=PROGRAMA,
-        description="Actualiza ZYRON sin reinstalar: componentes propios desde GitHub Releases "
+        description=f"Actualiza {PRODUCTO} sin reinstalar: componentes propios desde GitHub Releases "
                     "(firmados) y paquetes de Debian con apt.")
     p.add_argument("-s", "--si", action="store_true", help="responde sí a todas las preguntas")
     sub = p.add_subparsers(dest="orden")
@@ -2261,7 +2302,7 @@ def construir_argumentos():
     h.add_argument("-n", "--lineas", type=int, default=20)
     h.add_argument("--json", action="store_true", help="las últimas N operaciones en una línea JSON")
 
-    rv = sub.add_parser("revertir", help="deshace la última actualización de los archivos de ZYRON")
+    rv = sub.add_parser("revertir", help=f"deshace la última actualización de los archivos de {PRODUCTO}")
     rv.add_argument("--usuario", action="store_true", help="revierte tu configuración en vez del sistema")
     rv.add_argument("-s", "--si", action="store_true", default=argparse.SUPPRESS)
 

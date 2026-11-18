@@ -6,7 +6,7 @@
 
 ![Escritorio con btop, Neovim y Fastfetch en mosaico](capturas/mosaico.png)
 
-> **Estado:** en desarrollo. La última versión publicada es la **0.4.0-beta.1**, la primera con el Control Center. Se ha probado en máquinas virtuales; **todavía no en el portátil** (ver [docs/pruebas.md](docs/pruebas.md)).
+> **Estado:** en desarrollo. La última versión publicada es la **0.5.0-beta.1**, la primera con el nombre ZYRON. Se ha probado en máquinas virtuales; **todavía no en el portátil** (ver [docs/pruebas.md](docs/pruebas.md)).
 
 ## Qué lleva y por qué
 
@@ -33,7 +33,7 @@ Ligero: unos 600 MiB de RAM con la sesión abierta y arranque en unos 25 s (medi
 
 ## Instalar
 
-1. **Consigue la ISO:** descárgala de [Releases](https://github.com/Jaime-202/jaime0/releases) o compílala ([docs/compilar.md](docs/compilar.md)).
+1. **Consigue la ISO:** descárgala de [Releases](https://github.com/Jaime-202/zyron/releases) o compílala ([docs/compilar.md](docs/compilar.md)).
 2. **Grábala en un USB** de 4 GB o más (se borra entero).
    - Windows: [Rufus](https://rufus.ie), elige la ISO y el **modo Imagen DD**.
    - Linux (cambia `/dev/sdX` por tu USB; compruébalo con `lsblk`):

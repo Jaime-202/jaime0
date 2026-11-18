@@ -18,6 +18,22 @@ import subprocess
 import sys
 import tempfile
 
+
+def _producto():
+    """Nombre del sistema: PRODUCTO en marca.conf, el unico sitio donde se escribe."""
+    marca = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, "share", "marca", "marca.conf")
+    try:
+        with open(marca, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("PRODUCTO="):
+                    return linea.split("=", 1)[1].strip().strip('"') or "ZYRON"
+    except OSError:
+        pass
+    return "ZYRON"
+
+
+PRODUCTO = _producto()
+
 PROGRAMA = "jaime0-ajustes"
 
 
@@ -290,7 +306,7 @@ def efectivos():
     avisos = []
     for clave, texto in leer(archivo_usuario()).items():
         if clave not in ESQUEMA:
-            avisos.append(f"Se ignora '{clave}': no es un ajuste de ZYRON")
+            avisos.append(f"Se ignora '{clave}': no es un ajuste de {PRODUCTO}")
             continue
         try:
             valores[clave] = validar(clave, texto, temas)
@@ -318,7 +334,7 @@ def color_acento(valor, temas):
 # ------------------------------------------------------------------------------------
 # Escritura
 # ------------------------------------------------------------------------------------
-CABECERA = """# ~/.config/jaime0/ajustes: tus ajustes de ZYRON.
+CABECERA = f"""# ~/.config/jaime0/ajustes: tus ajustes de {PRODUCTO}.
 # Solo guarda lo que cambias; el resto sale de /usr/share/jaime0/ajustes.predeterminados.
 # Ninguna actualizacion toca este archivo. Cambialo con jaime0-ajustes o a mano
 # (clave = valor) y luego ejecuta: jaime0-ajustes aplicar

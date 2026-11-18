@@ -21,6 +21,22 @@ import shutil
 import subprocess
 import sys
 
+
+def _producto():
+    """Nombre del sistema: PRODUCTO en marca.conf, el unico sitio donde se escribe."""
+    marca = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, "share", "marca", "marca.conf")
+    try:
+        with open(marca, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("PRODUCTO="):
+                    return linea.split("=", 1)[1].strip().strip('"') or "ZYRON"
+    except OSError:
+        pass
+    return "ZYRON"
+
+
+PRODUCTO = _producto()
+
 SENAL_BARRA = 10
 ICONO_BARRA = "\U000f06b0"
 
@@ -180,7 +196,7 @@ def notificar_seguridad(debian):
     os.makedirs(dir_estado(), exist_ok=True)
     with open(avisado, "w", encoding="utf-8") as f:
         f.write(huella + "\n")
-    subprocess.run(["notify-send", "--app-name=ZYRON", "--icon=security-high",
+    subprocess.run(["notify-send", f"--app-name={PRODUCTO}", "--icon=security-high",
                     "Actualizaciones de seguridad de Debian",
                     f"{len(seg)} paquete{'s' if len(seg) != 1 else ''} con correcciones de seguridad. "
                     "Pulsa el icono de la barra o ejecuta: actualizaciones"],
@@ -210,7 +226,7 @@ def cmd_barra(_op):
         lineas.append(f"Debian: {len(seguridad)} {'actualizaciones' if len(seguridad) != 1 else 'actualización'} de seguridad "
                       f"({debian.get('paquetes', 0)} paquetes por actualizar en total)")
     if jaime0:
-        lineas.append(f"ZYRON {jaime0[0]} disponible (canal {jaime0[1]}). Para instalarla: jaime0-update")
+        lineas.append(f"{PRODUCTO} {jaime0[0]} disponible (canal {jaime0[1]}). Para instalarla: jaime0-update")
     if lineas:
         lineas.append("Clic: verlas e instalarlas" if seguridad else "Clic: ver los detalles")
         salida = {"text": ICONO_BARRA, "class": "seguridad" if seguridad else "disponible",
@@ -229,7 +245,7 @@ def cmd_interactivo(_op):
     guardar_estado(debian)
     jaime0 = jaime0_disponible()
     if jaime0:
-        print(verde(f"ZYRON {jaime0[0]} disponible (canal {jaime0[1]}).") + " Para verla e instalarla: jaime0-update")
+        print(verde(f"{PRODUCTO} {jaime0[0]} disponible (canal {jaime0[1]}).") + " Para verla e instalarla: jaime0-update")
     mostrar(debian)
     if not debian["paquetes"]:
         return 0
@@ -248,7 +264,7 @@ def cmd_interactivo(_op):
 
 
 def main():
-    p = argparse.ArgumentParser(prog="actualizaciones", description="Actualizaciones de Debian en ZYRON.")
+    p = argparse.ArgumentParser(prog="actualizaciones", description=f"Actualizaciones de Debian en {PRODUCTO}.")
     sub = p.add_subparsers(dest="orden")
     c = sub.add_parser("comprobar", help="comprueba sin instalar")
     c.add_argument("--notificar", action="store_true", help="avisa de correcciones de seguridad nuevas")

@@ -34,10 +34,10 @@ Item {
     property var actualizaciones: null
     function textoJaime0() {
         const a = actualizaciones;
-        if (!a) return "ZYRON: N/D";
-        if (!a.jaime0) return "ZYRON: " + (a.error_jaime0 ? "no se puede saber" : "N/D");
-        if (a.jaime0.nueva && a.jaime0.disponible) return "ZYRON: " + a.jaime0.disponible.version + " disponible";
-        return "ZYRON: " + (a.jaime0.version_instalada || "?") + (a.jaime0.disponible ? " · al día" : " · sin comprobar");
+        if (!a) return Tema.producto + ": N/D";
+        if (!a.jaime0) return Tema.producto + ": " + (a.error_jaime0 ? "no se puede saber" : "N/D");
+        if (a.jaime0.nueva && a.jaime0.disponible) return Tema.producto + ": " + a.jaime0.disponible.version + " disponible";
+        return Tema.producto + ": " + (a.jaime0.version_instalada || "?") + (a.jaime0.disponible ? " · al día" : " · sin comprobar");
     }
     Consulta { id: consultaAct; onRespuesta: d => { if (d.ok !== false) vista.actualizaciones = d; } }
     Component.onCompleted: consultaAct.pedir({ orden: "actualizaciones" })

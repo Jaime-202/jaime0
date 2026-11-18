@@ -37,12 +37,12 @@ Item {
         : estado === "UPDATE FAILED" ? Tema.rojo : Tema.ambar
     readonly property string explicacion: {
         if (!datos) return "Leyendo el estado…";
-        if (!j) return datos.error_jaime0 || "No se puede saber el estado de las actualizaciones de ZYRON.";
+        if (!j) return datos.error_jaime0 || "No se puede saber el estado de las actualizaciones de " + Tema.producto + ".";
         if (j.en_curso) return "jaime0-update está trabajando en la terminal (" + j.en_curso.fase + (j.en_curso.version ? ", " + j.en_curso.version : "") + "). No cierres la terminal.";
         if (estado === "CHECKING") return "Descargando y verificando el manifiesto firmado y la lista de paquetes de Debian…";
         if (j.interrumpida) return "Una actualización se cortó a medias. RECUPERAR deja los archivos como estaban antes.";
         if (estado === "UPDATE FAILED") return "La última operación falló: " + (j.ultima.detalle || "sin detalle") + ". Nada quedó a medias.";
-        if (j.nueva) return "ZYRON " + disp.version + " (canal " + disp.canal + ") está publicada y firmada. INSTALAR enseña antes qué archivos cambian.";
+        if (j.nueva) return Tema.producto + " " + disp.version + " (canal " + disp.canal + ") está publicada y firmada. INSTALAR enseña antes qué archivos cambian.";
         if (!j.comprobado) return "Aún no se ha comprobado si hay versiones nuevas.";
         return "No hay ninguna versión más nueva en el canal " + j.canal + ".";
     }
@@ -248,7 +248,7 @@ Item {
                             Text {
                                 width: parent.width
                                 visible: !(vista.j && vista.j.conflictos && vista.j.conflictos.length)
-                                text: "Ninguno. Si cambias un archivo de ZYRON y una versión nueva lo trae distinto, el tuyo no se toca: el nuevo se deja al lado como .jaime0-nuevo y aparece aquí."
+                                text: "Ninguno. Si cambias un archivo de " + Tema.producto + " y una versión nueva lo trae distinto, el tuyo no se toca: el nuevo se deja al lado como .jaime0-nuevo y aparece aquí."
                                 color: Tema.apagado; font.family: Tema.mono; font.pixelSize: Tema.letraMini; wrapMode: Text.WordWrap
                             }
                             Repeater {

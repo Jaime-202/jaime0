@@ -230,7 +230,7 @@ Item {
                 Layout.preferredWidth: 3
                 ident: "A1"
                 readonly property var res: vista.datos && vista.datos.resumen ? vista.datos.resumen : null
-                etiqueta: "ZYRON RULES · " + (res ? res.activas + " ACTIVAS · " + res.desactivadas + " DESACTIVADAS"
+                etiqueta: Tema.producto + " RULES · " + (res ? res.activas + " ACTIVAS · " + res.desactivadas + " DESACTIVADAS"
                                                      + (res.por_revisar ? " · " + res.por_revisar + " POR REVISAR" : "")
                                                      + (res.con_fallo ? " · " + res.con_fallo + " CON FALLO" : "")
                                                      + (res.conflictos ? " · " + res.conflictos + " CONFLICTOS" : "")

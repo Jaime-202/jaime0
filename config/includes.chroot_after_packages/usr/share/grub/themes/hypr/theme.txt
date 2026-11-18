@@ -1,35 +1,65 @@
+# Menu de arranque de ZYRON: negro, simbolo arriba, menu enmarcado como la animacion de
+# arranque, la entrada elegida con barra verde y la cuenta atras como una linea fina.
+# Posiciones en porcentaje: se adapta a cualquier resolucion. title-text lo pone el hook de
+# marca con el nombre de marca.conf. Mismo tema en el medio en vivo (config/bootloaders).
 desktop-color: "#080b0d"
 title-text: "ZYRON"
 title-color: "#54e58a"
 title-font: "Unifont Regular 16"
 message-font: "Unifont Regular 16"
+message-color: "#8796a1"
 terminal-font: "Unifont Regular 16"
 
++ image {
+        left = 50%-48
+        top = 9%
+        width = 96
+        height = 96
+        file = "simbolo.png"
+}
+
++ image { left = 30%-14 top = 34%-14 file = "esquina-si.png" }
++ image { left = 70%-10 top = 34%-14 file = "esquina-sd.png" }
++ image { left = 30%-14 top = 74%-10 file = "esquina-ii.png" }
++ image { left = 70%-10 top = 74%-10 file = "esquina-id.png" }
+
 + boot_menu {
-        left = 20%
-        width = 60%
-        top = 35%
+        left = 30%
+        width = 40%
+        top = 34%
         height = 40%
         item_color = "#d8e2e8"
         item_font = "Unifont Regular 16"
         selected_item_color = "#54e58a"
         selected_item_font = "Unifont Regular 16"
-        item_height = 24
-        item_padding = 4
-        item_spacing = 6
+        selected_item_pixmap_style = "select_*.png"
+        item_height = 26
+        item_padding = 10
+        item_spacing = 4
         icon_width = 0
         icon_height = 0
         item_icon_space = 0
+        scrollbar = false
 }
 
 + progress_bar {
         id = "__timeout__"
-        left = 20%
-        top = 80%
-        height = 8
-        width = 60%
+        left = 30%
+        top = 78%
+        height = 3
+        width = 40%
         fg_color = "#54e58a"
-        bg_color = "#101519"
-        border_color = "#26343a"
+        bg_color = "#151c21"
+        border_color = "#151c21"
         show_text = false
+}
+
++ label {
+        left = 0
+        top = 84%
+        width = 100%
+        align = "center"
+        color = "#8796a1"
+        font = "Unifont Regular 16"
+        text = "↑ ↓ elegir    Intro arrancar    e editar    c consola"
 }

@@ -23,14 +23,14 @@ for P in xserver-xorg xserver-xorg-core gnome-shell plasma-desktop plasma-worksp
 done
 
 echo "== Archivos de usuario =="
-for F in .zshrc .config/kitty/kitty.conf .config/starship.toml .config/fastfetch/config.jsonc .config/fastfetch/logo.txt .config/nvim/init.lua .config/btop/btop.conf .config/btop/themes/jaime0.theme .config/gtk-3.0/settings.ini .config/gtk-3.0/gtk.css .config/gtk-4.0/settings.ini .config/gtk-4.0/gtk.css .config/qt6ct/qt6ct.conf; do
+for F in .zshrc .config/kitty/kitty.conf .config/starship.toml .config/fastfetch/config.jsonc .config/nvim/init.lua .config/btop/btop.conf .config/btop/themes/jaime0.theme .config/gtk-3.0/settings.ini .config/gtk-3.0/gtk.css .config/gtk-4.0/settings.ini .config/gtk-4.0/gtk.css .config/qt6ct/qt6ct.conf; do
     [ -f "$SKEL/$F" ] && ok "$F" || fallo "$F no existe"
     grep -q $'\r' "$SKEL/$F" && fallo "$F tiene CRLF"
     grep -nE '(#|//) *(a[nñ]ade aqu|resto de)|^[[:space:]]*\.\.\.[[:space:]]*$' "$SKEL/$F" && fallo "$F con marcadores"
 done
 
 echo "== Valores de la especificacion =="
-for PAR in ".config/kitty/kitty.conf|^font_family +JetBrainsMono Nerd Font$" ".config/kitty/kitty.conf|^font_size +11" ".config/kitty/kitty.conf|^hide_window_decorations +yes$" ".config/kitty/kitty.conf|^window_padding_width +8$" ".config/kitty/kitty.conf|^background_opacity +0.95$" ".config/kitty/kitty.conf|^background +#080b0d$" ".config/kitty/kitty.conf|^foreground +#d8e2e8$" ".config/kitty/kitty.conf|^tab_bar_edge +bottom$" ".config/kitty/kitty.conf|^tab_bar_min_tabs +1$" ".config/kitty/kitty.conf|^color2 +#54e58a$" ".config/kitty/kitty.conf|^color5 +#a68ab5$" ".config/btop/btop.conf|^color_theme = \"jaime0\"$" ".config/btop/btop.conf|^rounded_corners = True$" ".config/btop/themes/jaime0.theme|^theme.cpu_box.=\"#26343a\"$" ".config/btop/themes/jaime0.theme|^theme.hi_fg.=\"#54e58a\"$" ".zshrc|_titulo_orden" ".zshrc|COLUMNS >= 86" ".config/fastfetch/logo.txt|^.1 .*.2" ".config/gtk-3.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/gtk-4.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/qt6ct/qt6ct.conf|^icon_theme=Papirus-Dark$"; do
+for PAR in ".config/kitty/kitty.conf|^font_family +JetBrainsMono Nerd Font$" ".config/kitty/kitty.conf|^font_size +11" ".config/kitty/kitty.conf|^hide_window_decorations +yes$" ".config/kitty/kitty.conf|^window_padding_width +8$" ".config/kitty/kitty.conf|^background_opacity +0.95$" ".config/kitty/kitty.conf|^background +#080b0d$" ".config/kitty/kitty.conf|^foreground +#d8e2e8$" ".config/kitty/kitty.conf|^tab_bar_edge +bottom$" ".config/kitty/kitty.conf|^tab_bar_min_tabs +1$" ".config/kitty/kitty.conf|^color2 +#54e58a$" ".config/kitty/kitty.conf|^color5 +#a68ab5$" ".config/btop/btop.conf|^color_theme = \"jaime0\"$" ".config/btop/btop.conf|^rounded_corners = True$" ".config/btop/themes/jaime0.theme|^theme.cpu_box.=\"#26343a\"$" ".config/btop/themes/jaime0.theme|^theme.hi_fg.=\"#54e58a\"$" ".zshrc|_titulo_orden" ".zshrc|COLUMNS >= 86" ".config/fastfetch/config.jsonc|zyron-simbolo.png" ".config/gtk-3.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/gtk-4.0/settings.ini|^gtk-icon-theme-name=Papirus-Dark$" ".config/qt6ct/qt6ct.conf|^icon_theme=Papirus-Dark$"; do
     A=${PAR%%|*}; E=${PAR#*|}
     grep -qE -- "$E" "$SKEL/$A" && ok "$A: $E" || fallo "$A: falta $E"
 done

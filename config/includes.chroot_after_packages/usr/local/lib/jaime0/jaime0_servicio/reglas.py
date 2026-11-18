@@ -18,6 +18,7 @@ import time
 import traceback
 import unicodedata
 
+from .base import PRODUCTO
 from .base import VERSION_DATOS, carpeta_config, registrar, protegido
 from .medicion import leer_bateria, leer_cargador
 from .historico import leer_jsonl, anexar_jsonl, reescribir_jsonl
@@ -129,7 +130,7 @@ EVENTOS = (
      "parametros": (_p("estado", "opcion", "Estado", opciones=("WARNING", "CRITICAL", "ONLINE")),)},
     {"id": "servicio_fallido", "nombre": "Servicio fallido",
      "descripcion": "Aparece una unidad nueva entre las fallidas de systemd", "parametros": ()},
-    {"id": "perfil", "nombre": "Perfil", "descripcion": "Cambias de perfil de ZYRON (los cambios de una regla no cuentan)",
+    {"id": "perfil", "nombre": "Perfil", "descripcion": f"Cambias de perfil de {PRODUCTO} (los cambios de una regla no cuentan)",
      "parametros": (_p("perfil", "perfil", "Perfil", opciones=IDS_PERFIL),)},
 )
 
@@ -149,7 +150,7 @@ CONDICIONES = (
 )
 
 ACCIONES = (
-    {"id": "perfil", "nombre": "Cambiar de perfil", "descripcion": "Aplica un perfil de ZYRON",
+    {"id": "perfil", "nombre": "Cambiar de perfil", "descripcion": f"Aplica un perfil de {PRODUCTO}",
      "parametros": (_p("perfil", "perfil", "Perfil", opciones=IDS_PERFIL),)},
     {"id": "modo_noche", "nombre": "Modo noche", "descripcion": "Enciende o apaga el modo noche",
      "parametros": (_p("estado", "opcion", "Estado", opciones=("encender", "apagar")),)},
@@ -706,7 +707,7 @@ def comprobar_script(nombre, carpeta, uid=None, lstat=os.lstat, estatus=os.stat)
     if not stat.S_ISREG(st.st_mode):
         return None, "no es un archivo regular (los enlaces no se admiten)"
     if st.st_uid != uid:
-        return None, "el script no es del usuario que ejecuta ZYRON"
+        return None, f"el script no es del usuario que ejecuta {PRODUCTO}"
     if st.st_mode & 0o022:
         return None, "otros usuarios pueden modificar el script (permiso de escritura de grupo u otros)"
     if not st.st_mode & 0o100:
@@ -838,7 +839,7 @@ class Acciones:
         return self._fin(proc, error, "No molestar " + ("activado" if on else "desactivado"))
 
     def _a_notificar(self, a):
-        proc, error = self._correr(["notify-send", "--app-name=ZYRON", "--", a["titulo"], a["texto"]], 5)
+        proc, error = self._correr(["notify-send", f"--app-name={PRODUCTO}", "--", a["titulo"], a["texto"]], 5)
         return self._fin(proc, error, "Notificación enviada")
 
     def _a_abrir_aplicacion(self, a):

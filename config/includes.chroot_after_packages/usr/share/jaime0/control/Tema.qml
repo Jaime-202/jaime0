@@ -6,6 +6,10 @@ import Quickshell
 // Paleta y medidas del Control Center. Es la misma identidad de ZYRON, pero con mas
 // presencia del cian y de las lineas tecnicas que el escritorio normal.
 Singleton {
+    // Nombre del sistema. Lo pone shell.qml desde /usr/local/share/marca/marca.conf (PRODUCTO),
+    // el unico sitio donde se escribe.
+    property string producto: "ZYRON"
+
     readonly property color fondo: "#080b0d"
     readonly property color panel: "#101519"
     readonly property color panel2: "#0c1114"

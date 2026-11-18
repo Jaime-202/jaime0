@@ -27,6 +27,13 @@ def leer(p):
     return pathlib.Path(p).read_text(encoding="utf-8")
 
 
+def leer_seguro(p):
+    try:
+        return pathlib.Path(p).read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return ""
+
+
 def paquetes():
     """Todos los paquetes de config/package-lists (sin comentarios)."""
     salida = set()
@@ -255,7 +262,50 @@ class PruebasIdentidadYArranque(unittest.TestCase):
 
     def test_nombre_del_producto(self):
         self.assertIn('PRODUCTO="ZYRON"', leer(I / "usr/local/share/marca/marca.conf"))
-        self.assertIn('"ZYRON"', leer(REPO / "auto/config"))
+        config = leer(REPO / "auto/config")
+        self.assertIn(". config/includes.chroot_after_packages/usr/local/share/marca/marca.conf", config)
+        self.assertNotIn("ZYRON", config.replace("# Nombre", ""))
+
+    def test_el_nombre_solo_esta_escrito_en_marca_conf(self):
+        """Programas, servicio, Control Center y configuracion lo leen de marca.conf o llevan
+        un marcador que sustituye un hook: si se escribe a mano en otro sitio, falla."""
+        import io as _io
+        import tokenize
+        fallos = []
+        for f in list((I / "usr/local/bin").iterdir()) + list((I / "usr/local/lib/jaime0/jaime0_servicio").glob("*.py")):
+            if not f.is_file():      # __pycache__, que dejan otras pruebas al importar
+                continue
+            texto = leer(f)
+            if (not texto.startswith("#!/usr/bin/python3") and not texto.startswith("#!/usr/bin/env python3")
+                    and f.suffix != ".py"):
+                for n, l in enumerate(texto.splitlines(), 1):
+                    if "ZYRON" in l and not l.lstrip().startswith("#") and "${PRODUCTO:-ZYRON}" not in l:
+                        fallos.append(f"{f.name}:{n}")
+                continue
+            toks = list(tokenize.generate_tokens(_io.StringIO(texto).readline))
+            for i, t in enumerate(toks):
+                previo = next((x for x in reversed(toks[:i]) if x.type not in (tokenize.NL, tokenize.COMMENT)), None)
+                if t.type == tokenize.STRING and (previo is None or previo.type in (
+                        tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT)):
+                    continue        # docstring: documentacion, no se muestra
+                if t.type == tokenize.STRING and "ZYRON" in t.string and t.string.strip("'\"") != "ZYRON":
+                    fallos.append(f"{f.name}:{t.start[0]}")
+                elif t.type == tokenize.STRING and t.string in ('"ZYRON"', "'ZYRON'")                         and "_producto" not in texto[:texto.find(t.line)].rsplit("def ", 1)[-1][:12]:
+                    fallos.append(f"{f.name}:{t.start[0]}")
+        for f in (I / "usr/share/jaime0").rglob("*.qml"):
+            for n, l in enumerate(leer(f).splitlines(), 1):
+                if "ZYRON" in l and not l.lstrip().startswith("//") and 'property string producto: "ZYRON"' not in l:
+                    fallos.append(f"{f.name}:{n}")
+        self.assertEqual(fallos, [], "nombre escrito a mano: usa PRODUCTO / Tema.producto / @PRODUCTO@")
+
+    def test_cada_marcador_lo_sustituye_un_hook(self):
+        hooks = leer(REPO / "config/hooks/normal/0395-marca.hook.chroot") + leer(REPO / "config/hooks/normal/0390-instalador.hook.chroot")
+        for f in I.rglob("*"):
+            if f.is_file() and f.suffix not in (".png", ".svg") and "@PRODUCTO" in leer_seguro(f):
+                rel = "/" + str(f.relative_to(I)).replace("\\", "/")
+                self.assertTrue(rel in hooks or f.name in hooks, f"{rel} lleva @PRODUCTO@ y ningun hook lo sustituye")
+                self.assertFalse(rel.startswith(("/etc/skel/", "/usr/local/bin/", "/usr/share/jaime0/", "/usr/lib/systemd/user/")),
+                                 f"{rel} lo reparte jaime0-update: no puede llevar un marcador")
 
     def test_el_instalador_deja_el_tema_de_zyron(self):
         self.assertRegex(leer(CALAMARES / "modules/plymouthcfg.conf"), r"(?m)^plymouth_theme: zyron$")
@@ -295,6 +345,55 @@ class PruebasIdentidadYArranque(unittest.TestCase):
         self.assertIn('title = "^Jaime0 Control Center$"', lua)
         self.assertIn('title: "Ajustes de Jaime0"', leer(I / "usr/share/jaime0/ajustes-gui/shell.qml"))
         self.assertIn('title = "^Ajustes de Jaime0$"', lua)
+
+    def test_las_expresiones_regulares_de_qml_caben_en_una_linea(self):
+        """Un /.../ de JavaScript no puede partirse en dos lineas: el archivo entero no cargaria."""
+        for f in (I / "usr/share/jaime0").rglob("*.qml"):
+            for n, linea in enumerate(leer(f).splitlines(), 1):
+                if re.search(r"\.(match|test|replace|split)\(/", linea):
+                    self.assertRegex(linea, r"\(/.+/[gimsuy]*[,)]", f"{f.name}:{n}: expresion sin cerrar")
+
+
+class PruebasPrimerArranque(unittest.TestCase):
+    """Tema de GRUB, salida de Hyprland y bienvenida del primer arranque."""
+
+    def test_el_tema_de_grub_tiene_sus_imagenes_en_los_dos_sitios(self):
+        for carpeta in (I / "usr/share/grub/themes/hypr", REPO / "config/bootloaders/grub-pc/live-theme"):
+            tema = leer(carpeta / "theme.txt")
+            imagenes = set(re.findall(r'file = "([^"]+)"', tema))
+            for estilo in re.findall(r'pixmap_style = "([^"]+)"', tema):
+                imagenes |= {estilo.replace("*", "c"), estilo.replace("*", "w")}
+            self.assertTrue(imagenes)
+            for imagen in imagenes:
+                self.assertTrue((carpeta / imagen).is_file(), f"{carpeta}: falta {imagen}")
+
+    def test_el_tema_de_grub_se_lee_desde_boot(self):
+        """Con el disco cifrado GRUB no lee /usr: el instalador copia el tema a /boot."""
+        self.assertIn("/boot/grub/themes/hypr/theme.txt", leer(I / "etc/default/grub.d/90-hypr.cfg"))
+        self.assertIn("cp -r /usr/share/grub/themes/hypr /boot/grub/themes/hypr", leer(I / "usr/local/sbin/hypr-instalar-grub"))
+
+    def test_cada_capa_svg_tiene_su_png_en_el_repositorio(self):
+        """Las capas van ya renderizadas: jaime0-update las reparte tal cual (docs/arranque.md)."""
+        tema = I / "usr/share/plymouth/themes/zyron"
+        svgs = {f.stem for f in (tema / "capas").glob("*.svg")}
+        self.assertEqual(svgs, {f.stem for f in tema.glob("*.png")})
+        self.assertNotIn("@PRODUCTO", leer(tema / "zyron.plymouth"))
+        self.assertNotIn("rsvg-convert", leer(REPO / "config/hooks/normal/0310-plymouth.hook.chroot"))
+
+    def test_hyprland_no_escribe_en_la_consola(self):
+        sesion = leer(I / "usr/local/bin/iniciar-sesion")
+        self.assertIn('start-hyprland >"${registro}" 2>&1', sesion)
+        self.assertIn("registro=/dev/null", sesion)   # sin carpeta de estado, arranca igual
+
+    def test_la_bienvenida_sale_una_vez_y_no_en_vivo(self):
+        lanzador = leer(I / "usr/local/bin/jaime0-bienvenida")
+        self.assertIn("/run/live/medium", lanzador)
+        self.assertIn("bienvenida-vista", lanzador)
+        lua = leer(I / "etc/skel/.config/hypr/hyprland.lua")
+        self.assertIn("jaime0-bienvenida inicio", lua)
+        self.assertIn('title = "^Bienvenida$"', lua)
+        self.assertIn('title: "Bienvenida"', leer(I / "usr/share/jaime0/control/bienvenida.qml"))
+        self.assertIn("Exec=jaime0-bienvenida", leer(I / "usr/share/applications/jaime0-bienvenida.desktop"))
 
 
 if __name__ == "__main__":

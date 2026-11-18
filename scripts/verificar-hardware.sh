@@ -51,6 +51,7 @@ echo "== Respaldo si no hay GPU =="
 sh -n chroot/usr/local/bin/iniciar-sesion && ok "iniciar-sesion sin errores de sintaxis" || fallo "sintaxis de iniciar-sesion"
 grep -q -- '--cmd iniciar-sesion' chroot/etc/greetd/config.toml && ok "el acceso usa iniciar-sesion" || fallo "config.toml"
 grep -q 'command = "iniciar-sesion"' chroot/usr/lib/live/config/0086-greetd-vivo && ok "el vivo usa iniciar-sesion" || fallo "0086-greetd-vivo"
+grep -q 'start-hyprland >"${registro}" 2>&1' chroot/usr/local/bin/iniciar-sesion && ok "la salida de Hyprland va a un registro, no a la consola" || fallo "Hyprland escribe en la consola"
 grep -q 'GRUB_CMDLINE_LINUX_RECOVERY="nomodeset"' chroot/etc/default/grub.d/90-hypr.cfg && ok "recuperacion con nomodeset" || fallo "recuperacion"
 if [ -f binary/boot/grub/grub.cfg ]; then
     grep -q 'Modo seguro' binary/boot/grub/grub.cfg && ok "menu con Modo seguro" || fallo "menu sin Modo seguro"

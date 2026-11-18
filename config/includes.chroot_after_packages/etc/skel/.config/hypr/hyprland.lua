@@ -274,6 +274,8 @@ hl.on("hyprland.start", function()
     -- (El servicio del Control Center se arranca arriba, tras exportar el entorno.)
     -- Si la NVIDIA espera a que se registre su clave (Secure Boot), un aviso al entrar.
     hl.exec_cmd("sh -c 'sleep 6; exec jaime0-nvidia aviso'")
+    -- Primeros pasos (red, grafica, cuenta y atajos): solo la primera vez y no en vivo.
+    hl.exec_cmd("sh -c 'sleep 3; exec jaime0-bienvenida inicio'")
     hl.exec_cmd("wl-paste --type text --watch cliphist store")
     hl.exec_cmd("wl-paste --type image --watch cliphist store")
     -- Bloqueo a los 10 min, pantalla apagada a los 11 y suspension a los 30 (no en vivo).
@@ -561,6 +563,15 @@ hl.window_rule({
     float  = true,
     center = true,
     size   = { "monitor_w*0.86", "monitor_h*0.86" },
+})
+
+-- Bienvenida del primer arranque (jaime0-bienvenida, en Quickshell)
+hl.window_rule({
+    name   = "flotante-bienvenida",
+    match  = { class = "^org\\.quickshell$", title = "^Bienvenida$" },
+    float  = true,
+    center = true,
+    size   = { "720", "520" },
 })
 
 -- Aplicacion de ajustes (jaime0-ajustes, en Quickshell)

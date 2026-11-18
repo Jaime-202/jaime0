@@ -1,6 +1,6 @@
 [Plymouth Theme]
-Name=ZYRON
-Description=Activacion del nucleo de ZYRON.
+Name=Activacion del nucleo
+Description=Animacion de arranque del sistema.
 ModuleName=script
 
 [script]

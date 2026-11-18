@@ -1,5 +1,5 @@
 [Unit]
-Description=Servicio de salud y control de ZYRON
+Description=Servicio de salud y control del sistema (Control Center)
 
 [Service]
 Type=simple

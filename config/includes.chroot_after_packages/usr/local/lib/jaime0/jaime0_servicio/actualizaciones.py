@@ -14,6 +14,7 @@ import subprocess
 import threading
 import time
 
+from .base import PRODUCTO
 from .base import VERSION_DATOS, registrar
 from .sistema import programa_hermano
 
@@ -110,7 +111,7 @@ class Comprobador:
                 if update:
                     plan, error = ejecutar_json([update, "comprobar", "--json"], LIMITE_COMPROBAR_UPDATE, self.ejecutar)
                     if error or (plan and plan.get("ok") is False):
-                        avisos.append("ZYRON: " + (error or plan.get("error") or "no se pudo comprobar"))
+                        avisos.append(f"{PRODUCTO}: " + (error or plan.get("error") or "no se pudo comprobar"))
                 else:
                     plan = None
                 apt = self.buscar("actualizaciones")

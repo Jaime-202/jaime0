@@ -4,6 +4,13 @@ set -e
 . /usr/local/share/marca/marca.conf
 MINUSCULAS="$(printf '%s' "${PRODUCTO}" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9\n' '-')"
 
+# Marcadores de los archivos que se fijan al compilar (jaime0-update no los reparte, asi que
+# pueden llevar el marcador): @PRODUCTO@ y @PRODUCTO_MINUSCULAS@. branding.desc, en 0390.
+for F in /etc/greetd/config.toml /etc/calamares/modules/users.conf \
+         /usr/share/polkit-1/actions/es.jaime0.ufw-estado.policy; do
+    sed -i -e "s/@PRODUCTO_MINUSCULAS@/${MINUSCULAS}/g" -e "s/@PRODUCTO@/${PRODUCTO}/g" "${F}"
+done
+
 # El desvio evita que una actualizacion de base-files devuelva el nombre anterior.
 if [ ! -e /usr/lib/os-release.debian ]; then
     dpkg-divert --local --no-rename --divert /usr/lib/os-release.debian --add /usr/lib/os-release
@@ -16,9 +23,9 @@ NAME="${PRODUCTO}"
 ID=${MINUSCULAS}
 ID_LIKE=debian
 VERSION_CODENAME=${CODIGO}
-HOME_URL="https://github.com/Jaime-202/jaime0"
-SUPPORT_URL="https://github.com/Jaime-202/jaime0"
-BUG_REPORT_URL="https://github.com/Jaime-202/jaime0/issues"
+HOME_URL="https://github.com/Jaime-202/zyron"
+SUPPORT_URL="https://github.com/Jaime-202/zyron"
+BUG_REPORT_URL="https://github.com/Jaime-202/zyron/issues"
 FIN
 ln -sf ../usr/lib/os-release /etc/os-release
 

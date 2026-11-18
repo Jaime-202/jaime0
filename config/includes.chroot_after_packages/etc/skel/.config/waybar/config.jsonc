@@ -24,7 +24,7 @@
     "custom/logo": {
         "format": "",
         "tooltip": true,
-        "tooltip-format": "ZYRON · SUPER + F1: atajos",
+        "tooltip-format": "Aplicaciones · SUPER + F1: atajos",
         "on-click": "rofi -show drun",
         "on-click-right": "atajos --rofi"
     },

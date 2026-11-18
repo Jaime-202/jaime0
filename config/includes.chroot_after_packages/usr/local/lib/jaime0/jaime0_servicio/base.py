@@ -12,7 +12,7 @@ import time
 import traceback
 
 __all__ = [
-    "PROGRAMA", "VERSION_DATOS", "SENAL_BARRA", "INTERVALO_NORMAL", "INTERVALO_RAPIDO",
+    "_producto", "PRODUCTO", "PROGRAMA", "VERSION_DATOS", "SENAL_BARRA", "INTERVALO_NORMAL", "INTERVALO_RAPIDO",
     "DURACION_RAPIDO", "REFRESCO_LENTO", "TAMANO_ANILLO", "DURACION_ANILLO", "VOLCADO_CADA",
     "SMART_CADA", "FACTOR_HUECO", "RETENCION_MINUTOS", "MAX_PUNTOS", "MAX_EVENTOS",
     "MAX_INCIDENCIAS", "MUESTRAS_INCIDENCIA", "MUESTRAS_SIN_DATO", "MUESTRAS_PICO_CPU",
@@ -22,6 +22,24 @@ __all__ = [
     "directorio_estado", "registrar", "protegido", "Recordado", "AVISO_EFECTO_LENTO",
     "ERROR_INTERNO", "Trabajador", "escribir_json"
 ]
+
+
+def _producto():
+    """Nombre del sistema: PRODUCTO en /usr/local/share/marca/marca.conf, el unico sitio donde
+    se escribe (en el repositorio, la misma ruta relativa)."""
+    marca = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, os.pardir, os.pardir,
+                         "share", "marca", "marca.conf")
+    try:
+        with open(marca, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("PRODUCTO="):
+                    return linea.split("=", 1)[1].strip().strip('"') or "ZYRON"
+    except OSError:
+        pass
+    return "ZYRON"
+
+
+PRODUCTO = _producto()
 
 
 PROGRAMA = "jaime0-servicio"

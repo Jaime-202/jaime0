@@ -81,7 +81,7 @@ La sección UPDATES no instala nada: lee `jaime0-update estado --json` (sin red)
 
 Solo lo que lista el manifiesto, y solo dentro de estas rutas. Aunque un manifiesto firmado pidiera otra, se rechaza:
 
-`/etc/skel` (y desde ahí tu `~/.config`), `/etc/jaime0`, `/etc/default/grub.d`, `/etc/fonts`, `/etc/systemd`, `/etc/apt/apt.conf.d/20jaime0-*`, `/usr/local/bin`, `/usr/local/lib/jaime0` (paquete de `jaime0-servicio`), `/usr/local/libexec/jaime0-*` (ayudantes que `pkexec` ejecuta como root), `/usr/local/share/marca`, `/usr/local/share/dbus-1/services`, `/usr/lib/systemd/user`, `/usr/share/jaime0` (versión, clave, Control Center, ajustes, widgets), `/usr/share/backgrounds/jaime0`, `/usr/share/glib-2.0/schemas`, `/usr/share/grub/themes`, `/usr/share/polkit-1/actions/es.jaime0.*` y `/usr/share/qt6ct`.
+`/etc/skel` (y desde ahí tu `~/.config`), `/etc/jaime0`, `/etc/default/grub.d`, `/etc/fonts`, `/etc/systemd`, `/etc/apt/apt.conf.d/20jaime0-*`, `/usr/local/bin`, `/usr/local/lib/jaime0` (paquete de `jaime0-servicio`), `/usr/local/libexec/jaime0-*` (ayudantes que `pkexec` ejecuta como root), `/usr/local/share/marca`, `/usr/local/share/dbus-1/services`, `/usr/lib/systemd/user`, `/usr/share/jaime0` (versión, clave, Control Center, ajustes, widgets), `/usr/share/backgrounds/jaime0`, `/usr/share/glib-2.0/schemas`, `/usr/share/grub/themes`, `/usr/share/plymouth/themes/zyron` (animación de arranque), `/usr/share/polkit-1/actions/es.jaime0.*` y `/usr/share/qt6ct`.
 
 Nunca: bytecode de Python (`__pycache__`, `.pyc`: lo genera cada equipo), documentos, datos personales ni programas que hayas instalado. Quedan fuera **a propósito**:
 
@@ -91,7 +91,7 @@ Nunca: bytecode de Python (`__pycache__`, `.pyc`: lo genera cada equipo), docume
 | Repositorio y clave de Brave (`/etc/apt/sources.list.d`, `/usr/share/keyrings`) | Deciden en qué confía `apt`; los mantiene el paquete de Brave |
 | `/etc/greetd/config.toml` | Un error deja el equipo sin pantalla de acceso; llega con una ISO nueva |
 | NVIDIA del núcleo (`/etc/modprobe.d/jaime0-nvidia.conf`, `/etc/udev/rules.d/80-jaime0-nvidia-pm.rules`) | Necesitan regenerar el initramfs y reiniciar, y un fallo deja sin gráfica; llegan con una ISO nueva |
-| Lo que generan los hooks al compilar (Plymouth, fuentes y cursores descargados) | No está en el repositorio como archivo |
+| Lo que generan los hooks al compilar (el tema sencillo de Plymouth, fuentes y cursores descargados) | No está en el repositorio como archivo |
 
 ## Tus personalizaciones están protegidas
 
@@ -123,14 +123,14 @@ Lo hace `jaime0-update` solo, según lo que haya cambiado:
 
 - **Siempre** (también tras `revertir` y `recuperar`): `/usr/local/lib/jaime0` queda `root:root` con directorios 755 y archivos 644; los ayudantes `/usr/local/libexec/jaime0-*`, `root:root` 755; las políticas `/usr/share/polkit-1/actions/es.jaime0.*`, `root:root` 644. Si alguien pudiera escribir en ellos, podría cambiar lo que `pkexec` ejecuta como root.
 - Paquete del servicio: borra los `__pycache__` y lo vuelve a compilar (`python3 -m compileall -q /usr/local/lib/jaime0`).
-- GRUB: `update-grub` (y pide reiniciar). Esquemas de GLib: `glib-compile-schemas`. `/etc/systemd`: `systemctl daemon-reload`. Temporizadores de usuario nuevos: `systemctl --global enable`. Versión: `VERSION` y `VERSION_ID` de `/usr/lib/os-release`.
+- GRUB: copia el tema a `/boot/grub/themes/hypr` (con el disco cifrado GRUB no lee `/usr`) y `update-grub` (y pide reiniciar). Animación de arranque: `update-initramfs -u` (y pide reiniciar). Esquemas de GLib: `glib-compile-schemas`. `/etc/systemd`: `systemctl daemon-reload`. Temporizadores de usuario nuevos: `systemctl --global enable`. Versión: `VERSION` y `VERSION_ID` de `/usr/lib/os-release`.
 - Fase de usuario: si cambió el servicio o la ventana del Control Center (por la huella de sus componentes), `systemctl --user try-restart jaime0-servicio.service` (sin sesión no pasa nada: arrancará con la versión nueva al volver a entrar) y avisa de cerrar y abrir el Control Center.
 
 ## Versiones
 
 | Versión | Dónde | Para qué |
 |---|---|---|
-| De la distribución | `/usr/share/jaime0/version` (`0.4.0-beta.1`) | La de la ISO o la última instalada. La copian `/usr/lib/os-release`, el manifiesto y la etiqueta `vX.Y.Z` |
+| De la distribución | `/usr/share/jaime0/version` (`0.5.0-beta.1`) | La de la ISO o la última instalada. La copian `/usr/lib/os-release`, el manifiesto y la etiqueta `vX.Y.Z` |
 | De los componentes | El manifiesto: cada archivo con su SHA-256 y su componente (`escritorio`, `herramientas`, `servicio`, `control-center`, `temas`, `sistema`); `huellas_componentes` da una huella de conjunto de cada uno y `componentes`, los que cambian respecto a la anterior | Saber si un componente cambió |
 | De tu configuración | `version` de `~/.local/state/jaime0/estado.json` | La última versión aplicada a tu carpeta personal |
 | Del actualizador | `VERSION_ACTUALIZADOR` en `jaime0-update` (entero; ahora 2) | Un manifiesto puede exigir uno mínimo (`requisitos.actualizador_minimo`). Si el tuyo es más viejo, no se instala nada y el error dice cómo actualizarlo a mano (abajo) |
@@ -158,7 +158,7 @@ El formato del manifiesto sigue siendo `1`: los campos nuevos son opcionales y u
 ### Qué NO se puede revertir
 
 - Los paquetes de Debian actualizados con `apt`, ni los que una versión pida instalar (campo `paquetes`). Debian no guarda versiones anteriores: la vía es `apt` o reinstalar.
-- Lo que generan los hooks al compilar la ISO (Plymouth, fuentes, cursores) ni lo que queda fuera de las rutas gestionadas.
+- Lo que generan los hooks al compilar la ISO (el tema sencillo de Plymouth, fuentes, cursores) ni lo que queda fuera de las rutas gestionadas.
 
 En ext4 (la opción por defecto) no hay rollback completo. En Btrfs, `jaime0-update` y `apt` crean instantáneas pre/post con snapper y `revertir` indica la orden `snapper undochange` exacta; ni así vuelven atrás el núcleo ni `/boot` (ver [recuperacion.md](recuperacion.md)).
 
@@ -169,8 +169,8 @@ Las ISO 0.3 y 0.4 no traen `jaime0-update` (se retiró mientras el repositorio e
 ```bash
 V=0.4.0-beta.2
 cd "$(mktemp -d)"
-for f in manifiesto.json manifiesto.json.sig "jaime0-$V.tar.gz"; do curl -fLO "https://github.com/Jaime-202/jaime0/releases/download/v$V/$f"; done
-curl -fsSL -o firma.pem https://raw.githubusercontent.com/Jaime-202/jaime0/main/config/includes.chroot_after_packages/usr/share/jaime0/firma-actualizaciones.pem
+for f in manifiesto.json manifiesto.json.sig "jaime0-$V.tar.gz"; do curl -fLO "https://github.com/Jaime-202/zyron/releases/download/v$V/$f"; done
+curl -fsSL -o firma.pem https://raw.githubusercontent.com/Jaime-202/zyron/main/config/includes.chroot_after_packages/usr/share/jaime0/firma-actualizaciones.pem
 openssl pkey -pubin -in firma.pem -outform DER | sha256sum      # debe ser la huella de abajo
 openssl pkeyutl -verify -pubin -inkey firma.pem -rawin -in manifiesto.json -sigfile manifiesto.json.sig
 python3 -c 'import hashlib,json,sys; m=json.load(open("manifiesto.json")); assert hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest()==m["carga"]["sha256"]; print("Carga verificada")' "jaime0-$V.tar.gz"

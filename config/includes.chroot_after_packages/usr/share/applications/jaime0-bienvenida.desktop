@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Bienvenida
+GenericName=Primeros pasos
+Comment=Red, grafica, cuenta y atajos para empezar
+Exec=jaime0-bienvenida
+Icon=/usr/local/share/marca/zyron-simbolo.png
+Terminal=false
+Categories=System;
+Keywords=bienvenida;primeros pasos;welcome;atajos;

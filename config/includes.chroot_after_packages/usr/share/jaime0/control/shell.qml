@@ -26,7 +26,7 @@ ShellRoot {
         { id: "SYSTEM", titulo: "OVERVIEW" },
         { id: "PERFORMANCE", titulo: "CPU · MEMORY · PROCESSES" },
         { id: "PROFILES", titulo: "SMART PROFILES" },
-        { id: "AUTOMATION", titulo: "ZYRON RULES" },
+        { id: "AUTOMATION", titulo: Tema.producto + " RULES" },
         { id: "PRIVACY & SECURITY", titulo: "PRIVACY CENTER" },
         { id: "HEALTH", titulo: "SYSTEM HEALTH" },
         { id: "SETTINGS", titulo: "CONTROL CENTER SETTINGS" },
@@ -98,6 +98,17 @@ ShellRoot {
                 Tema.nivel = d.animaciones;
             if (d && [90, 100, 115, 130].indexOf(d.escala) >= 0)
                 raiz.escalaAjuste = d.escala / 100;
+        }
+    }
+    // Nombre del sistema (marca.conf, PRODUCTO="..."): Tema.producto.
+    FileView {
+        id: archivoMarca
+        path: "/usr/local/share/marca/marca.conf"
+        blockLoading: true
+        printErrors: false
+        onLoaded: {
+            const m = archivoMarca.text().match(/^PRODUCTO="?([^"\n]+)"?$/m);
+            if (m) Tema.producto = m[1];
         }
     }
     FileView {
@@ -210,7 +221,7 @@ ShellRoot {
                     spacing: 10
                     Rectangle { width: 8; height: 8; color: Tema.verde; anchors.verticalCenter: parent.verticalCenter }
                     Text {
-                        text: "ZYRON // CONTROL CENTER"
+                        text: Tema.producto + " // CONTROL CENTER"
                         color: Tema.texto
                         font.family: Tema.mono
                         font.pixelSize: 14

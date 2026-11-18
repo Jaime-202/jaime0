@@ -33,6 +33,22 @@ import sys
 import tempfile
 import time
 
+
+def _producto():
+    """Nombre del sistema: PRODUCTO en marca.conf, el unico sitio donde se escribe."""
+    marca = os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir, "share", "marca", "marca.conf")
+    try:
+        with open(marca, encoding="utf-8") as f:
+            for linea in f:
+                if linea.startswith("PRODUCTO="):
+                    return linea.split("=", 1)[1].strip().strip('"') or "ZYRON"
+    except OSError:
+        pass
+    return "ZYRON"
+
+
+PRODUCTO = _producto()
+
 try:
     import fcntl
 except ImportError:  # Solo en las pruebas fuera de Linux
@@ -834,7 +850,7 @@ def sec_paquetes(opciones):
 
 
 SECCIONES = [
-    ("ZYRON", sec_jaime0),
+    (f"{PRODUCTO}", sec_jaime0),
     ("Sistema", sec_sistema),
     ("CPU y memoria", sec_cpu_memoria),
     ("Gráfica y monitores", sec_grafica),
@@ -852,7 +868,7 @@ SECCIONES = [
 
 def generar(opciones):
     inicio = time.monotonic()
-    partes = [f"Informe de diagnóstico de ZYRON ({PROGRAMA})",
+    partes = [f"Informe de diagnóstico de {PRODUCTO} ({PROGRAMA})",
               f"Generado: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}"
               + (" (con --sudo)" if opciones.get("sudo") else ""),
               "", AVISO_PRIVACIDAD, ""]
@@ -1340,7 +1356,7 @@ def c_smart(ctx):
         return "NO_DISPONIBLE", "No se ven discos en /sys/block", []
     if not ctx.sudo and not es_root():
         return ("NO_DISPONIBLE", "Leer SMART necesita root: jaime0-diagnostico comprobar --sudo (el servicio de "
-                "ZYRON ya vigila SMART por UDisks)", [])
+                f"{PRODUCTO} ya vigila SMART por UDisks)", [])
     smartctl = resolver("smartctl")
     buenos, malos = [], []
     for d in discos:
@@ -1669,7 +1685,7 @@ def c_config_ajustes(ctx):
     avisos = [recortar(a) for a in doc.get("avisos") or [] if isinstance(a, str)]
     if not avisos:
         return "OK", "Ningún ajuste no válido en ~/.config/jaime0/ajustes", []
-    desconocidos = all("no es un ajuste de ZYRON" in a for a in avisos)
+    desconocidos = all(f"no es un ajuste de {PRODUCTO}" in a for a in avisos)
     gravedad = "INFO" if desconocidos else "WARNING"
     p = problema("sistema.config_ajustes", "SETTINGS", gravedad, "JAIME0-AJUSTES", avisos[:10],
                  ["Probablemente un ajuste que ya no existe (de una versión anterior)" if desconocidos else
@@ -1733,12 +1749,12 @@ def c_permisos(ctx):
     if escritura:
         ordenes.append(["sudo", "/usr/bin/chmod", "go-w", "--", *escritura])
     p = problema("sistema.permisos", "PERMISSIONS", "CRITICAL", "PERMISSIONS", detectado,
-                 ["Probablemente una copia o un cambio manual (cp, chmod o chown) sobre archivos de ZYRON",
+                 [f"Probablemente una copia o un cambio manual (cp, chmod o chown) sobre archivos de {PRODUCTO}",
                   "Posible manipulación: alguien sin privilegios pudo cambiar código que se ejecuta como root"],
-                 "Un programa sin privilegios podría modificar lo que ZYRON ejecuta como root (pkexec, polkit): "
+                 f"Un programa sin privilegios podría modificar lo que {PRODUCTO} ejecuta como root (pkexec, polkit): "
                  "riesgo de escalada de privilegios.",
                  ["Devuelve la propiedad a root y quita la escritura a otros (reparación de abajo)",
-                  "Después comprueba que su contenido es el de ZYRON: jaime0-update estado (conflictos)"],
+                  f"Después comprueba que su contenido es el de {PRODUCTO}: jaime0-update estado (conflictos)"],
                  reparacion("permisos-root", "Pone como propietario a root y quita el permiso de escritura al grupo "
                             "y a otros, solo en las rutas listadas. No cambia su contenido.", ordenes, root=True))
     return "CRITICAL", f"{len(malos)} rutas con propietario o permisos inseguros", [p]
@@ -1753,7 +1769,7 @@ def c_update(ctx):
         return "NO_DISPONIBLE", "jaime0-update estado --json no devolvió datos", []
     version = doc.get("version_instalada") or "desconocida"
     if isinstance(doc.get("en_curso"), dict):
-        return "INFO", f"ZYRON {version}: hay una operación de jaime0-update en curso", []
+        return "INFO", f"{PRODUCTO} {version}: hay una operación de jaime0-update en curso", []
     if doc.get("interrumpida"):
         ultima = doc.get("ultima") if isinstance(doc.get("ultima"), dict) else {}
         detectado = ["jaime0-update estado: hay una actualización interrumpida", f"Versión instalada: {version}"]
@@ -1762,15 +1778,15 @@ def c_update(ctx):
                              f"({ultima.get('resultado')})")
         p = problema("sistema.update_interrumpida", "UPDATE INTERRUPTED", "ERROR", "UPDATES", detectado,
                      ["Probablemente se apagó el equipo, se cortó la red o se cerró la terminal mientras se instalaba "
-                      "una actualización de ZYRON"],
-                     "Algunos archivos de ZYRON pueden haber quedado a medias entre dos versiones.",
+                      f"una actualización de {PRODUCTO}"],
+                     f"Algunos archivos de {PRODUCTO} pueden haber quedado a medias entre dos versiones.",
                      ["Deshaz lo que quedó a medias (reparación de abajo o: sudo /usr/local/bin/jaime0-update recuperar)",
                       "Después vuelve a actualizar: jaime0-update"],
-                     reparacion("update-recuperar", "Deshace la actualización de ZYRON que se cortó y deja los "
+                     reparacion("update-recuperar", f"Deshace la actualización de {PRODUCTO} que se cortó y deja los "
                                 "archivos como estaban antes (con la copia que hizo jaime0-update).",
                                 [["sudo", "/usr/local/bin/jaime0-update", "recuperar"]], root=True))
-        return "ERROR", "Hay una actualización de ZYRON interrumpida", [p]
-    texto = f"ZYRON {version}, canal {doc.get('canal') or '?'}"
+        return "ERROR", f"Hay una actualización de {PRODUCTO} interrumpida", [p]
+    texto = f"{PRODUCTO} {version}, canal {doc.get('canal') or '?'}"
     if doc.get("nueva") and isinstance(doc.get("disponible"), dict):
         texto += f"; hay una versión nueva ({doc['disponible'].get('version')}): ver UPDATES"
     return "OK", texto, []
@@ -2089,7 +2105,7 @@ def c_monitores(ctx):
 def c_aceleracion(ctx):
     v = virtualizacion(ctx)
     if v:
-        return ("INFO", f"Máquina virtual ({v}): ZYRON dibuja por software (LIBGL_ALWAYS_SOFTWARE); es lo esperado "
+        return ("INFO", f"Máquina virtual ({v}): {PRODUCTO} dibuja por software (LIBGL_ALWAYS_SOFTWARE); es lo esperado "
                 "y no es un problema", [])
     if "nomodeset" in (leer(ruta("proc", "cmdline")) or "").split():
         p = problema("graficos.modo_seguro", "GRAPHICS SAFE MODE", "WARNING", "GRAPHICS",
@@ -2292,7 +2308,7 @@ def c_perfiles(ctx):
     estado, detalle, problemas = comprobar_servicio(
         ctx, "power-profiles-daemon.service", "energia.perfiles_servicio", "POWER PROFILES", "POWER PROFILES",
         "WARNING", "Sin power-profiles-daemon no se puede cambiar el perfil de energía (ni desde la barra ni desde "
-                   "los perfiles de ZYRON).", inactivo_es_problema=False)
+                   f"los perfiles de {PRODUCTO}).", inactivo_es_problema=False)
     if estado != "OK":
         return estado, detalle, problemas
     r = ctx.cmd(["powerprofilesctl"], tiempo=5)
@@ -2387,7 +2403,7 @@ COMPROBACIONES = (
     ("sistema.config_waybar", "Configuración de Waybar", c_config_waybar),
     ("sistema.config_ajustes", "Ajustes de Jaime0", c_config_ajustes),
     ("sistema.permisos", "Permisos de lo que se ejecuta como root", c_permisos),
-    ("sistema.actualizacion", "Actualizaciones de ZYRON", c_update),
+    ("sistema.actualizacion", f"Actualizaciones de {PRODUCTO}", c_update),
     ("sistema.seguridad", "Actualizaciones de seguridad de Debian", c_seguridad),
     ("graficos.nvidia", "Controlador NVIDIA", c_nvidia),
     ("graficos.sesion", "Sesión Wayland / Hyprland", c_sesion),
@@ -2615,7 +2631,7 @@ def texto_problema(p, con_reparacion=True):
 
 def texto_comprobar(doc):
     r = doc["resumen"]
-    l = [f"Diagnóstico de ZYRON · {fecha(doc['t'])} · {doc['duracion']} s",
+    l = [f"Diagnóstico de {PRODUCTO} · {fecha(doc['t'])} · {doc['duracion']} s",
          "Resumen: " + ", ".join(f"{r[g]} {g}" for g in GRAVEDADES)
          + f"; {r['NO_DISPONIBLE']} no disponibles, {r['NO_APLICA']} no aplican", ""]
     ancho = max(len(e) for e in ETIQUETAS.values()) + 2
@@ -2826,13 +2842,13 @@ def cmd_reparar(args):
     return 1
 
 
-AYUDA = """Uso: jaime0-diagnostico [--pantalla] [--sudo]
+AYUDA = f"""Uso: jaime0-diagnostico [--pantalla] [--sudo]
        jaime0-diagnostico comprobar [--json] [--sudo]
        jaime0-diagnostico historial [--json] [-n N]
        jaime0-diagnostico reparar ID [--sudo]
 
 Genera un informe de hardware y compatibilidad para adjuntarlo a una incidencia de
-ZYRON en GitHub. No recoge direcciones MAC ni IP, redes Wi-Fi, nombre de usuario ni
+{PRODUCTO} en GitHub. No recoge direcciones MAC ni IP, redes Wi-Fi, nombre de usuario ni
 de equipo, números de serie ni el contenido de tus archivos.
 
   (sin opciones)  guarda el informe en ~/jaime0-diagnostico-AAAAMMDD-HHMM.txt
